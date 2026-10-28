@@ -1,0 +1,178 @@
+import Foundation
+
+/// What the UI needs to know about one session.
+public struct SessionInfo: Sendable, Equatable, Identifiable {
+    public let id: String
+    public var name: String
+    public var explicitName = false
+    public var cwd: String?
+    public var client: HookClient
+    public var colorIndex: Int
+    public var botState: BotState = .idle
+    public var waitingBadge: Badge = .exclaim
+    public var ticker = ""
+    public var lastEventAt: Double
+    public var contextPercent: Double = 0
+    public var model: String?
+    public var pending: Pending? = nil
+    public var ended = false
+
+    public enum Pending: Sendable, Equatable { case approval(tool: String), question }
+}
+
+/// Side effects the store cannot perform itself (timers, notifications, usage display).
+public enum StoreEffect: Sendable, Equatable {
+    case added(String)
+    case removed(String)
+    case revertToIdle(String, after: Double)
+    case removeLater(String, after: Double)
+    case notify(session: String, title: String, body: String)
+    case usage(StatuslineInfo)
+}
+
+/// A reducer: feed it decoded hooks and a clock, read `sessions` back. No AppKit, fully testable.
+public struct SessionStore: Sendable {
+    public private(set) var sessions: [String: SessionInfo] = [:]
+    /// Insertion order, so robots do not shuffle when a dictionary rehashes.
+    public private(set) var order: [String] = []
+
+    public static let happyDuration = 1.5
+    public static let endedLinger = 3.0
+    public static let sleepAfter = 600.0
+
+    public init() {}
+
+    public var ordered: [SessionInfo] { order.compactMap { sessions[$0] } }
+    public var anyPending: Bool { sessions.values.contains { $0.pending != nil } }
+
+    // MARK: - Reduce
+
+    public mutating func apply(_ hook: DecodedHook, now: Double) -> [StoreEffect] {
+        var effects: [StoreEffect] = []
+        let id = hook.session.id
+        if sessions[id] == nil {
+            if case .sessionEnd = hook.event { return [] }
+            sessions[id] = make(hook.session, now: now)
+            order.append(id)
+            effects.append(.added(id))
+        }
+        var s = sessions[id]!
+        s.lastEventAt = now
+        s.ended = false
+        if s.cwd == nil { s.cwd = hook.session.cwd }
+        if s.client.tty == nil { s.client = hook.session.client }
+
+        switch hook.event {
+        case .sessionStart:
+            s.botState = .idle
+            s.pending = nil
+            s.ticker = "準備好了"
+        case .prompt(let text):
+            s.botState = .thinking
+            s.pending = nil
+            s.ticker = text.split(separator: "\n").first.map(String.init) ?? text
+        case .toolStart(let tool, let input):
+            s.botState = .working
+            s.pending = nil
+            s.ticker = ClaudeCodeDecoder.toolLabel(tool: tool, input: input)
+        case .toolEnd(let tool, let ok, let input, _):
+            s.pending = nil
+            s.botState = ok ? .working : .error
+            if !ok { s.ticker = "失敗：" + ClaudeCodeDecoder.toolLabel(tool: tool, input: input) }
+        case .permissionRequest(let tool, let input, _):
+            s.botState = .waiting
+            if tool == "AskUserQuestion" {
+                s.pending = .question
+                s.waitingBadge = .question
+                s.ticker = "有問題要問你"
+            } else {
+                s.pending = .approval(tool: tool)
+                s.waitingBadge = .exclaim
+                s.ticker = "等你確認：" + ClaudeCodeDecoder.toolLabel(tool: tool, input: input)
+            }
+            effects.append(.notify(session: id, title: s.name, body: s.ticker))
+        case .question(let q):
+            s.botState = .waiting
+            s.pending = .question
+            s.waitingBadge = .question
+            s.ticker = q["questions"]?.array?.first?["question"]?.string ?? "有問題要問你"
+            effects.append(.notify(session: id, title: s.name, body: s.ticker))
+        case .notification(let type, let message):
+            switch type {
+            case "permission_prompt":
+                if s.pending == nil { s.botState = .waiting; s.waitingBadge = .exclaim; s.pending = .approval(tool: "?") }
+            case "idle_prompt":
+                s.botState = .idle
+                s.pending = nil
+                s.ticker = "等你輸入"
+                effects.append(.notify(session: id, title: s.name, body: message))
+            default:
+                break
+            }
+        case .stop:
+            s.pending = nil
+            s.botState = .happy
+            s.ticker = "完成"
+            effects.append(.revertToIdle(id, after: Self.happyDuration))
+        case .sessionEnd:
+            s.pending = nil
+            s.ended = true
+            s.botState = .sleeping
+            s.ticker = "結束"
+            effects.append(.removeLater(id, after: Self.endedLinger))
+        case .subagentStart(let type):
+            s.botState = .working
+            s.ticker = "子代理：" + (type ?? "agent")
+        case .subagentStop:
+            s.botState = .working
+        case .statusline(let info):
+            if let n = info.sessionName, !n.isEmpty { s.name = n; s.explicitName = true }
+            if let m = info.model { s.model = m }
+            if let c = info.contextPercent {
+                s.contextPercent = c
+                if c >= 80, s.pending == nil, s.botState == .idle || s.botState == .tired { s.botState = .tired }
+            }
+            effects.append(.usage(info))
+            // Status line runs constantly; it is not "activity" for the sleep timer.
+            s.lastEventAt = sessions[id]!.lastEventAt
+        }
+        sessions[id] = s
+        return effects
+    }
+
+    /// Timer-driven transitions: happy → idle, sleeping after inactivity.
+    public mutating func revertToIdle(_ id: String) {
+        guard var s = sessions[id], s.botState == .happy else { return }
+        s.botState = s.contextPercent >= 80 ? .tired : .idle
+        sessions[id] = s
+    }
+
+    public mutating func tick(now: Double) {
+        for (id, var s) in sessions where !s.ended && s.pending == nil {
+            if now - s.lastEventAt >= Self.sleepAfter, s.botState == .idle || s.botState == .tired {
+                s.botState = .sleeping
+                sessions[id] = s
+            }
+        }
+    }
+
+    public mutating func remove(_ id: String) {
+        sessions.removeValue(forKey: id)
+        order.removeAll { $0 == id }
+    }
+
+    // MARK: - Helpers
+
+    private func make(_ ref: SessionRef, now: Double) -> SessionInfo {
+        let taken = Set(sessions.values.map(\.colorIndex))
+        return SessionInfo(id: ref.id, name: Self.defaultName(id: ref.id, cwd: ref.cwd), cwd: ref.cwd,
+                           client: ref.client, colorIndex: SessionPalette.index(for: ref.id, taken: taken),
+                           lastEventAt: now)
+    }
+
+    /// Same fallback chain as notify-hook.sh: session name, else cwd basename, else id prefix.
+    public static func defaultName(id: String, cwd: String?) -> String {
+        if let cwd, let last = cwd.split(separator: "/").last, !last.isEmpty { return String(last) }
+        return String(id.prefix(8))
+    }
+}

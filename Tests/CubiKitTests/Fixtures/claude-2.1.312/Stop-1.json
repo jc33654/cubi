@@ -1,0 +1,30 @@
+{
+  "v": 1,
+  "agent": "claude-code",
+  "event": "Stop",
+  "tool": null,
+  "pid": 77429,
+  "ppid": 76734,
+  "client": {
+    "term_program": "ghostty",
+    "bundle_id": "com.mitchellh.ghostty",
+    "term_session_id": null,
+    "tty": "/dev/ttys014"
+  },
+  "payload": {
+    "session_id": "bedb82d9-d033-4e3a-aa7d-13a07a1a1bd0",
+    "transcript_path": "/Users/me/.claude/projects/-Users-me-Documents-cubi/bedb82d9-d033-4e3a-aa7d-13a07a1a1bd0.jsonl",
+    "cwd": "/Users/me/Documents/cubi",
+    "scratchpad_dir": "/private/tmp/claude-501/-Users-me-Documents-cubi/bedb82d9-d033-4e3a-aa7d-13a07a1a1bd0/scratchpad",
+    "prompt_id": "f28f6155-fa0b-44b1-88e6-7ddcdd5025a2",
+    "permission_mode": "auto",
+    "effort": {
+      "level": "high"
+    },
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "last_assistant_message": "執行完成，回應只有一行（整頁 HTML 沒有換行，所以 `head -3` 只輸出一行）：\n\n```\n<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><t…",
+    "background_tasks": [],
+    "session_crons": []
+  }
+}

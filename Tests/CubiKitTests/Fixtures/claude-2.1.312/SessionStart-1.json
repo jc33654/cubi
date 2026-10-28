@@ -1,0 +1,23 @@
+{
+  "v": 1,
+  "agent": "claude-code",
+  "event": "SessionStart",
+  "tool": null,
+  "pid": 76745,
+  "ppid": 76734,
+  "client": {
+    "term_program": "ghostty",
+    "bundle_id": "com.mitchellh.ghostty",
+    "term_session_id": null,
+    "tty": "/dev/ttys014"
+  },
+  "payload": {
+    "session_id": "bedb82d9-d033-4e3a-aa7d-13a07a1a1bd0",
+    "transcript_path": "/Users/me/.claude/projects/-Users-me-Documents-cubi/bedb82d9-d033-4e3a-aa7d-13a07a1a1bd0.jsonl",
+    "cwd": "/Users/me/Documents/cubi",
+    "scratchpad_dir": "/private/tmp/claude-501/-Users-me-Documents-cubi/bedb82d9-d033-4e3a-aa7d-13a07a1a1bd0/scratchpad",
+    "hook_event_name": "SessionStart",
+    "source": "startup",
+    "model": "claude-fable-5-1"
+  }
+}

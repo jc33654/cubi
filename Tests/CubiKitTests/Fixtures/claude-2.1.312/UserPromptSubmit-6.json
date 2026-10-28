@@ -1,0 +1,24 @@
+{
+  "v": 1,
+  "agent": "claude-code",
+  "event": "UserPromptSubmit",
+  "tool": null,
+  "pid": 79689,
+  "ppid": 78279,
+  "client": {
+    "term_program": "ghostty",
+    "bundle_id": "com.mitchellh.ghostty",
+    "term_session_id": null,
+    "tty": "/dev/ttys014"
+  },
+  "payload": {
+    "session_id": "7696156f-6ac7-4f32-b8b0-fcdfcc2af898",
+    "transcript_path": "/Users/me/.claude/projects/-Users-me-Documents-cubi/7696156f-6ac7-4f32-b8b0-fcdfcc2af898.jsonl",
+    "cwd": "/Users/me/Documents/cubi",
+    "scratchpad_dir": "/private/tmp/claude-501/-Users-me-Documents-cubi/7696156f-6ac7-4f32-b8b0-fcdfcc2af898/scratchpad",
+    "prompt_id": "696b5260-8ca8-40dc-9ee7-8bf00edf01a0",
+    "permission_mode": "default",
+    "hook_event_name": "UserPromptSubmit",
+    "prompt": "<task-notification>\n<task-id>a59263a2096b9b633</task-id>\n<tool-use-id>toolu_01Wef5SVLNKUM4sj7aEMQQmG</tool-use-id>\n<output-file>/private/tmp/claude-501/-Users-me-Documents-cubi/7696156f-6ac7-4f32…"
+  }
+}

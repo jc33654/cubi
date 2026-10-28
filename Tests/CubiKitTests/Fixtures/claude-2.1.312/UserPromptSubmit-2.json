@@ -1,0 +1,24 @@
+{
+  "v": 1,
+  "agent": "claude-code",
+  "event": "UserPromptSubmit",
+  "tool": null,
+  "pid": 78384,
+  "ppid": 78279,
+  "client": {
+    "term_program": "ghostty",
+    "bundle_id": "com.mitchellh.ghostty",
+    "term_session_id": null,
+    "tty": "/dev/ttys014"
+  },
+  "payload": {
+    "session_id": "7696156f-6ac7-4f32-b8b0-fcdfcc2af898",
+    "transcript_path": "/Users/me/.claude/projects/-Users-me-Documents-cubi/7696156f-6ac7-4f32-b8b0-fcdfcc2af898.jsonl",
+    "cwd": "/Users/me/Documents/cubi",
+    "scratchpad_dir": "/private/tmp/claude-501/-Users-me-Documents-cubi/7696156f-6ac7-4f32-b8b0-fcdfcc2af898/scratchpad",
+    "prompt_id": "23a39633-de25-4e49-96f2-0a631f55de17",
+    "permission_mode": "default",
+    "hook_event_name": "UserPromptSubmit",
+    "prompt": "幫我執行 curl -s https://example.com | head -3"
+  }
+}

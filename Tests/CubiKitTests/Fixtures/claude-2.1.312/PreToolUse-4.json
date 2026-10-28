@@ -1,0 +1,51 @@
+{
+  "v": 1,
+  "agent": "claude-code",
+  "event": "PreToolUse",
+  "tool": null,
+  "pid": 78801,
+  "ppid": 78279,
+  "client": {
+    "term_program": "ghostty",
+    "bundle_id": "com.mitchellh.ghostty",
+    "term_session_id": null,
+    "tty": "/dev/ttys014"
+  },
+  "payload": {
+    "session_id": "7696156f-6ac7-4f32-b8b0-fcdfcc2af898",
+    "transcript_path": "/Users/me/.claude/projects/-Users-me-Documents-cubi/7696156f-6ac7-4f32-b8b0-fcdfcc2af898.jsonl",
+    "cwd": "/Users/me/Documents/cubi",
+    "scratchpad_dir": "/private/tmp/claude-501/-Users-me-Documents-cubi/7696156f-6ac7-4f32-b8b0-fcdfcc2af898/scratchpad",
+    "prompt_id": "6524ca84-cc8a-4848-9a2d-925e6adf01a8",
+    "permission_mode": "default",
+    "effort": {
+      "level": "high"
+    },
+    "hook_event_name": "PreToolUse",
+    "tool_name": "AskUserQuestion",
+    "tool_input": {
+      "questions": [
+        {
+          "question": "curl 已被拒絕兩次，接下來要怎麼處理？",
+          "header": "下一步",
+          "options": [
+            {
+              "label": "再執行一次 curl",
+              "description": "原樣重跑 curl -s https://example.com | head -3"
+            },
+            {
+              "label": "改用 WebFetch",
+              "description": "不經 shell，改用 WebFetch 工具抓 example.com 的內容"
+            },
+            {
+              "label": "不執行",
+              "description": "放棄這個指令，等你下一步指示"
+            }
+          ],
+          "multiSelect": false
+        }
+      ]
+    },
+    "tool_use_id": "toolu_01EhCLkW8tppfBtz1zECbmc9"
+  }
+}

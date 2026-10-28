@@ -1,0 +1,40 @@
+{
+  "v": 1,
+  "agent": "claude-code",
+  "event": "PostToolUse",
+  "tool": null,
+  "pid": 77423,
+  "ppid": 76734,
+  "client": {
+    "term_program": "ghostty",
+    "bundle_id": "com.mitchellh.ghostty",
+    "term_session_id": null,
+    "tty": "/dev/ttys014"
+  },
+  "payload": {
+    "session_id": "bedb82d9-d033-4e3a-aa7d-13a07a1a1bd0",
+    "transcript_path": "/Users/me/.claude/projects/-Users-me-Documents-cubi/bedb82d9-d033-4e3a-aa7d-13a07a1a1bd0.jsonl",
+    "cwd": "/Users/me/Documents/cubi",
+    "scratchpad_dir": "/private/tmp/claude-501/-Users-me-Documents-cubi/bedb82d9-d033-4e3a-aa7d-13a07a1a1bd0/scratchpad",
+    "prompt_id": "f28f6155-fa0b-44b1-88e6-7ddcdd5025a2",
+    "permission_mode": "auto",
+    "effort": {
+      "level": "high"
+    },
+    "hook_event_name": "PostToolUse",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "curl -s https://example.com | head -3",
+      "description": "Fetch example.com and show first 3 lines"
+    },
+    "tool_response": {
+      "stdout": "<!doctype html><html lang=en><head><meta charset=utf-8><link rel=icon href=data:,><meta name=viewport content=\"width=device-width,initial-scale=1\"><title>Example Domain</title><style>html{color-scheme…",
+      "stderr": "",
+      "interrupted": false,
+      "isImage": false,
+      "noOutputExpected": false
+    },
+    "tool_use_id": "toolu_01NaY35WNwEsSCDJZynYrup6",
+    "duration_ms": 1943
+  }
+}

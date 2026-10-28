@@ -1,0 +1,30 @@
+{
+  "v": 1,
+  "agent": "claude-code",
+  "event": "Stop",
+  "tool": null,
+  "pid": 79696,
+  "ppid": 78279,
+  "client": {
+    "term_program": "ghostty",
+    "bundle_id": "com.mitchellh.ghostty",
+    "term_session_id": null,
+    "tty": "/dev/ttys014"
+  },
+  "payload": {
+    "session_id": "7696156f-6ac7-4f32-b8b0-fcdfcc2af898",
+    "transcript_path": "/Users/me/.claude/projects/-Users-me-Documents-cubi/7696156f-6ac7-4f32-b8b0-fcdfcc2af898.jsonl",
+    "cwd": "/Users/me/Documents/cubi",
+    "scratchpad_dir": "/private/tmp/claude-501/-Users-me-Documents-cubi/7696156f-6ac7-4f32-b8b0-fcdfcc2af898/scratchpad",
+    "prompt_id": "696b5260-8ca8-40dc-9ee7-8bf00edf01a0",
+    "permission_mode": "default",
+    "effort": {
+      "level": "high"
+    },
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "last_assistant_message": "Subagent 回報完成，共 14 個檔案（已排除 `.git` 與 `.build`，由 subagent 用 `find` 實際取得）：\n\n```\n.claude/settings.local.json\n.gitignore\ndocs/capture.settings.local.json\ndocs/plan.md\ndocs/protocol.md\nMakefile\nPackage.swif…",
+    "background_tasks": [],
+    "session_crons": []
+  }
+}

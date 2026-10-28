@@ -1,0 +1,41 @@
+{
+  "v": 1,
+  "agent": "claude-code",
+  "event": "SubagentStop",
+  "tool": null,
+  "pid": 79688,
+  "ppid": 78279,
+  "client": {
+    "term_program": "ghostty",
+    "bundle_id": "com.mitchellh.ghostty",
+    "term_session_id": null,
+    "tty": "/dev/ttys014"
+  },
+  "payload": {
+    "session_id": "7696156f-6ac7-4f32-b8b0-fcdfcc2af898",
+    "transcript_path": "/Users/me/.claude/projects/-Users-me-Documents-cubi/7696156f-6ac7-4f32-b8b0-fcdfcc2af898.jsonl",
+    "cwd": "/Users/me/Documents/cubi",
+    "scratchpad_dir": "/private/tmp/claude-501/-Users-me-Documents-cubi/7696156f-6ac7-4f32-b8b0-fcdfcc2af898/scratchpad",
+    "prompt_id": "ba9e1429-97b9-4990-8f7b-ddab277fa481",
+    "permission_mode": "default",
+    "agent_id": "a59263a2096b9b633",
+    "agent_type": "Explore",
+    "effort": {
+      "level": "medium"
+    },
+    "hook_event_name": "SubagentStop",
+    "stop_hook_active": false,
+    "agent_transcript_path": "/Users/me/.claude/projects/-Users-me-Documents-cubi/7696156f-6ac7-4f32-b8b0-fcdfcc2af898/subagents/agent-a59263a2096b9b633.jsonl",
+    "last_assistant_message": "以下是 `/Users/me/Documents/cubi` 下的完整檔案清單（已排除 `.git` 與 `.build`），原樣回報：\n\n```\n/Users/me/Documents/cubi/.claude/settings.local.json\n/Users/me/Documents/cubi/.gitignore\n/Users/me/Documen…",
+    "background_tasks": [
+      {
+        "id": "a59263a2096b9b633",
+        "type": "subagent",
+        "status": "running",
+        "description": "列出目錄檔案",
+        "agent_type": "Explore"
+      }
+    ],
+    "session_crons": []
+  }
+}

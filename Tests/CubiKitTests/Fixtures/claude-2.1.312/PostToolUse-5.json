@@ -1,0 +1,42 @@
+{
+  "v": 1,
+  "agent": "claude-code",
+  "event": "PostToolUse",
+  "tool": null,
+  "pid": 79604,
+  "ppid": 78279,
+  "client": {
+    "term_program": "ghostty",
+    "bundle_id": "com.mitchellh.ghostty",
+    "term_session_id": null,
+    "tty": "/dev/ttys014"
+  },
+  "payload": {
+    "session_id": "7696156f-6ac7-4f32-b8b0-fcdfcc2af898",
+    "transcript_path": "/Users/me/.claude/projects/-Users-me-Documents-cubi/7696156f-6ac7-4f32-b8b0-fcdfcc2af898.jsonl",
+    "cwd": "/Users/me/Documents/cubi",
+    "scratchpad_dir": "/private/tmp/claude-501/-Users-me-Documents-cubi/7696156f-6ac7-4f32-b8b0-fcdfcc2af898/scratchpad",
+    "prompt_id": "ba9e1429-97b9-4990-8f7b-ddab277fa481",
+    "permission_mode": "default",
+    "agent_id": "a59263a2096b9b633",
+    "agent_type": "Explore",
+    "effort": {
+      "level": "medium"
+    },
+    "hook_event_name": "PostToolUse",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "find /Users/me/Documents/cubi -path '*/.git' -prune -o -path '*/.build' -prune -o -type f -print | sort",
+      "description": "List all files recursively excluding .git and .build"
+    },
+    "tool_response": {
+      "stdout": "/Users/me/Documents/cubi/.claude/settings.local.json\n/Users/me/Documents/cubi/.gitignore\n/Users/me/Documents/cubi/docs/capture.settings.local.json\n/Users/me/Documents/cubi/docs/pla…",
+      "stderr": "",
+      "interrupted": false,
+      "isImage": false,
+      "noOutputExpected": false
+    },
+    "tool_use_id": "toolu_017wSoXfNRS7DXuy1uLHPZsG",
+    "duration_ms": 96
+  }
+}

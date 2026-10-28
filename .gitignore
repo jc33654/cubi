@@ -1,0 +1,7 @@
+.build/
+build/
+*.xcodeproj
+.DS_Store
+.swiftpm/
+# Per-machine Claude Code settings (capture hooks point at a local build path)
+.claude/settings.local.json

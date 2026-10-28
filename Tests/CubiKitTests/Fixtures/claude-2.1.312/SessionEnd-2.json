@@ -1,0 +1,23 @@
+{
+  "v": 1,
+  "agent": "claude-code",
+  "event": "SessionEnd",
+  "tool": null,
+  "pid": 79793,
+  "ppid": 78279,
+  "client": {
+    "term_program": "ghostty",
+    "bundle_id": "com.mitchellh.ghostty",
+    "term_session_id": null,
+    "tty": "/dev/ttys014"
+  },
+  "payload": {
+    "session_id": "7696156f-6ac7-4f32-b8b0-fcdfcc2af898",
+    "transcript_path": "/Users/me/.claude/projects/-Users-me-Documents-cubi/7696156f-6ac7-4f32-b8b0-fcdfcc2af898.jsonl",
+    "cwd": "/Users/me/Documents/cubi",
+    "scratchpad_dir": "/private/tmp/claude-501/-Users-me-Documents-cubi/7696156f-6ac7-4f32-b8b0-fcdfcc2af898/scratchpad",
+    "prompt_id": "449a84ee-430f-4b88-a77a-ecab98c580f6",
+    "hook_event_name": "SessionEnd",
+    "reason": "prompt_input_exit"
+  }
+}

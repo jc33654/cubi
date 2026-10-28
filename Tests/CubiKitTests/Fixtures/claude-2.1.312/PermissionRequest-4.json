@@ -1,0 +1,44 @@
+{
+  "v": 1,
+  "agent": "claude-code",
+  "event": "PermissionRequest",
+  "tool": null,
+  "pid": 78973,
+  "ppid": 78279,
+  "client": {
+    "term_program": "ghostty",
+    "bundle_id": "com.mitchellh.ghostty",
+    "term_session_id": null,
+    "tty": "/dev/ttys014"
+  },
+  "payload": {
+    "session_id": "7696156f-6ac7-4f32-b8b0-fcdfcc2af898",
+    "transcript_path": "/Users/me/.claude/projects/-Users-me-Documents-cubi/7696156f-6ac7-4f32-b8b0-fcdfcc2af898.jsonl",
+    "cwd": "/Users/me/Documents/cubi",
+    "scratchpad_dir": "/private/tmp/claude-501/-Users-me-Documents-cubi/7696156f-6ac7-4f32-b8b0-fcdfcc2af898/scratchpad",
+    "prompt_id": "6524ca84-cc8a-4848-9a2d-925e6adf01a8",
+    "permission_mode": "default",
+    "effort": {
+      "level": "high"
+    },
+    "hook_event_name": "PermissionRequest",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "curl -s https://example.com | head -3",
+      "description": "Fetch example.com and show first three lines"
+    },
+    "permission_suggestions": [
+      {
+        "type": "addRules",
+        "rules": [
+          {
+            "toolName": "Bash",
+            "ruleContent": "curl -s https://example.com"
+          }
+        ],
+        "behavior": "allow",
+        "destination": "localSettings"
+      }
+    ]
+  }
+}

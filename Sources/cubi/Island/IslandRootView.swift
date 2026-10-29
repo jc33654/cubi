@@ -104,30 +104,28 @@ struct IslandRootView: View {
         .lineLimit(1)
     }
 
-    /// Robots sit on the two wings beside the notch, alternating left and right.
+    /// Robots on the left wing (it widens as they arrive), the usage readout on the right wing.
     private func wings(height: CGFloat) -> some View {
         let botSize = state.botSize
-        let wingWidth = IslandState.compactExtraWidth / 2
-        let left = state.bots.enumerated().filter { $0.offset % 2 == 0 }.map(\.element)
-        let right = state.bots.enumerated().filter { $0.offset % 2 == 1 }.map(\.element)
         return HStack(spacing: 0) {
             HStack(spacing: 6) {
-                ForEach(left) { bot in BotView(bot: bot, paused: state.mode == .hidden).frame(width: botSize, height: botSize) }
+                ForEach(state.bots) { bot in BotView(bot: bot, paused: state.mode == .hidden).frame(width: botSize, height: botSize) }
             }
-            .frame(width: wingWidth, height: height)
+            .frame(width: state.leftWingWidth, height: height, alignment: .trailing)
+            .padding(.trailing, 0)
             Spacer().frame(width: state.geometry.notchWidth)
-            HStack(spacing: 6) {
-                ForEach(right) { bot in BotView(bot: bot, paused: state.mode == .hidden).frame(width: botSize, height: botSize) }
-                // The right wing doubles as the usage readout while no robot needs it.
-                if right.isEmpty, let u = state.usage, u.fiveHour != nil || u.sevenDay != nil {
+            Group {
+                if let u = state.usage, u.fiveHour != nil || u.sevenDay != nil {
                     VStack(alignment: .trailing, spacing: 1) {
                         if let w = u.fiveHour { usageLine("5h", w) }
                         if let w = u.sevenDay { usageLine("7d", w) }
                     }
-                    .padding(.trailing, 4)
+                } else {
+                    Text("—").font(.system(size: 10)).foregroundStyle(.white.opacity(0.3))
                 }
             }
-            .frame(width: wingWidth, height: height, alignment: right.isEmpty ? .trailing : .center)
+            .frame(width: state.rightWingWidth - 10, height: height, alignment: .trailing)
+            .padding(.trailing, 10)
         }
         .frame(height: height)
     }

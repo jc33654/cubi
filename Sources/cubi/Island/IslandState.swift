@@ -61,18 +61,22 @@ final class IslandState {
     var restingMode: IslandMode { pinned ? .compact : .hidden }
 
     static let expandedSize = CGSize(width: 640, height: 190)
-    static let compactExtraWidth: CGFloat = 180
+    /// Right wing: the usage readout. Left wing: the robots, growing with their number.
+    static let rightWingWidth: CGFloat = 90
+    static let minLeftWingWidth: CGFloat = 90
     /// The compact island hangs a little below the notch so the robots can be larger than it.
     static let compactExtraHeight: CGFloat = 14
 
     var compactHeight: CGFloat { geometry.notchHeight + Self.compactExtraHeight }
     /// Robot size on the wings: 36 pt on a 32 pt notch.
     var botSize: CGFloat { max(16, compactHeight - 10) }
+    var leftWingWidth: CGFloat { max(Self.minLeftWingWidth, 16 + CGFloat(bots.count) * (botSize + 6)) }
+    var rightWingWidth: CGFloat { Self.rightWingWidth }
 
     func size(for mode: IslandMode) -> CGSize {
         switch mode {
         case .hidden:   return CGSize(width: geometry.notchWidth, height: geometry.notchHeight)
-        case .compact:  return CGSize(width: geometry.notchWidth + Self.compactExtraWidth, height: compactHeight)
+        case .compact:  return CGSize(width: geometry.notchWidth + leftWingWidth + rightWingWidth, height: compactHeight)
         case .expanded: return CGSize(width: Self.expandedSize.width, height: expandedHeight)
         }
     }

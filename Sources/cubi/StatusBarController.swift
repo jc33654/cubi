@@ -10,6 +10,8 @@ final class StatusBarController: NSObject {
     private let notifier: Notifier
     private let loginItem = NSMenuItem(title: "登入時啟動", action: #selector(toggleLogin), keyEquivalent: "")
     private let notifyItem = NSMenuItem(title: "系統通知", action: #selector(toggleNotifications), keyEquivalent: "")
+    private let pinItem = NSMenuItem(title: "保持顯示", action: #selector(togglePinned), keyEquivalent: "")
+    private let soundItem = NSMenuItem(title: "音效", action: #selector(toggleSounds), keyEquivalent: "")
     /// Shared with the island's right-click menu.
     let menu: NSMenu
 
@@ -33,6 +35,9 @@ final class StatusBarController: NSObject {
         let show = NSMenuItem(title: "顯示 / 收起", action: #selector(toggleIsland), keyEquivalent: "")
         show.target = self
         menu.addItem(show)
+        pinItem.target = self
+        pinItem.state = island.state.pinned ? .on : .off
+        menu.addItem(pinItem)
 
         let demo = NSMenuItem(title: "Demo 狀態", action: nil, keyEquivalent: "")
         let sub = NSMenu()
@@ -53,6 +58,9 @@ final class StatusBarController: NSObject {
         notifyItem.target = self
         notifyItem.state = notifier.enabled ? .on : .off
         menu.addItem(notifyItem)
+        soundItem.target = self
+        soundItem.state = Sounds.enabled ? .on : .off
+        menu.addItem(soundItem)
         loginItem.target = self
         loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
         menu.addItem(loginItem)
@@ -69,6 +77,16 @@ final class StatusBarController: NSObject {
     @objc private func setDemoState(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String, let state = BotState(rawValue: raw) else { return }
         island.setDemoState(state)
+    }
+
+    @objc private func toggleSounds() {
+        Sounds.enabled.toggle()
+        soundItem.state = Sounds.enabled ? .on : .off
+    }
+
+    @objc private func togglePinned() {
+        island.setPinned(!island.state.pinned)
+        pinItem.state = island.state.pinned ? .on : .off
     }
 
     @objc private func removeDemo() {
@@ -88,7 +106,7 @@ final class StatusBarController: NSObject {
                 try SMAppService.mainApp.register()
             }
         } catch {
-            NSLog("cubi: login item change failed: \(error)")
+            CubiLog.write("login item change failed: \(error)")
         }
         loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
     }

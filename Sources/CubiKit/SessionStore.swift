@@ -140,6 +140,29 @@ public struct SessionStore: Sendable {
         return effects
     }
 
+    public enum PendingOutcome: Sendable, Equatable { case allowed, denied, answered, handledElsewhere }
+
+    /// The blocking request for `id` is over, decided on the island or elsewhere.
+    public mutating func resolvePending(_ id: String, outcome: PendingOutcome) {
+        guard var s = sessions[id], s.pending != nil else { return }
+        s.pending = nil
+        switch outcome {
+        case .allowed:
+            s.botState = .working
+            s.ticker = "已允許，執行中"
+        case .denied:
+            s.botState = .thinking
+            s.ticker = "已拒絕"
+        case .answered:
+            s.botState = .thinking
+            s.ticker = "已回答"
+        case .handledElsewhere:
+            s.botState = .thinking
+            s.ticker = "已在終端處理"
+        }
+        sessions[id] = s
+    }
+
     /// Timer-driven transitions: happy → idle, sleeping after inactivity.
     public mutating func revertToIdle(_ id: String) {
         guard var s = sessions[id], s.botState == .happy else { return }

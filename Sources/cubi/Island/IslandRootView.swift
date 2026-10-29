@@ -36,6 +36,7 @@ struct IslandRootView: View {
         .onAppear { apply(state.mode, animated: false) }
         .onChange(of: state.mode) { _, new in apply(new, animated: true) }
         .onChange(of: state.geometry) { _, _ in apply(state.mode, animated: false) }
+        .onChange(of: state.expandedHeight) { _, _ in if state.mode == .expanded { apply(.expanded, animated: true) } }
     }
 
     private func apply(_ mode: IslandMode, animated: Bool) {
@@ -64,9 +65,30 @@ struct IslandRootView: View {
         case .expanded:
             VStack(spacing: 6) {
                 wings(height: state.compactHeight)
-                SessionListView(state: state)
-                    .padding(.bottom, 10)
+                if let card = state.pendingCards.first {
+                    cardView(card)
+                } else {
+                    SessionListView(state: state)
+                        .padding(.bottom, 10)
+                }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func cardView(_ card: PendingCard) -> some View {
+        let waiting = state.pendingCards.count - 1
+        switch card.content {
+        case .approval(let title, let detail, let canAlways):
+            ApprovalCardView(card: card, title: title, detail: detail, canAlways: canAlways, waitingCount: waiting) { d in
+                state.onDecision(card.id, d)
+            }
+            .id(card.id)
+        case .question(let questions):
+            QuestionCardView(card: card, questions: questions) { d in
+                state.onDecision(card.id, d)
+            }
+            .id(card.id)
         }
     }
 

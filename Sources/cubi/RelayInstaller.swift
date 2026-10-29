@@ -11,7 +11,7 @@ enum RelayInstaller {
     @discardableResult
     static func ensureInstalled() -> String? {
         guard let source = Bundle.main.url(forAuxiliaryExecutable: "cubi-hook") else {
-            NSLog("cubi: bundled cubi-hook not found")
+            CubiLog.write("bundled cubi-hook not found")
             return nil
         }
         let fm = FileManager.default
@@ -29,10 +29,10 @@ enum RelayInstaller {
             try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: temp.path)
             if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
             try fm.moveItem(at: temp, to: dest)
-            NSLog("cubi: installed relay at \(dest.path)")
+            CubiLog.write("installed relay at \(dest.path)")
             return dest.path
         } catch {
-            NSLog("cubi: relay install failed: \(error)")
+            CubiLog.write("relay install failed: \(error)")
             return nil
         }
     }

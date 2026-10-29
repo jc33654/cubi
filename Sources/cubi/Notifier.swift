@@ -24,7 +24,7 @@ final class Notifier {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { [weak self] granted, error in
             Task { @MainActor in
                 self?.authorized = granted
-                if let error { NSLog("cubi: notification authorization failed: \(error)") }
+                if let error { CubiLog.write("notification authorization failed: \(error)") }
             }
         }
     }
@@ -38,7 +38,7 @@ final class Notifier {
         content.sound = .default
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request) { error in
-            if let error { NSLog("cubi: notification failed: \(error)") }
+            if let error { CubiLog.write("notification failed: \(error)") }
         }
     }
 }

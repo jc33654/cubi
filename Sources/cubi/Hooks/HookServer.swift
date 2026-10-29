@@ -2,17 +2,27 @@ import Foundation
 import CubiKit
 
 /// One relay connection. For blocking events the relay keeps it open until we `reply`.
+///
+/// The file descriptor is owned by the server's DispatchSource: closing it here while the source
+/// is live would let the kernel hand the same number to the next connection, whose bytes would
+/// then go to the stale source. So `reply`/`close` only ask the server to cancel the source, and
+/// the source's cancel handler is the one place the fd is closed.
 final class HookConnection: @unchecked Sendable {
     let fd: Int32
     private let lock = NSLock()
     private var closed = false
+    private let teardown: @Sendable () -> Void
 
-    init(fd: Int32) { self.fd = fd }
+    init(fd: Int32, teardown: @escaping @Sendable () -> Void) {
+        self.fd = fd
+        self.teardown = teardown
+    }
 
     /// Sends one line (the relay prints it verbatim to Claude Code's stdout) and closes.
     func reply(_ line: String) {
-        lock.lock(); defer { lock.unlock() }
-        guard !closed else { return }
+        lock.lock()
+        guard !closed else { lock.unlock(); return }
+        closed = true
         var bytes = Array(line.utf8)
         if bytes.last != 0x0A { bytes.append(0x0A) }
         var off = 0
@@ -20,16 +30,17 @@ final class HookConnection: @unchecked Sendable {
             let n = bytes[off...].withUnsafeBytes { write(fd, $0.baseAddress, $0.count) }
             if n > 0 { off += n } else if n < 0 && errno == EINTR { continue } else { break }
         }
-        closed = true
-        Darwin.close(fd)
+        lock.unlock()
+        teardown()
     }
 
     /// Closes without a reply: "no decision", the terminal asks instead.
     func close() {
-        lock.lock(); defer { lock.unlock() }
-        guard !closed else { return }
+        lock.lock()
+        guard !closed else { lock.unlock(); return }
         closed = true
-        Darwin.close(fd)
+        lock.unlock()
+        teardown()
     }
 
     var isClosed: Bool { lock.lock(); defer { lock.unlock() }; return closed }
@@ -49,7 +60,18 @@ final class HookServer: @unchecked Sendable {
     private let onClientClosed: ClosedHandler
     private var listenFD: Int32 = -1
     private var acceptSource: DispatchSourceRead?
-    private var readers: [Int32: (source: DispatchSourceRead, buffer: Data, connection: HookConnection, delivered: Bool)] = [:]
+
+    private final class Reader {
+        let source: DispatchSourceRead
+        let connection: HookConnection
+        var buffer = Data()
+        var delivered = false
+        init(source: DispatchSourceRead, connection: HookConnection) {
+            self.source = source
+            self.connection = connection
+        }
+    }
+    private var readers: [Int32: Reader] = [:]
 
     static var defaultSocketPath: String {
         FileManager.default.homeDirectoryForCurrentUser.path + "/Library/Application Support/cubi/cubi.sock"
@@ -98,8 +120,7 @@ final class HookServer: @unchecked Sendable {
         queue.sync {
             acceptSource?.cancel()
             acceptSource = nil
-            for (_, r) in readers { r.source.cancel(); r.connection.close() }
-            readers.removeAll()
+            for (_, r) in readers { r.source.cancel() }
             if listenFD >= 0 { Darwin.close(listenFD); listenFD = -1 }
             unlink(socketPath)
         }
@@ -120,11 +141,17 @@ final class HookServer: @unchecked Sendable {
                 continue
             }
             _ = fcntl(client, F_SETFL, fcntl(client, F_GETFL) | O_NONBLOCK)
-            let connection = HookConnection(fd: client)
+
             let source = DispatchSource.makeReadSource(fileDescriptor: client, queue: queue)
-            readers[client] = (source, Data(), connection, false)
+            let connection = HookConnection(fd: client) { [queue] in
+                queue.async { source.cancel() }
+            }
+            let reader = Reader(source: source, connection: connection)
+            readers[client] = reader
             source.setEventHandler { [weak self] in self?.readPending(client) }
+            // The only place the fd is closed. Cancelling twice is harmless.
             source.setCancelHandler { [weak self] in
+                Darwin.close(client)
                 self?.readers.removeValue(forKey: client)
             }
             source.resume()
@@ -132,14 +159,15 @@ final class HookServer: @unchecked Sendable {
     }
 
     private func readPending(_ fd: Int32) {
-        guard var entry = readers[fd] else { return }
+        guard let reader = readers[fd] else { return }
         var chunk = [UInt8](repeating: 0, count: 65536)
         while true {
             let n = chunk.withUnsafeMutableBytes { read(fd, $0.baseAddress, $0.count) }
             if n > 0 {
-                entry.buffer.append(contentsOf: chunk[0..<n])
-                if entry.buffer.count > Self.maxLineBytes {
-                    finish(fd, entry, notify: false)
+                reader.buffer.append(contentsOf: chunk[0..<n])
+                if reader.buffer.count > Self.maxLineBytes {
+                    CubiLog.write("envelope over \(Self.maxLineBytes) bytes dropped")
+                    reader.connection.close()
                     return
                 }
                 continue
@@ -147,39 +175,34 @@ final class HookServer: @unchecked Sendable {
             if n < 0 && errno == EINTR { continue }
             if n < 0 && errno == EAGAIN { break }
             // EOF or error: the relay has gone (fire-and-forget done, or a blocking hook was cancelled).
-            if !entry.delivered { deliver(fd, &entry) }
-            finish(fd, entry, notify: entry.delivered)
+            if !reader.delivered { deliver(reader) }
+            let wasOpen = !reader.connection.isClosed
+            reader.connection.close()
+            if wasOpen && reader.delivered {
+                let connection = reader.connection
+                Task { @MainActor [onClientClosed] in onClientClosed(connection) }
+            }
             return
         }
-        if !entry.delivered, entry.buffer.contains(0x0A) { deliver(fd, &entry) }
-        readers[fd] = entry
+        if !reader.delivered, reader.buffer.contains(0x0A) { deliver(reader) }
     }
 
-    private func deliver(_ fd: Int32, _ entry: inout (source: DispatchSourceRead, buffer: Data, connection: HookConnection, delivered: Bool)) {
+    private func deliver(_ reader: Reader) {
+        reader.delivered = true
         let line: Data
-        if let nl = entry.buffer.firstIndex(of: 0x0A) {
-            line = entry.buffer[entry.buffer.startIndex..<nl]
+        if let nl = reader.buffer.firstIndex(of: 0x0A) {
+            line = reader.buffer[reader.buffer.startIndex..<nl]
         } else {
-            line = entry.buffer
+            line = reader.buffer
         }
-        entry.delivered = true
         guard !line.isEmpty else { return }
         do {
             let envelope = try HookEnvelope.parse(line)
-            let connection = entry.connection
+            let connection = reader.connection
             Task { @MainActor [handler] in handler(envelope, connection) }
         } catch {
-            NSLog("cubi: bad envelope (\(line.count) bytes): \(error)")
-        }
-    }
-
-    private func finish(_ fd: Int32, _ entry: (source: DispatchSourceRead, buffer: Data, connection: HookConnection, delivered: Bool), notify: Bool) {
-        entry.source.cancel()
-        let connection = entry.connection
-        let wasOpen = !connection.isClosed
-        connection.close()
-        if notify && wasOpen {
-            Task { @MainActor [onClientClosed] in onClientClosed(connection) }
+            CubiLog.write("bad envelope (\(line.count) bytes): \(error)")
+            reader.connection.close()
         }
     }
 }

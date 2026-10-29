@@ -36,10 +36,25 @@ final class IslandState {
     var bots: [BotRuntime] = []
     /// True while something waits for the user (an approval, a question): the island does not auto-close.
     var holdOpen = false
+    /// Cards waiting for a decision, oldest first. Set by the coordinator.
+    var pendingCards: [PendingCard] = []
+    /// Where a card's buttons report to. Set by the coordinator.
+    @ObservationIgnored var onDecision: (UUID, Decision) -> Void = { _, _ in }
+    /// Expanded height follows the card being shown.
+    var expandedHeight: CGFloat = 190
+    /// User setting: the island never hides; its resting mode is compact so every robot stays visible.
+    var pinned: Bool {
+        didSet { UserDefaults.standard.set(pinned, forKey: Self.pinnedKey) }
+    }
+    static let pinnedKey = "islandPinned"
 
     init(geometry: NotchGeometry) {
         self.geometry = geometry
+        self.pinned = UserDefaults.standard.bool(forKey: Self.pinnedKey)
     }
+
+    /// Where auto-close ends up.
+    var restingMode: IslandMode { pinned ? .compact : .hidden }
 
     static let expandedSize = CGSize(width: 640, height: 190)
     static let compactExtraWidth: CGFloat = 180
@@ -54,7 +69,7 @@ final class IslandState {
         switch mode {
         case .hidden:   return CGSize(width: geometry.notchWidth, height: geometry.notchHeight)
         case .compact:  return CGSize(width: geometry.notchWidth + Self.compactExtraWidth, height: compactHeight)
-        case .expanded: return Self.expandedSize
+        case .expanded: return CGSize(width: Self.expandedSize.width, height: expandedHeight)
         }
     }
 

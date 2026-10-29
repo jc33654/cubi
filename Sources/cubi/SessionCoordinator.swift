@@ -2,7 +2,7 @@ import AppKit
 import CubiKit
 
 /// Glue between the socket server, the session store and the island: decodes envelopes, applies
-/// them to the store, runs the store's timers, and mirrors sessions onto robots.
+/// them to the store, holds blocking requests until the user decides, and mirrors sessions onto robots.
 @MainActor
 final class SessionCoordinator {
     private(set) var store = SessionStore()
@@ -11,9 +11,12 @@ final class SessionCoordinator {
     private var server: HookServer?
     private var sleepTimer: Timer?
     private(set) var lastUsage: StatuslineInfo?
+    /// Oldest first. At most one per session: Claude Code waits on each.
+    private var pending: [PendingRequest] = []
 
     init(island: IslandController) {
         self.island = island
+        island.state.onDecision = { [weak self] id, decision in self?.decide(id, decision) }
     }
 
     func start() {
@@ -24,9 +27,9 @@ final class SessionCoordinator {
         do {
             try server.start()
             self.server = server
-            NSLog("cubi: listening on \(server.socketPath)")
+            CubiLog.write("listening on \(server.socketPath)")
         } catch {
-            NSLog("cubi: hook server failed to start: \(error)")
+            CubiLog.write("hook server failed to start: \(error)")
         }
         let timer = Timer(timeInterval: 60, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
@@ -45,22 +48,92 @@ final class SessionCoordinator {
 
     private func handle(_ envelope: HookEnvelope, _ connection: HookConnection) {
         guard let decoded = ClaudeCodeDecoder.decode(envelope) else {
-            NSLog("cubi: ignored \(envelope.agent)/\(envelope.event ?? "?")")
+            CubiLog.write("ignored \(envelope.agent)/\(envelope.event ?? "?")")
             connection.close()
             return
         }
-        // Phase 2 makes no decisions: closing at once hands the question back to the terminal
-        // immediately instead of after the relay's timeout. Phase 3 holds these open.
-        if decoded.event.isBlocking { connection.close() } else { connection.close() }
+        let sessionID = decoded.session.id
+
+        switch decoded.event {
+        case .permissionRequest(let tool, let input, let suggestions):
+            if tool == "AskUserQuestion" {
+                // The question itself comes through PreToolUse; this is the terminal's own flow.
+                connection.close()
+                return
+            }
+            // One outstanding request per session: a newer one replaces a stale one.
+            withdraw(sessionID: sessionID, outcome: .handledElsewhere)
+            pending.append(PendingRequest(sessionID: sessionID, kind: .approval(tool: tool, input: input, suggestions: suggestions),
+                                          connection: connection))
+        case .question(let raw):
+            guard let questions = AskQuestion.parse(raw) else {
+                CubiLog.write("AskUserQuestion input not understood, leaving it to the terminal")
+                connection.close()
+                return
+            }
+            withdraw(sessionID: sessionID, outcome: .handledElsewhere)
+            pending.append(PendingRequest(sessionID: sessionID, kind: .question(questions: questions, raw: raw),
+                                          connection: connection))
+        default:
+            connection.close()
+        }
 
         let effects = store.apply(decoded, now: Date().timeIntervalSinceReferenceDate)
+        CubiLog.write("event \(decoded.event.name) session=\(sessionID.prefix(8)) pending=\(pending.count)")
         run(effects)
+        if decoded.event.isBlocking { Sounds.play(.pending) }
         sync()
     }
 
+    /// The relay went away before we answered: the user pressed Esc, answered in the terminal,
+    /// or the relay's deadline passed. Either way the card is moot.
     private func clientClosed(_ connection: HookConnection) {
-        // Phase 3: a cancelled approval (answered in the terminal) withdraws its card here.
+        guard let i = pending.firstIndex(where: { $0.connection === connection }) else { return }
+        let request = pending.remove(at: i)
+        store.resolvePending(request.sessionID, outcome: .handledElsewhere)
+        sync()
     }
+
+    private func withdraw(sessionID: String, outcome: SessionStore.PendingOutcome) {
+        guard let i = pending.firstIndex(where: { $0.sessionID == sessionID }) else { return }
+        let request = pending.remove(at: i)
+        request.connection.close()
+        store.resolvePending(sessionID, outcome: outcome)
+    }
+
+    // MARK: - Decisions from the island
+
+    private func decide(_ id: UUID, _ decision: Decision) {
+        guard let i = pending.firstIndex(where: { $0.id == id }) else { return }
+        let request = pending.remove(at: i)
+        let outcome: SessionStore.PendingOutcome
+        switch (request.kind, decision) {
+        case (.approval, .allow):
+            request.connection.reply(ClaudeCodeReplies.permission(.allow))
+            outcome = .allowed
+            Sounds.play(.allow)
+        case (.approval(_, _, let suggestions), .always):
+            request.connection.reply(ClaudeCodeReplies.permission(.always(suggestions: suggestions)))
+            outcome = .allowed
+            Sounds.play(.allow)
+        case (.approval, .deny):
+            request.connection.reply(ClaudeCodeReplies.permission(.deny(message: "Denied from Cubi")))
+            outcome = .denied
+            Sounds.play(.deny)
+        case (.question(_, let raw), .answers(let answers)):
+            request.connection.reply(ClaudeCodeReplies.question(questions: raw["questions"] ?? .array([]), answers: answers))
+            outcome = .answered
+            Sounds.play(.answer)
+        default:
+            CubiLog.write("decision \(decision) does not fit request, closing without a decision")
+            request.connection.close()
+            outcome = .handledElsewhere
+        }
+        store.resolvePending(request.sessionID, outcome: outcome)
+        sync()
+    }
+
+    // MARK: - Effects and timers
 
     private func run(_ effects: [StoreEffect]) {
         for effect in effects {
@@ -78,6 +151,7 @@ final class SessionCoordinator {
                 DispatchQueue.main.asyncAfter(deadline: .now() + after) { [weak self] in
                     MainActor.assumeIsolated {
                         guard let self, self.store.sessions[id]?.ended == true else { return }
+                        self.withdraw(sessionID: id, outcome: .handledElsewhere)
                         self.store.remove(id)
                         self.sync()
                     }
@@ -95,7 +169,7 @@ final class SessionCoordinator {
         sync()
     }
 
-    // MARK: - Mirror sessions onto robots
+    // MARK: - Mirror sessions and cards onto the island
 
     private func sync() {
         let state = island.state
@@ -112,14 +186,49 @@ final class SessionCoordinator {
             bot.model.setState(info.botState)
             bots.append(bot)
         }
-        // Keep the demo robot (if the menu created one) at the end.
         if let demo = existing["demo"] { bots.append(demo) }
         if bots.map(\.id) != state.bots.map(\.id) { state.bots = bots }
 
-        let pending = store.anyPending
-        if pending != state.holdOpen {
-            state.holdOpen = pending
-            pending ? island.reveal() : island.releaseHold()
+        let cards = pending.map { card(for: $0) }
+        if cards != state.pendingCards {
+            state.pendingCards = cards
+            state.expandedHeight = Self.expandedHeight(for: cards.first, compact: state.compactHeight)
+        }
+
+        let hold = !pending.isEmpty
+        if hold != state.holdOpen {
+            state.holdOpen = hold
+            hold ? island.present() : island.releaseHold()
+        } else if hold && state.mode != .expanded {
+            island.present()
+        }
+    }
+
+    private func card(for request: PendingRequest) -> PendingCard {
+        let info = store.sessions[request.sessionID]
+        let name = info?.name ?? SessionStore.defaultName(id: request.sessionID, cwd: nil)
+        let color = SessionPalette.colors[info?.colorIndex ?? 0]
+        switch request.kind {
+        case .approval(let tool, let input, let suggestions):
+            let summary = ApprovalSummary.describe(tool: tool, input: input)
+            let canAlways = (suggestions.array?.isEmpty == false)
+            return PendingCard(id: request.id, sessionName: name, color: color,
+                               content: .approval(title: summary.title, detail: summary.detail, canAlways: canAlways))
+        case .question(let questions, _):
+            return PendingCard(id: request.id, sessionName: name, color: color, content: .question(questions))
+        }
+    }
+
+    private static func expandedHeight(for card: PendingCard?, compact: CGFloat) -> CGFloat {
+        guard let card else { return 190 }
+        switch card.content {
+        case .approval:
+            return compact + 150
+        case .question(let questions):
+            let q = questions.first
+            let options = CGFloat(q?.options.count ?? 1)
+            let rows = options * 36 + (q?.multiSelect == true ? 34 : 0)
+            return min(360, compact + 70 + rows)
         }
     }
 }

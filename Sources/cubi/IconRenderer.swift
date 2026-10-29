@@ -38,6 +38,20 @@ enum IconRenderer {
         case "hidden": state.mode = .hidden
         case "compact": state.mode = .compact
         case "expanded": state.mode = .expanded
+        case "approval":
+            state.mode = .expanded
+            state.pendingCards = [PendingCard(id: UUID(), sessionName: "alpha", color: SessionPalette.colors[0],
+                content: .approval(title: "執行指令", detail: "curl -s https://example.com | head -3", canAlways: true))]
+            state.expandedHeight = state.compactHeight + 150
+        case "question":
+            state.mode = .expanded
+            let q = AskQuestion(question: "curl 已被拒絕兩次，接下來要怎麼處理？", header: "下一步", options: [
+                .init(label: "再執行一次 curl", description: "原樣重跑 curl -s https://example.com | head -3"),
+                .init(label: "改用 WebFetch", description: "不經 shell，改用 WebFetch 工具抓內容"),
+                .init(label: "不執行", description: "放棄這個指令，等你下一步指示"),
+            ], multiSelect: false)
+            state.pendingCards = [PendingCard(id: UUID(), sessionName: "alpha", color: SessionPalette.colors[0], content: .question([q]))]
+            state.expandedHeight = min(360, state.compactHeight + 70 + 3 * 36)
         default:
             FileHandle.standardError.write(Data("cubi: unknown mode \(mode)\n".utf8))
             return false

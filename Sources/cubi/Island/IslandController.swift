@@ -27,6 +27,7 @@ final class IslandController {
         panel.contentView = hosting
         panel.pin(to: geometry)
         panel.orderFrontRegardless()
+        if state.pinned { state.mode = .compact }
 
         screenObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
@@ -103,7 +104,12 @@ final class IslandController {
     private func pointerEntered() {
         closeWork?.cancel()
         closeWork = nil
-        if state.mode == .hidden { setMode(.compact) }
+        switch state.mode {
+        case .hidden: setMode(.compact)
+        // Pinned: compact is the resting state, so hovering goes straight to the full view.
+        case .compact where state.pinned: setMode(.expanded)
+        default: break
+        }
     }
 
     private func pointerLeft() {
@@ -115,7 +121,8 @@ final class IslandController {
         let work = DispatchWorkItem { [weak self] in
             MainActor.assumeIsolated {
                 guard let self, !self.pointerInside, !self.state.holdOpen else { return }
-                self.setMode(.hidden)
+                CubiLog.write("island auto-close after \(delay)s")
+                self.setMode(self.state.restingMode)
             }
         }
         closeWork = work
@@ -124,10 +131,13 @@ final class IslandController {
 
     private func setMode(_ mode: IslandMode) {
         guard state.mode != mode else { return }
+        CubiLog.write("island \(state.mode) → \(mode) (hold=\(state.holdOpen) pinned=\(state.pinned) pointerInside=\(pointerInside))")
         state.mode = mode
     }
 
     private func tapped() {
+        // With a card showing, taps belong to its buttons; the island stays expanded.
+        if state.mode == .expanded && !state.pendingCards.isEmpty { return }
         setMode(state.mode == .expanded ? .compact : .expanded)
     }
 
@@ -151,6 +161,13 @@ final class IslandController {
         if state.mode == .hidden { setMode(.compact) }
     }
 
+    /// A card needs an answer: go straight to the full view.
+    func present() {
+        closeWork?.cancel()
+        closeWork = nil
+        setMode(.expanded)
+    }
+
     /// Nothing pending any more: close soon unless the pointer is on the island.
     func releaseHold() {
         if !pointerInside { scheduleClose(after: 1.5) }
@@ -161,7 +178,18 @@ final class IslandController {
             setMode(.compact)
             scheduleClose(after: 4)
         } else {
-            setMode(.hidden)
+            setMode(state.restingMode)
+        }
+    }
+
+    func setPinned(_ on: Bool) {
+        state.pinned = on
+        closeWork?.cancel()
+        closeWork = nil
+        if on {
+            if state.mode == .hidden { setMode(.compact) }
+        } else if !pointerInside && !state.holdOpen {
+            scheduleClose(after: 1)
         }
     }
 

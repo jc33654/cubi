@@ -59,6 +59,24 @@ public enum CanonicalEvent: Sendable, Equatable {
     case subagentStop(type: String?)
     case statusline(StatuslineInfo)
 
+    /// Short name for logs.
+    public var name: String {
+        switch self {
+        case .sessionStart: return "sessionStart"
+        case .prompt: return "prompt"
+        case .toolStart(let t, _): return "toolStart(\(t))"
+        case .toolEnd(let t, let ok, _, _): return "toolEnd(\(t),\(ok ? "ok" : "failed"))"
+        case .permissionRequest(let t, _, _): return "permissionRequest(\(t))"
+        case .question: return "question"
+        case .notification(let t, _): return "notification(\(t))"
+        case .stop: return "stop"
+        case .sessionEnd: return "sessionEnd"
+        case .subagentStart: return "subagentStart"
+        case .subagentStop: return "subagentStop"
+        case .statusline: return "statusline"
+        }
+    }
+
     /// True when the relay holds its connection open for a reply.
     public var isBlocking: Bool {
         switch self {

@@ -15,7 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let others = NSRunningApplication.runningApplications(withBundleIdentifier: CubiInfo.bundleIdentifier)
             .filter { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }
         if !others.isEmpty {
-            NSLog("cubi: already running (pid \(others[0].processIdentifier)), asking it to show the island")
+            CubiLog.write("already running (pid \(others[0].processIdentifier)), asking it to show the island")
             DistributedNotificationCenter.default().postNotificationName(Self.showNotification, object: nil,
                                                                          userInfo: nil, deliverImmediately: true)
             NSApp.terminate(nil)

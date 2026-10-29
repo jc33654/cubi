@@ -25,8 +25,17 @@ final class SessionCoordinator {
         island.state.onDecision = { [weak self] id, decision in self?.decide(id, decision) }
     }
 
+    private static let usageKey = "lastUsage"
+
     func start() {
         RelayInstaller.ensureInstalled()
+        // The status line only fires when a session changes; restore the last reading so the
+        // readout is not blank until then.
+        if let data = UserDefaults.standard.data(forKey: Self.usageKey),
+           let saved = try? JSONDecoder().decode(StatuslineInfo.self, from: data) {
+            lastUsage = saved
+            sync()
+        }
         let server = HookServer(
             handler: { [weak self] envelope, connection in self?.handle(envelope, connection) },
             onClientClosed: { [weak self] connection in self?.clientClosed(connection) })
@@ -250,7 +259,11 @@ final class SessionCoordinator {
             case .notify(let session, let title, let body):
                 notifier.notify(title: title, body: body, thread: session)
             case .usage(let info):
+                if info != lastUsage {
+                    CubiLog.write("usage 5h=\(info.fiveHour.map { "\(Int($0.usedPercent))%" } ?? "nil") 7d=\(info.sevenDay.map { "\(Int($0.usedPercent))%" } ?? "nil") ctx=\(info.contextPercent.map { "\(Int($0))%" } ?? "nil") name=\(info.sessionName ?? "-")")
+                }
                 lastUsage = info
+                if let data = try? JSONEncoder().encode(info) { UserDefaults.standard.set(data, forKey: Self.usageKey) }
             }
         }
     }

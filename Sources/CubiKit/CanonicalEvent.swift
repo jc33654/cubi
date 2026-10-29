@@ -16,7 +16,7 @@ public struct SessionRef: Sendable, Equatable {
     }
 }
 
-public struct UsageWindow: Sendable, Equatable {
+public struct UsageWindow: Sendable, Equatable, Codable {
     public var usedPercent: Double
     /// Unix epoch seconds.
     public var resetsAt: Double?
@@ -27,7 +27,7 @@ public struct UsageWindow: Sendable, Equatable {
     }
 }
 
-public struct StatuslineInfo: Sendable, Equatable {
+public struct StatuslineInfo: Sendable, Equatable, Codable {
     public var sessionName: String?
     public var model: String?
     public var contextPercent: Double?

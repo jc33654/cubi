@@ -29,6 +29,10 @@ final class SessionCoordinator {
             guard let info = self?.store.sessions[id] else { return }
             TerminalFocus.focus(info)
         }
+        notifier.onActivate = { [weak self] id in
+            guard let info = self?.store.sessions[id] else { return }
+            TerminalFocus.focus(info)
+        }
     }
 
     private static let usageKey = "lastUsage"

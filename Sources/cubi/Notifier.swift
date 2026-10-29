@@ -61,7 +61,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         Task { @MainActor in
             CubiLog.write("notification clicked: session=\(thread.prefix(8))")
             self.onActivate(thread)
-            completionHandler()
         }
+        completionHandler()
     }
 }

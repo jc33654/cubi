@@ -18,11 +18,22 @@ private func parse(_ line: String) throws -> JSONValue {
     let fixture = try Fixtures.decoded("PermissionRequest-1")
     guard case .permissionRequest(_, _, let suggestions) = fixture.event else { Issue.record("x"); return }
     let j = try parse(ClaudeCodeReplies.permission(.always(suggestions: suggestions)))
-    let perms = j["hookSpecificOutput"]?["decision"]?["updatedPermissions"]?.array
-    #expect(perms?.count == 1)
-    #expect(perms?.first?["type"]?.string == "addRules")
-    #expect(perms?.first?["destination"]?.string == "localSettings")
-    #expect(perms?.first?["rules"]?.array?.first?["ruleContent"]?.string == "curl -s https://example.com")
+    let perms = try #require(j["hookSpecificOutput"]?["decision"]?["updatedPermissions"]?.array)
+    // One immediate (session) copy, then the persisted (localSettings) original.
+    #expect(perms.count == 2)
+    #expect(perms[0]["destination"]?.string == "session")
+    #expect(perms[1]["destination"]?.string == "localSettings")
+    for p in perms {
+        #expect(p["type"]?.string == "addRules")
+        #expect(p["rules"]?.array?.first?["ruleContent"]?.string == "curl -s https://example.com")
+    }
+}
+
+@Test func alwaysDoesNotDuplicateASessionSuggestion() throws {
+    let s: JSONValue = .array([.object(["type": .string("addRules"), "destination": .string("session"), "behavior": .string("allow"),
+                                        "rules": .array([.object(["toolName": .string("Bash"), "ruleContent": .string("ls")])])])])
+    let j = try parse(ClaudeCodeReplies.permission(.always(suggestions: s)))
+    #expect(j["hookSpecificOutput"]?["decision"]?["updatedPermissions"]?.array?.count == 1)
 }
 
 @Test func alwaysWithoutSuggestionsIsPlainAllow() throws {

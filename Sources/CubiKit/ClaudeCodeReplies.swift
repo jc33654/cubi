@@ -17,7 +17,19 @@ public enum ClaudeCodeReplies {
             decision = ["behavior": .string("allow")]
         case .always(let suggestions):
             decision = ["behavior": .string("allow")]
-            if case .array(let a) = suggestions, !a.isEmpty { decision["updatedPermissions"] = suggestions }
+            if case .array(let a) = suggestions, !a.isEmpty {
+                // Claude Code writes a `localSettings` rule to disk but only picks it up when its
+                // file watcher reloads (5–60 s observed). A `session` copy applies at once.
+                var perms: [JSONValue] = []
+                for entry in a {
+                    if var o = entry.object, o["destination"]?.string != "session" {
+                        o["destination"] = .string("session")
+                        perms.append(.object(o))
+                    }
+                }
+                perms.append(contentsOf: a)
+                decision["updatedPermissions"] = .array(perms)
+            }
         case .deny(let message):
             decision = ["behavior": .string("deny"), "message": .string(message)]
         }

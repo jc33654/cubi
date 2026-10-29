@@ -22,6 +22,48 @@ if let i = arguments.firstIndex(of: "--render-island"), i + 3 < arguments.count 
     exit(ok ? 0 : 1)
 }
 
+// Hook management from the terminal (the same code the settings window uses).
+//   --hooks-status             what is installed
+//   --hooks-plan [--retire-notify]   show the diff an install would make, write nothing
+//   --install-hooks [--retire-notify] install (backup + write), after showing the diff
+//   --uninstall-hooks          remove Cubi's entries and restore the previous statusLine
+if let i = arguments.firstIndex(where: { ["--hooks-status", "--hooks-plan", "--install-hooks", "--uninstall-hooks"].contains($0) }) {
+    let retire = arguments.contains("--retire-notify")
+    let options = ClaudeHookInstaller.Options(retireCommandsContaining: retire ? ["notify-hook.sh"] : [])
+    do {
+        switch arguments[i] {
+        case "--hooks-status":
+            let s = try HookSetup.status()
+            print("hooks: \(s.hooksInstalled ? "installed" : "not installed")")
+            print("statusLine: \(s.statuslineChained ? "chained" : "not chained")")
+            if !s.legacyNotificationCommands.isEmpty { print("legacy Notification hooks: \(s.legacyNotificationCommands.joined(separator: ", "))") }
+            exit(0)
+        case "--hooks-plan":
+            let p = try HookSetup.installPreview(options: options)
+            print(p.plan.changed ? p.plan.diff : "already installed, nothing to change")
+            exit(0)
+        case "--install-hooks":
+            let p = try HookSetup.installPreview(options: options)
+            guard p.plan.changed else { print("already installed, nothing to change"); exit(0) }
+            print(p.plan.diff)
+            let backup = try HookSetup.apply(p)
+            print("written \(HookSetup.settingsURL.path)" + (backup.map { " (backup: \($0.path))" } ?? ""))
+            print("Restart your Claude Code sessions: hooks are read when a session starts.")
+            exit(0)
+        default:
+            let p = try HookSetup.uninstallPreview()
+            guard p.plan.changed else { print("nothing of Cubi's in settings.json"); exit(0) }
+            print(p.plan.diff)
+            let backup = try HookSetup.apply(p)
+            print("written \(HookSetup.settingsURL.path)" + (backup.map { " (backup: \($0.path))" } ?? ""))
+            exit(0)
+        }
+    } catch {
+        FileHandle.standardError.write(Data("cubi: \(error.localizedDescription)\n".utf8))
+        exit(1)
+    }
+}
+
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate

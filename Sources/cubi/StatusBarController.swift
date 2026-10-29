@@ -15,9 +15,14 @@ final class StatusBarController: NSObject {
     /// Shared with the island's right-click menu.
     let menu: NSMenu
 
-    init(island: IslandController, notifier: Notifier) {
+    private let openSettings: () -> Void
+    private let openToolkit: () -> Void
+
+    init(island: IslandController, notifier: Notifier, openSettings: @escaping () -> Void, openToolkit: @escaping () -> Void) {
         self.island = island
         self.notifier = notifier
+        self.openSettings = openSettings
+        self.openToolkit = openToolkit
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         menu = NSMenu()
         super.init()
@@ -66,6 +71,15 @@ final class StatusBarController: NSObject {
         menu.addItem(loginItem)
 
         menu.addItem(.separator())
+        let settings = NSMenuItem(title: "設定…", action: #selector(showSettings), keyEquivalent: ",")
+        settings.target = self
+        menu.addItem(settings)
+        if FileManager.default.fileExists(atPath: ToolkitPanel.htmlPath) {
+            let toolkit = NSMenuItem(title: "Claude Toolkit 面板", action: #selector(showToolkit), keyEquivalent: "")
+            toolkit.target = self
+            menu.addItem(toolkit)
+        }
+        menu.addItem(.separator())
         let quit = NSMenuItem(title: "結束 Cubi", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quit)
     }
@@ -78,6 +92,9 @@ final class StatusBarController: NSObject {
         guard let raw = sender.representedObject as? String, let state = BotState(rawValue: raw) else { return }
         island.setDemoState(state)
     }
+
+    @objc private func showSettings() { openSettings() }
+    @objc private func showToolkit() { openToolkit() }
 
     @objc private func toggleSounds() {
         Sounds.enabled.toggle()

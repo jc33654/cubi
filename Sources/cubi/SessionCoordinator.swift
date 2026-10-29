@@ -8,6 +8,8 @@ final class SessionCoordinator {
     private(set) var store = SessionStore()
     private let island: IslandController
     let notifier = Notifier()
+    let ignored = IgnoredDirectories()
+    private var ignoredLogged: Set<String> = []
     private var server: HookServer?
     private var sleepTimer: Timer?
     private var watchTimer: Timer?
@@ -73,6 +75,12 @@ final class SessionCoordinator {
             return
         }
         let sessionID = decoded.session.id
+
+        if store.sessions[sessionID] == nil, ignored.ignores(decoded.session.cwd) {
+            if ignoredLogged.insert(sessionID).inserted { CubiLog.write("ignored session \(sessionID.prefix(8)) in \(decoded.session.cwd ?? "?")") }
+            connection.close()
+            return
+        }
 
         // Any later event for this session means the terminal (or Esc) settled the request.
         if decoded.event.endsPendingRequest, hasPending(sessionID) {

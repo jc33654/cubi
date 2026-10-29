@@ -6,6 +6,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var island: IslandController?
     private var statusBar: StatusBarController?
     private var coordinator: SessionCoordinator?
+    private var settings: SettingsWindow?
+    private let toolkit = ToolkitPanel()
     private var showObserver: NSObjectProtocol?
 
     /// Posted by a second launch so the running copy reveals the island (there is no window to show).
@@ -29,10 +31,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.island = island
         let coordinator = SessionCoordinator(island: island)
         self.coordinator = coordinator
-        let statusBar = StatusBarController(island: island, notifier: coordinator.notifier)
+        let settings = SettingsWindow(island: island.state, notifier: coordinator.notifier, ignored: coordinator.ignored, toolkit: toolkit)
+        self.settings = settings
+        let statusBar = StatusBarController(island: island, notifier: coordinator.notifier,
+                                            openSettings: { [settings] in settings.show() },
+                                            openToolkit: { [toolkit] in toolkit.show() })
         self.statusBar = statusBar
         island.contextMenu = statusBar.menu
         coordinator.start()
+        // Where development left project-local hooks behind; the settings window offers to clean them.
+        if UserDefaults.standard.stringArray(forKey: HookSetupModel.projectLocalKey) == nil {
+            UserDefaults.standard.set(["~/Documents/cubi"], forKey: HookSetupModel.projectLocalKey)
+        }
+        if !((try? HookSetup.status())?.hooksInstalled ?? false) { settings.show() }
 
         showObserver = DistributedNotificationCenter.default().addObserver(
             forName: Self.showNotification, object: nil, queue: .main

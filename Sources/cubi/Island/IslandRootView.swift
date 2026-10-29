@@ -130,8 +130,8 @@ struct IslandRootView: View {
                         .help(bot.name)
                 }
             }
+            .padding(.trailing, 8)
             .frame(width: state.leftWingWidth, height: height, alignment: .trailing)
-            .padding(.trailing, 0)
             Spacer().frame(width: state.geometry.notchWidth)
             Group {
                 if let u = state.usage, u.fiveHour != nil || u.sevenDay != nil {

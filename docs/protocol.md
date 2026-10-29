@@ -62,3 +62,42 @@
 - statusline 串接：stdout 透傳、exit code 透傳（`--then 'exit 3'` → 3）、與真實 `~/.claude/statusline.sh` 串接輸出正常。
 - JSON 跳脫：引號、換行、中文、控制字元 round-trip 正確。
 - `client.tty` 正確指到執行 Claude Code 的 Ghostty 分頁 tty。
+
+## Plugin manifest（`~/Library/Application Support/cubi/plugins/<id>/manifest.json`）
+
+範例：`docs/plugins/example-agent/manifest.json`。載入規則在 `Sources/CubiKit/ManifestPlugin.swift`。
+
+| 欄位 | 必填 | 說明 |
+|---|---|---|
+| `schema` | | 目前 `1` |
+| `id` | ✔ | `[a-z0-9-]`，同時是 relay 的 `--agent` 值與 socket 信封的 `agent` |
+| `name` | ✔ | 設定頁顯示名 |
+| `color` | | `#RRGGBB`，沒給用灰 |
+| `capabilities` | | `approvals`、`questions`、`statusline` 的子集。manifest plugin 目前沒有回覆模板，宣告 `approvals` 只影響設定頁顯示 |
+| `secrets[]` | | `{key, label, required}`；值存登入鑰匙圈，不進 manifest |
+| `install.mode` | | `json-hooks` 或 `manual`（預設）。`manual` 時 `install.instructions` 顯示給使用者自己貼 |
+| `install.file` | json-hooks 必填 | 要寫的 JSON 檔，可用 `~`。格式比照 Claude Code：`hooks.<event>[] = { hooks: [{type, command, timeout}] }` |
+| `install.entries[]` | json-hooks 必填 | `{event, command, timeout}`。**`command` 必須含 `cubi-hook --agent <id> `**（尾端空白），安裝狀態與解除都靠這個 tag 辨識自己的條目；沒有就拒載 |
+| `events.<native>` | | 原生事件名 → `{canonical, map}` |
+| `events.<native>.canonical` | ✔ | `sessionStart`、`prompt`、`toolStart`、`toolEnd`、`permissionRequest`、`question`、`notification`、`stop`、`sessionEnd` |
+| `events.<native>.map` | | canonical 欄位 → JSON path（只支援 `$.a.b` 物件走訪，沒有陣列索引）。沒對映的欄位用 Claude Code 的預設路徑 |
+
+`map` 可用的欄位（括號是預設路徑）：
+
+| 欄位 | 用於 | 預設 |
+|---|---|---|
+| `session` | 全部，必要 | `$.session_id` |
+| `cwd`、`transcript` | 全部 | `$.cwd`、`$.transcript_path` |
+| `tool`、`input`、`toolUseID` | toolStart、toolEnd、permissionRequest、question | `$.tool_name`、`$.tool_input`、`$.tool_use_id` |
+| `ok`、`response` | toolEnd | `$.ok`、`$.tool_response` |
+| `source` | sessionStart | `$.source` |
+| `prompt` | prompt | `$.prompt` |
+| `type`、`message` | notification | `$.notification_type`、`$.message` |
+| `message` | stop | `$.last_assistant_message` |
+| `reason` | sessionEnd | `$.reason` |
+
+行為：
+
+- 未知 `agent` 的信封直接丟棄；plugin 關閉時不裝 hooks、不顯示、不解碼。
+- 解除安裝只刪 `command` 含自己 tag 的 group，其他 plugin 與使用者自己的 hooks 不動。
+- blocking 事件（`permissionRequest`、`question`）decode 出來後，因為 manifest plugin 沒有 reply 模板，app 會立刻關連線，agent 退回自己的提示。

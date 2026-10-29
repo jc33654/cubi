@@ -8,6 +8,8 @@ public struct SessionInfo: Sendable, Equatable, Identifiable {
     public var cwd: String?
     public var client: HookClient
     public var transcriptPath: String?
+    /// The most recent tool call id seen for the session (PermissionRequest itself carries none).
+    public var lastToolUseID: String?
     public var colorIndex: Int
     public var botState: BotState = .idle
     public var waitingBadge: Badge = .exclaim
@@ -63,6 +65,7 @@ public struct SessionStore: Sendable {
         if s.cwd == nil { s.cwd = hook.session.cwd }
         if s.client.tty == nil { s.client = hook.session.client }
         if let t = hook.session.transcriptPath { s.transcriptPath = t }
+        if let id = hook.toolUseID { s.lastToolUseID = id }
 
         switch hook.event {
         case .sessionStart:
@@ -105,7 +108,12 @@ public struct SessionStore: Sendable {
         case .notification(let type, let message):
             switch type {
             case "permission_prompt":
-                if s.pending == nil { s.botState = .waiting; s.waitingBadge = .exclaim; s.pending = .approval(tool: "?") }
+                if s.pending == nil {
+                    s.botState = .waiting
+                    s.waitingBadge = .exclaim
+                    s.pending = .approval(tool: "?")
+                    s.ticker = "終端正在詢問"
+                }
             case "idle_prompt":
                 s.botState = .idle
                 s.pending = nil

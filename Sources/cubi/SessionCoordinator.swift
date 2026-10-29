@@ -84,11 +84,13 @@ final class SessionCoordinator {
                 withdraw(sessionID: sessionID, outcome: .handledElsewhere)
                 hold(PendingRequest(sessionID: sessionID,
                                     kind: .question(questions: questions, raw: input, channel: .permissionRequest),
-                                    connection: connection), transcript: decoded.session.transcriptPath)
+                                    connection: connection, toolUseID: toolUseID(decoded)),
+                     transcript: decoded.session.transcriptPath)
             } else {
                 withdraw(sessionID: sessionID, outcome: .handledElsewhere)
                 hold(PendingRequest(sessionID: sessionID, kind: .approval(tool: tool, input: input, suggestions: suggestions),
-                                    connection: connection), transcript: decoded.session.transcriptPath)
+                                    connection: connection, toolUseID: toolUseID(decoded)),
+                     transcript: decoded.session.transcriptPath)
             }
         case .question(let raw):
             guard let questions = AskQuestion.parse(raw) else {
@@ -98,7 +100,8 @@ final class SessionCoordinator {
             }
             withdraw(sessionID: sessionID, outcome: .handledElsewhere)
             hold(PendingRequest(sessionID: sessionID, kind: .question(questions: questions, raw: raw, channel: .preToolUse),
-                                connection: connection), transcript: decoded.session.transcriptPath)
+                                connection: connection, toolUseID: toolUseID(decoded)),
+                 transcript: decoded.session.transcriptPath)
         default:
             connection.close()
         }
@@ -111,12 +114,18 @@ final class SessionCoordinator {
         if case .stop = decoded.event { Sounds.play(.done) }
     }
 
+    /// PermissionRequest carries no tool_use_id; the PreToolUse just before it did.
+    private func toolUseID(_ decoded: DecodedHook) -> String? {
+        decoded.toolUseID ?? store.sessions[decoded.session.id]?.lastToolUseID
+    }
+
     private func hasPending(_ sessionID: String) -> Bool {
         pending.contains { $0.sessionID == sessionID }
     }
 
     private func hold(_ request: PendingRequest, transcript: String?) {
         pending.append(request)
+        CubiLog.write("holding \(request.isQuestion ? "question" : "approval") session=\(request.sessionID.prefix(8)) tool_use_id=\(request.toolUseID ?? "-")")
         if let w = TranscriptWatcher(path: transcript) { watchers[request.id] = w }
         startWatchingIfNeeded()
     }
@@ -155,7 +164,7 @@ final class SessionCoordinator {
         var settled: [String] = []
         for request in pending {
             guard var w = watchers[request.id] else { continue }
-            if w.userEntryAppended() { settled.append(request.sessionID) } else { watchers[request.id] = w }
+            if w.settled(toolUseID: request.toolUseID) { settled.append(request.sessionID) } else { watchers[request.id] = w }
         }
         for id in settled {
             CubiLog.write("transcript moved on: session=\(id.prefix(8))")

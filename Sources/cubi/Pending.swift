@@ -18,12 +18,15 @@ final class PendingRequest: Identifiable {
     let sessionID: String
     let kind: Kind
     let connection: HookConnection
+    /// Id of the tool call being decided, when a PreToolUse for it was seen.
+    let toolUseID: String?
     let receivedAt = Date()
 
-    init(sessionID: String, kind: Kind, connection: HookConnection) {
+    init(sessionID: String, kind: Kind, connection: HookConnection, toolUseID: String?) {
         self.sessionID = sessionID
         self.kind = kind
         self.connection = connection
+        self.toolUseID = toolUseID
     }
 }
 

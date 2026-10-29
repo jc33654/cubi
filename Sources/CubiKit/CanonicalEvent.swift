@@ -102,9 +102,12 @@ public enum CanonicalEvent: Sendable, Equatable {
 public struct DecodedHook: Sendable, Equatable {
     public var session: SessionRef
     public var event: CanonicalEvent
+    /// Claude Code's id for the tool call this hook is about (PreToolUse/PostToolUse carry it).
+    public var toolUseID: String?
 
-    public init(session: SessionRef, event: CanonicalEvent) {
+    public init(session: SessionRef, event: CanonicalEvent, toolUseID: String? = nil) {
         self.session = session
         self.event = event
+        self.toolUseID = toolUseID
     }
 }

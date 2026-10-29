@@ -44,7 +44,7 @@ public enum ClaudeCodeDecoder {
         default:
             event = nil
         }
-        return event.map { DecodedHook(session: session, event: $0) }
+        return event.map { DecodedHook(session: session, event: $0, toolUseID: p["tool_use_id"]?.string) }
     }
 
     static func statusline(_ p: JSONValue) -> StatuslineInfo {

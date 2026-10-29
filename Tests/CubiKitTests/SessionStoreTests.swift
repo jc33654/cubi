@@ -134,3 +134,18 @@ private func hook(_ id: String, _ event: CanonicalEvent, cwd: String? = "/Users/
     #expect(store.usage?.fiveHour == w(11))
     #expect(store.usage?.sevenDay == w(20))
 }
+
+@Test func lateSubagentStopDoesNotWakeAnIdleRobot() {
+    var store = SessionStore()
+    _ = store.apply(hook("s", .sessionStart(source: nil)), now: 1)
+    _ = store.apply(hook("s", .prompt("hi")), now: 2)
+    _ = store.apply(hook("s", .subagentStart(type: "Explore")), now: 3)
+    #expect(store.sessions["s"]?.botState == .working)
+    _ = store.apply(hook("s", .subagentStop(type: "Explore")), now: 4)
+    #expect(store.sessions["s"]?.botState == .thinking)
+    _ = store.apply(hook("s", .stop(lastMessage: nil)), now: 5)
+    store.revertToIdle("s")
+    #expect(store.sessions["s"]?.botState == .idle)
+    _ = store.apply(hook("s", .subagentStop(type: "Explore")), now: 60)
+    #expect(store.sessions["s"]?.botState == .idle)
+}

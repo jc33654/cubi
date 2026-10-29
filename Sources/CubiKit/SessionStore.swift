@@ -175,7 +175,12 @@ public struct SessionStore: Sendable {
             s.botState = .working
             s.ticker = "子代理：" + (type ?? "agent")
         case .subagentStop:
-            s.botState = .working
+            // SubagentStop can arrive minutes after the turn ended (background agents); it must
+            // not wake an idle robot. Mid-turn, the main agent goes back to composing.
+            if s.botState == .working || s.botState == .thinking {
+                s.botState = .thinking
+                s.ticker = "思考中"
+            }
         case .statusline(let info):
             if let n = info.sessionName, !n.isEmpty { s.name = n; s.explicitName = true }
             if let m = info.model { s.model = m }

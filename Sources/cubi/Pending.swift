@@ -31,7 +31,6 @@ final class PendingRequest: Identifiable {
     let connection: HookConnection
     /// Id of the tool call being decided, when a PreToolUse for it was seen.
     let toolUseID: String?
-    let receivedAt = Date()
 
     init(sessionID: String, agent: String, kind: Kind, envelope: HookEnvelope, connection: HookConnection, toolUseID: String?) {
         self.sessionID = sessionID

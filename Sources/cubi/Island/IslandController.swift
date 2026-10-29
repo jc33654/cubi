@@ -155,13 +155,6 @@ final class IslandController {
         scheduleClose(after: 4)
     }
 
-    /// Something needs the user: open and stay open (`state.holdOpen` blocks auto-close).
-    func reveal() {
-        closeWork?.cancel()
-        closeWork = nil
-        if state.mode == .hidden { setMode(.compact) }
-    }
-
     /// A card needs an answer: go straight to the full view.
     func present() {
         closeWork?.cancel()

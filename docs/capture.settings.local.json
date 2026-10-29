@@ -1,19 +1,19 @@
 {
   "hooks": {
-    "SessionStart":       [{ "hooks": [{ "type": "command", "command": "/Users/nb-0041/Documents/cubi/.build/release/cubi-hook --agent claude-code --event SessionStart --capture", "timeout": 10 }] }],
-    "SessionEnd":         [{ "hooks": [{ "type": "command", "command": "/Users/nb-0041/Documents/cubi/.build/release/cubi-hook --agent claude-code --event SessionEnd --capture", "timeout": 1 }] }],
-    "UserPromptSubmit":   [{ "hooks": [{ "type": "command", "command": "/Users/nb-0041/Documents/cubi/.build/release/cubi-hook --agent claude-code --event UserPromptSubmit --capture", "timeout": 10 }] }],
+    "SessionStart":       [{ "hooks": [{ "type": "command", "command": "$HOME/Documents/cubi/.build/release/cubi-hook --agent claude-code --event SessionStart --capture", "timeout": 10 }] }],
+    "SessionEnd":         [{ "hooks": [{ "type": "command", "command": "$HOME/Documents/cubi/.build/release/cubi-hook --agent claude-code --event SessionEnd --capture", "timeout": 1 }] }],
+    "UserPromptSubmit":   [{ "hooks": [{ "type": "command", "command": "$HOME/Documents/cubi/.build/release/cubi-hook --agent claude-code --event UserPromptSubmit --capture", "timeout": 10 }] }],
     "PreToolUse":         [
-      { "hooks": [{ "type": "command", "command": "/Users/nb-0041/Documents/cubi/.build/release/cubi-hook --agent claude-code --event PreToolUse --capture", "timeout": 10 }] },
-      { "matcher": "AskUserQuestion", "hooks": [{ "type": "command", "command": "/Users/nb-0041/Documents/cubi/.build/release/cubi-hook --agent claude-code --event PreToolUse --tool AskUserQuestion --capture", "timeout": 120 }] }
+      { "hooks": [{ "type": "command", "command": "$HOME/Documents/cubi/.build/release/cubi-hook --agent claude-code --event PreToolUse --capture", "timeout": 10 }] },
+      { "matcher": "AskUserQuestion", "hooks": [{ "type": "command", "command": "$HOME/Documents/cubi/.build/release/cubi-hook --agent claude-code --event PreToolUse --tool AskUserQuestion --capture", "timeout": 120 }] }
     ],
-    "PostToolUse":        [{ "hooks": [{ "type": "command", "command": "/Users/nb-0041/Documents/cubi/.build/release/cubi-hook --agent claude-code --event PostToolUse --capture", "timeout": 10 }] }],
-    "PostToolUseFailure": [{ "hooks": [{ "type": "command", "command": "/Users/nb-0041/Documents/cubi/.build/release/cubi-hook --agent claude-code --event PostToolUseFailure --capture", "timeout": 10 }] }],
-    "PermissionRequest":  [{ "hooks": [{ "type": "command", "command": "/Users/nb-0041/Documents/cubi/.build/release/cubi-hook --agent claude-code --event PermissionRequest --capture", "timeout": 120 }] }],
-    "Notification":       [{ "hooks": [{ "type": "command", "command": "/Users/nb-0041/Documents/cubi/.build/release/cubi-hook --agent claude-code --event Notification --capture", "timeout": 10 }] }],
-    "Stop":               [{ "hooks": [{ "type": "command", "command": "/Users/nb-0041/Documents/cubi/.build/release/cubi-hook --agent claude-code --event Stop --capture", "timeout": 10 }] }],
-    "StopFailure":        [{ "hooks": [{ "type": "command", "command": "/Users/nb-0041/Documents/cubi/.build/release/cubi-hook --agent claude-code --event StopFailure --capture", "timeout": 10 }] }],
-    "SubagentStart":      [{ "hooks": [{ "type": "command", "command": "/Users/nb-0041/Documents/cubi/.build/release/cubi-hook --agent claude-code --event SubagentStart --capture", "timeout": 10 }] }],
-    "SubagentStop":       [{ "hooks": [{ "type": "command", "command": "/Users/nb-0041/Documents/cubi/.build/release/cubi-hook --agent claude-code --event SubagentStop --capture", "timeout": 10 }] }]
+    "PostToolUse":        [{ "hooks": [{ "type": "command", "command": "$HOME/Documents/cubi/.build/release/cubi-hook --agent claude-code --event PostToolUse --capture", "timeout": 10 }] }],
+    "PostToolUseFailure": [{ "hooks": [{ "type": "command", "command": "$HOME/Documents/cubi/.build/release/cubi-hook --agent claude-code --event PostToolUseFailure --capture", "timeout": 10 }] }],
+    "PermissionRequest":  [{ "hooks": [{ "type": "command", "command": "$HOME/Documents/cubi/.build/release/cubi-hook --agent claude-code --event PermissionRequest --capture", "timeout": 120 }] }],
+    "Notification":       [{ "hooks": [{ "type": "command", "command": "$HOME/Documents/cubi/.build/release/cubi-hook --agent claude-code --event Notification --capture", "timeout": 10 }] }],
+    "Stop":               [{ "hooks": [{ "type": "command", "command": "$HOME/Documents/cubi/.build/release/cubi-hook --agent claude-code --event Stop --capture", "timeout": 10 }] }],
+    "StopFailure":        [{ "hooks": [{ "type": "command", "command": "$HOME/Documents/cubi/.build/release/cubi-hook --agent claude-code --event StopFailure --capture", "timeout": 10 }] }],
+    "SubagentStart":      [{ "hooks": [{ "type": "command", "command": "$HOME/Documents/cubi/.build/release/cubi-hook --agent claude-code --event SubagentStart --capture", "timeout": 10 }] }],
+    "SubagentStop":       [{ "hooks": [{ "type": "command", "command": "$HOME/Documents/cubi/.build/release/cubi-hook --agent claude-code --event SubagentStop --capture", "timeout": 10 }] }]
   }
 }

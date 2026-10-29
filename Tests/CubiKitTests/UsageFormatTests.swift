@@ -20,11 +20,7 @@ import Testing
     #expect(UsageFormat.resetLabel(resetsAt: nil, now: now) == nil)
 }
 
-@Test func compactLineAndLevels() {
-    let info = StatuslineInfo(fiveHour: UsageWindow(usedPercent: 8, resetsAt: nil), sevenDay: UsageWindow(usedPercent: 18.6, resetsAt: nil))
-    #expect(UsageFormat.compactLine(info) == "5h 8% · 7d 18%")
-    #expect(UsageFormat.compactLine(StatuslineInfo()) == nil)
-    #expect(UsageFormat.compactLine(nil) == nil)
+@Test func levels() {
     #expect(UsageFormat.level(49) == .ok)
     #expect(UsageFormat.level(50) == .warn)
     #expect(UsageFormat.level(80) == .hot)
@@ -33,7 +29,7 @@ import Testing
 @Test func statuslineDoesNotCreateSessions() {
     var store = SessionStore()
     let ref = SessionRef(id: "unknown", cwd: nil, client: HookClient())
-    let fx = store.apply(DecodedHook(session: ref, event: .statusline(StatuslineInfo(contextPercent: 10))), now: 1)
+    let fx = store.apply(DecodedHook(session: ref, event: .statusline(StatuslineInfo(contextPercent: 10, fiveHour: UsageWindow(usedPercent: 3, resetsAt: nil)))), now: 1)
     #expect(store.sessions.isEmpty)
     // The account-wide usage is still worth surfacing.
     #expect(fx.contains { if case .usage = $0 { return true }; return false })

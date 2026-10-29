@@ -17,15 +17,6 @@ public enum UsageFormat {
         return f.string(from: date)
     }
 
-    /// "5h 8% · 7d 18%" for the compact wing; nil when there is nothing to show.
-    public static func compactLine(_ info: StatuslineInfo?) -> String? {
-        guard let info else { return nil }
-        var parts: [String] = []
-        if let w = info.fiveHour { parts.append("5h \(Int(w.usedPercent))%") }
-        if let w = info.sevenDay { parts.append("7d \(Int(w.usedPercent))%") }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
-    }
-
     /// Green under 50, amber under 80, red from 80: the thresholds statusline.sh uses.
     public enum Level: Sendable { case ok, warn, hot }
     public static func level(_ percent: Double) -> Level {

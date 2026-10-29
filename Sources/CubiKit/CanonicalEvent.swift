@@ -83,16 +83,6 @@ public enum CanonicalEvent: Sendable, Equatable {
         }
     }
 
-    /// True when this event proves the session has moved past any request still waiting on
-    /// the island (the user answered in the terminal, pressed Esc, or the request timed out).
-    public var endsPendingRequest: Bool {
-        switch self {
-        case .toolEnd, .stop, .prompt, .sessionEnd, .subagentStart, .subagentStop: return true
-        case .toolStart(let tool, _): return tool != "AskUserQuestion"
-        default: return false
-        }
-    }
-
     /// True when the relay holds its connection open for a reply.
     public var isBlocking: Bool {
         switch self {
@@ -107,10 +97,28 @@ public struct DecodedHook: Sendable, Equatable {
     public var event: CanonicalEvent
     /// Claude Code's id for the tool call this hook is about (PreToolUse/PostToolUse carry it).
     public var toolUseID: String?
+    /// Set when a subagent, not the main agent, produced the hook.
+    public var agentID: String?
 
-    public init(session: SessionRef, event: CanonicalEvent, toolUseID: String? = nil) {
+    public init(session: SessionRef, event: CanonicalEvent, toolUseID: String? = nil, agentID: String? = nil) {
         self.session = session
         self.event = event
         self.toolUseID = toolUseID
+        self.agentID = agentID
+    }
+
+    /// True when this hook proves the request waiting on the island (for the tool call
+    /// `pendingToolUseID`) is over: the user answered in the terminal, pressed Esc, or the request
+    /// timed out. Tool traffic only counts for the same tool call: parallel tool calls and
+    /// subagents share the session id but say nothing about the request still waiting.
+    public func settlesPendingRequest(toolUseID pending: String?) -> Bool {
+        if agentID != nil { return false }
+        let sameCall = pending == nil || toolUseID == nil || toolUseID == pending
+        switch event {
+        case .stop, .prompt, .sessionEnd: return true
+        case .toolEnd: return sameCall
+        case .toolStart(let tool, _): return tool != "AskUserQuestion" && sameCall
+        default: return false
+        }
     }
 }

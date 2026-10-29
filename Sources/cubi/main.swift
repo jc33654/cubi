@@ -5,6 +5,7 @@ import AppKit
 import CubiKit
 
 let arguments = CommandLine.arguments
+signal(SIGPIPE, SIG_IGN)
 
 if arguments.contains("--version") {
     print("cubi \(CubiInfo.version)")
@@ -29,7 +30,7 @@ if let i = arguments.firstIndex(of: "--render-island"), i + 3 < arguments.count 
 //   --uninstall-hooks          remove Cubi's entries and restore the previous statusLine
 if let i = arguments.firstIndex(where: { ["--hooks-status", "--hooks-plan", "--install-hooks", "--uninstall-hooks"].contains($0) }) {
     let retire = arguments.contains("--retire-notify")
-    let options = ClaudeHookInstaller.Options(retireCommandsContaining: retire ? ["notify-hook.sh"] : [])
+    let retireCommands = retire ? ["notify-hook.sh"] : []
     do {
         switch arguments[i] {
         case "--hooks-status":
@@ -39,13 +40,17 @@ if let i = arguments.firstIndex(where: { ["--hooks-status", "--hooks-plan", "--i
             if !s.legacyNotificationCommands.isEmpty { print("legacy Notification hooks: \(s.legacyNotificationCommands.joined(separator: ", "))") }
             exit(0)
         case "--hooks-plan":
-            guard let p = try HookSetup.installPreview(options: options) else { exit(1) }
+            guard let p = try HookSetup.installPreview(retireCommandsContaining: retireCommands) else { exit(1) }
             print(p.plan.changed ? p.plan.diff : "already installed, nothing to change")
             exit(0)
         case "--install-hooks":
-            guard let p = try HookSetup.installPreview(options: options) else { exit(1) }
+            guard let p = try HookSetup.installPreview(retireCommandsContaining: retireCommands) else { exit(1) }
             guard p.plan.changed else { print("already installed, nothing to change"); exit(0) }
             print(p.plan.diff)
+            guard RelayInstaller.ensureInstalled() != nil else {
+                FileHandle.standardError.write(Data("cubi: could not install the relay the hooks point at (run this from Cubi.app/Contents/MacOS/cubi)\n".utf8))
+                exit(1)
+            }
             let backup = try HookSetup.apply(p)
             print("written \(HookSetup.settingsURL.path)" + (backup.map { " (backup: \($0.path))" } ?? ""))
             print("Restart your Claude Code sessions: hooks are read when a session starts.")

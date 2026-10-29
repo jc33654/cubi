@@ -6,7 +6,7 @@ import WebKit
 /// The HTML is re-read every time the window opens, so the panel's UI can change without a rebuild.
 @MainActor
 final class ToolkitPanel: NSObject, NSWindowDelegate {
-    nonisolated static let root = NSHomeDirectory() + "/.claude-toolkit"
+    nonisolated static let root = CubiPaths.home.path + "/.claude-toolkit"
     nonisolated static let cctlPath = root + "/bin/cctl"
     nonisolated static let htmlPath = root + "/panel/index.html"
 

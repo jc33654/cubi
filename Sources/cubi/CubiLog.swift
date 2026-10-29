@@ -2,7 +2,7 @@ import Foundation
 
 /// Appends to ~/Library/Logs/cubi.log (and NSLog). Cheap enough for per-event lines; never for per-frame.
 enum CubiLog {
-    static let path = FileManager.default.homeDirectoryForCurrentUser.path + "/Library/Logs/cubi.log"
+    static let path = CubiPaths.home.path + "/Library/Logs/cubi.log"
     private static let queue = DispatchQueue(label: "cc.dotdot.cubi.log")
     private static let formatter: DateFormatter = {
         let f = DateFormatter()

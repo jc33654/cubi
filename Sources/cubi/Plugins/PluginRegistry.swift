@@ -9,7 +9,7 @@ import CubiKit
 final class PluginRegistry {
     static let enabledKey = "enabledPlugins"
     static var pluginsDirectory: URL {
-        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/cubi/plugins")
+        CubiPaths.home.appendingPathComponent("Library/Application Support/cubi/plugins")
     }
 
     private(set) var plugins: [any AgentPlugin] = []

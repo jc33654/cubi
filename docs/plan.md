@@ -177,7 +177,7 @@ public protocol AgentPlugin: Sendable {
 enum CanonicalReply { allow(updatedInput:), deny(message:), answers([String: String]), passthrough }
 ```
 
-Manifest 草案（`plugins/<id>/manifest.json`，目錄 0700）：`id / name / color / capabilities / secrets[] / install{mode,file,key,entries[]} / events{native:{canonical,blocking,map(JSON path),reply}} / adapter{command,timeout}`。adapter 只給 stdin/stdout、清空環境變數、2 s timeout，啟用時 UI 顯示路徑與 hash；不做沙箱（與 hook 同等信任）。每個 plugin 預設關；關 = 不裝 hooks、不顯示、不載 adapter。
+Manifest 草案（`plugins/<id>/manifest.json`，目錄 0700）：`id / name / color / capabilities / secrets[] / install{mode,file,key,entries[]} / events{native:{canonical,map(JSON path),reply}} / adapter{command,timeout}`。adapter 只給 stdin/stdout、清空環境變數、2 s timeout，啟用時 UI 顯示路徑與 hash；不做沙箱（與 hook 同等信任）。每個 plugin 預設關；關 = 不裝 hooks、不顯示、不載 adapter。
 
 ### 已知陷阱與對策
 

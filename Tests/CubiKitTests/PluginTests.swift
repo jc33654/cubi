@@ -67,9 +67,27 @@ private func exampleManifest() throws -> ManifestPlugin {
     }
 }
 
-@Test func jsonPathSupportsIndexes() {
-    let v: JSONValue = .object(["a": .array([.object(["b": .string("hit")])])])
-    #expect(ManifestPlugin.path("$.a[0].b", in: v)?.string == "hit")
-    #expect(ManifestPlugin.path("$.a[1].b", in: v) == nil)
+@Test func jsonPathWalksObjectsOnly() {
+    let v: JSONValue = .object(["a": .object(["b": .string("hit")])])
+    #expect(ManifestPlugin.path("$.a.b", in: v)?.string == "hit")
+    #expect(ManifestPlugin.path("$.a.c", in: v) == nil)
     #expect(ManifestPlugin.path("a.b", in: v) == nil)
+}
+
+@Test func manifestInstallEntriesMustNameTheirAgent() {
+    let m: JSONValue = .object(["id": .string("x-agent"), "name": .string("X"), "install": .object([
+        "mode": .string("json-hooks"), "file": .string("~/x.json"),
+        "entries": .array([.object(["event": .string("Start"), "command": .string("/usr/bin/true")])]),
+    ])])
+    #expect(throws: ManifestPlugin.LoadError.badInstall) { try ManifestPlugin.parse(m) }
+}
+
+@Test func manifestUninstallLeavesClaudeCodeHooksAlone() throws {
+    let p = try exampleManifest()
+    let withClaude = ClaudeHookInstaller.installPlan(settings: .object([:])).after
+    let both = try #require(p.installPlan(settings: withClaude, retireCommandsContaining: [])).after
+    let back = try #require(p.uninstallPlan(settings: both, previousStatusLine: nil)).after
+    #expect(back == withClaude)
+    #expect(ClaudeHookInstaller.status(back).hooksInstalled)
+    #expect(!p.installStatus(settings: withClaude).hooksInstalled)
 }

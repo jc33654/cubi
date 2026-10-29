@@ -143,7 +143,7 @@ struct IslandRootView: View {
                     Text("—").font(.system(size: 10)).foregroundStyle(.white.opacity(0.3))
                 }
             }
-            .frame(width: state.rightWingWidth - 10, height: height, alignment: .trailing)
+            .frame(width: IslandState.rightWingWidth - 10, height: height, alignment: .trailing)
             .padding(.trailing, 10)
         }
         .frame(height: height)

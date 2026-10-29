@@ -4,7 +4,7 @@ import Foundation
 /// the hook keeps working when the app bundle moves, and the path has no spaces to quote.
 enum RelayInstaller {
     static var installedPath: String {
-        FileManager.default.homeDirectoryForCurrentUser.path + "/.cubi/bin/cubi-hook"
+        CubiPaths.home.path + "/.cubi/bin/cubi-hook"
     }
 
     /// Copies the relay when missing or different. Returns the installed path, or nil on failure.
@@ -27,8 +27,9 @@ enum RelayInstaller {
             let temp = dest.appendingPathExtension("tmp-\(ProcessInfo.processInfo.processIdentifier)")
             try fresh.write(to: temp)
             try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: temp.path)
-            if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
-            try fm.moveItem(at: temp, to: dest)
+            guard rename(temp.path, dest.path) == 0 else {
+                throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+            }
             CubiLog.write("installed relay at \(dest.path)")
             return dest.path
         } catch {

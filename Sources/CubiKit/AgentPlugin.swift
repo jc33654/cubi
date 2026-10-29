@@ -71,11 +71,6 @@ public protocol AgentPlugin: Sendable {
 public extension AgentPlugin {
     var secrets: [SecretSpec] { [] }
     var isBuiltIn: Bool { false }
-    func installPlan(settings: JSONValue, retireCommandsContaining: [String]) -> ClaudeHookInstaller.Plan? { nil }
-    func uninstallPlan(settings: JSONValue, previousStatusLine: JSONValue?) -> ClaudeHookInstaller.Plan? { nil }
-    func installStatus(settings: JSONValue) -> ClaudeHookInstaller.Status {
-        ClaudeHookInstaller.Status(hooksInstalled: false, statuslineChained: false, legacyNotificationCommands: [])
-    }
 }
 
 public enum AgentID {

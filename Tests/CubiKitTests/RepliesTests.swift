@@ -83,9 +83,9 @@ private func parse(_ line: String) throws -> JSONValue {
     var store = SessionStore()
     let ref = SessionRef(id: "s", cwd: nil, client: HookClient())
     _ = store.apply(DecodedHook(session: ref, event: .permissionRequest(tool: "Bash", input: .null, suggestions: .null)), now: 1)
-    #expect(store.anyPending)
+    #expect(store.sessions["s"]?.pending != nil)
     store.resolvePending("s", outcome: .allowed)
-    #expect(!store.anyPending)
+    #expect(store.sessions["s"]?.pending == nil)
     #expect(store.sessions["s"]?.botState == .working)
     store.resolvePending("s", outcome: .denied)   // no pending any more: no change
     #expect(store.sessions["s"]?.botState == .working)

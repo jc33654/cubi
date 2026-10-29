@@ -29,7 +29,7 @@ private let jadeSettings: JSONValue = .object([
 
 @Test func installChainsStatuslineAndRemembersPrevious() {
     let plan = ClaudeHookInstaller.installPlan(settings: jadeSettings)
-    #expect(plan.after["statusLine"]?["command"]?.string == "$HOME/.cubi/bin/cubi-hook --agent claude-code statusline --then ~/.claude/statusline.sh")
+    #expect(plan.after["statusLine"]?["command"]?.string == "$HOME/.cubi/bin/cubi-hook --agent claude-code statusline --then '~/.claude/statusline.sh'")
     #expect(plan.previousStatusLine == jadeSettings["statusLine"])
     let status = ClaudeHookInstaller.status(plan.after)
     #expect(status.hooksInstalled && status.statuslineChained)
@@ -53,12 +53,33 @@ private let jadeSettings: JSONValue = .object([
 
 @Test func uninstallWithoutRecordRecoversStatuslineFromThen() {
     let installed = ClaudeHookInstaller.installPlan(settings: jadeSettings).after
+    #expect(installed["statusLine"]?["command"]?.string == "$HOME/.cubi/bin/cubi-hook --agent claude-code statusline --then '~/.claude/statusline.sh'")
     let back = ClaudeHookInstaller.uninstallPlan(settings: installed, previousStatusLine: nil)
     #expect(back.after["statusLine"]?["command"]?.string == "~/.claude/statusline.sh")
 }
 
+@Test func chainedStatuslineKeepsQuotesAndPipesIntact() {
+    let original = "jq -r '.model.display_name | ascii_upcase'"
+    let settings: JSONValue = .object(["statusLine": .object(["type": .string("command"), "command": .string(original)])])
+    let plan = ClaudeHookInstaller.installPlan(settings: settings)
+    let quoted = "'jq -r '\\''.model.display_name | ascii_upcase'\\'''"
+    #expect(plan.after["statusLine"]?["command"]?.string?.hasSuffix(" --then " + quoted) == true)
+    let back = ClaudeHookInstaller.uninstallPlan(settings: plan.after, previousStatusLine: nil)
+    #expect(back.after["statusLine"]?["command"]?.string == original)
+}
+
+@Test func uninstallKeepsOtherAgentsHooks() {
+    let foreign: JSONValue = .object(["hooks": .array([.object(["type": .string("command"), "command": .string("$HOME/.cubi/bin/cubi-hook --agent other-agent --event SessionStart")])])])
+    var s = ClaudeHookInstaller.installPlan(settings: jadeSettings).after.object!
+    var hooks = s["hooks"]!.object!
+    hooks["SessionStart"] = .array((hooks["SessionStart"]!.array ?? []) + [foreign])
+    s["hooks"] = .object(hooks)
+    let back = ClaudeHookInstaller.uninstallPlan(settings: .object(s), previousStatusLine: nil)
+    #expect(back.after["hooks"]?["SessionStart"]?.array == [foreign])
+}
+
 @Test func retiringLegacyNotificationHook() {
-    let plan = ClaudeHookInstaller.installPlan(settings: jadeSettings, options: .init(retireCommandsContaining: ["notify-hook.sh"]))
+    let plan = ClaudeHookInstaller.installPlan(settings: jadeSettings, retireCommandsContaining: ["notify-hook.sh"])
     #expect(plan.after["hooks"]?["Notification"]?.array?.count == 1)
     #expect(plan.after["hooks"]?["Stop"]?.array?.count == 2)   // unrelated hooks untouched
 }
@@ -106,4 +127,15 @@ private let jadeSettings: JSONValue = .object([
     // Invalid JSON is refused, not treated as empty.
     try Data("{not json".utf8).write(to: url)
     #expect(throws: SettingsFile.Failure.invalid("settings.json")) { try SettingsFile.read(at: url) }
+}
+
+@Test func agentTagIsTokenExact() {
+    let fooBar: JSONValue = .object(["hooks": .array([.object(["type": .string("command"), "command": .string("$HOME/.cubi/bin/cubi-hook --agent foo-bar --event SessionStart")])])])
+    let foo: JSONValue = .object(["hooks": .array([.object(["type": .string("command"), "command": .string("$HOME/.cubi/bin/cubi-hook --agent foo --event SessionStart")])])])
+    #expect(!ClaudeHookInstaller.groupIsOurs(fooBar, agent: "foo"))
+    #expect(ClaudeHookInstaller.groupIsOurs(foo, agent: "foo"))
+    #expect(!ClaudeHookInstaller.groupIsOurs(foo, agent: "foo-bar"))
+    // The status line command ends in "statusline", not "--event": the tag still has to match.
+    let chained: JSONValue = .object(["hooks": .array([.object(["type": .string("command"), "command": .string("$HOME/.cubi/bin/cubi-hook --agent foo statusline")])])])
+    #expect(ClaudeHookInstaller.groupIsOurs(chained, agent: "foo"))
 }

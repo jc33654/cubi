@@ -31,21 +31,11 @@ public enum ClaudeHookInstaller {
         public var previousStatusLine: JSONValue?
     }
 
-    public struct Options: Sendable, Equatable {
-        public var chainStatusline = true
-        /// Hook commands containing any of these substrings are dropped (the user's old tooling).
-        public var retireCommandsContaining: [String] = []
-        public init(chainStatusline: Bool = true, retireCommandsContaining: [String] = []) {
-            self.chainStatusline = chainStatusline
-            self.retireCommandsContaining = retireCommandsContaining
-        }
-    }
-
     // MARK: - Inspection
 
     public static func status(_ settings: JSONValue) -> Status {
         let hooks = settings["hooks"]?.object ?? [:]
-        let installed = (hooks["SessionStart"]?.array ?? []).contains(where: groupIsOurs)
+        let installed = (hooks["SessionStart"]?.array ?? []).contains { groupIsOurs($0) }
         let chained = settings["statusLine"]?["command"]?.string?.contains(marker) ?? false
         var legacy: [String] = []
         for group in hooks["Notification"]?.array ?? [] {
@@ -56,23 +46,42 @@ public enum ClaudeHookInstaller {
         return Status(hooksInstalled: installed, statuslineChained: chained, legacyNotificationCommands: legacy)
     }
 
-    public static func groupIsOurs(_ group: JSONValue) -> Bool {
-        (group["hooks"]?.array ?? []).contains { $0["command"]?.string?.contains(marker) ?? false }
+    /// Hook groups Cubi installed for `agent`: every relay command names its agent, so one
+    /// plugin's uninstall leaves the others' hooks alone.
+    public static func groupIsOurs(_ group: JSONValue, agent: String = "claude-code") -> Bool {
+        (group["hooks"]?.array ?? []).contains { $0["command"]?.string?.contains(agentTag(agent)) ?? false }
+    }
+
+    /// "cubi-hook --agent <id> ", trailing space included: agent ids may contain hyphens, so
+    /// "foo" must not match "foo-bar".
+    public static func agentTag(_ agent: String) -> String { "\(marker) --agent \(agent) " }
+
+    /// The previous statusLine command travels as one argument of the chained command, so its
+    /// own quotes, pipes and `$` reach the relay untouched and are interpreted once, by the relay's shell.
+    public static func shellQuote(_ s: String) -> String {
+        "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
+    public static func shellUnquote(_ s: String) -> String {
+        guard s.count >= 2, s.hasPrefix("'"), s.hasSuffix("'") else { return s }
+        return String(s.dropFirst().dropLast()).replacingOccurrences(of: "'\\''", with: "'")
     }
 
     // MARK: - Plans
 
-    public static func installPlan(settings: JSONValue, options: Options = Options()) -> Plan {
+    /// `retireCommandsContaining`: hook commands containing any of these substrings are dropped
+    /// (the user's old tooling that Cubi replaces).
+    public static func installPlan(settings: JSONValue, retireCommandsContaining: [String] = []) -> Plan {
         var root = settings.object ?? [:]
         var hooks = root["hooks"]?.object ?? [:]
 
         for (event, timeout) in events {
             var groups = (hooks[event]?.array ?? []).filter { !groupIsOurs($0) }
-            if !options.retireCommandsContaining.isEmpty {
+            if !retireCommandsContaining.isEmpty {
                 groups = groups.filter { group in
                     !(group["hooks"]?.array ?? []).contains { hook in
                         let c = hook["command"]?.string ?? ""
-                        return options.retireCommandsContaining.contains { c.contains($0) }
+                        return retireCommandsContaining.contains { c.contains($0) }
                     }
                 }
             }
@@ -86,18 +95,16 @@ public enum ClaudeHookInstaller {
         root["hooks"] = .object(hooks)
 
         var previous: JSONValue? = nil
-        if options.chainStatusline {
-            let current = root["statusLine"]
-            let currentCommand = current?["command"]?.string ?? ""
-            if !currentCommand.contains(marker) {
-                previous = current
-                var sl = current?.object ?? ["type": .string("command")]
-                sl["type"] = .string("command")
-                sl["command"] = .string(currentCommand.isEmpty
-                    ? "\(relayCommand) --agent claude-code statusline"
-                    : "\(relayCommand) --agent claude-code statusline --then \(currentCommand)")
-                root["statusLine"] = .object(sl)
-            }
+        let current = root["statusLine"]
+        let currentCommand = current?["command"]?.string ?? ""
+        if !currentCommand.contains(marker) {
+            previous = current
+            var sl = current?.object ?? ["type": .string("command")]
+            sl["type"] = .string("command")
+            sl["command"] = .string(currentCommand.isEmpty
+                ? "\(relayCommand) --agent claude-code statusline"
+                : "\(relayCommand) --agent claude-code statusline --then \(shellQuote(currentCommand))")
+            root["statusLine"] = .object(sl)
         }
 
         let after = JSONValue.object(root)
@@ -119,7 +126,7 @@ public enum ClaudeHookInstaller {
             } else if let then = root["statusLine"]?["command"]?.string, let r = then.range(of: " --then ") {
                 // No record of the original: recover it from the chained command itself.
                 var sl = root["statusLine"]?.object ?? [:]
-                sl["command"] = .string(String(then[r.upperBound...]))
+                sl["command"] = .string(shellUnquote(String(then[r.upperBound...])))
                 root["statusLine"] = .object(sl)
             } else {
                 root.removeValue(forKey: "statusLine")

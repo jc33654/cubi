@@ -7,7 +7,6 @@ import Foundation
 public struct ManifestPlugin: AgentPlugin {
     public struct EventRule: Sendable, Equatable {
         public var canonical: String          // sessionStart, prompt, toolStart, toolEnd, permissionRequest, question, notification, stop, sessionEnd
-        public var blocking: Bool
         public var map: [String: String]      // canonical field → JSON path like "$.tool_name"
     }
 
@@ -19,21 +18,17 @@ public struct ManifestPlugin: AgentPlugin {
     public var installMode: InstallMode
     public var installEntries: [(event: String, command: String, timeout: Int)]
     public var events: [String: EventRule]
-    public var directory: URL?
 
-    public enum LoadError: Error, Equatable { case notAnObject, badID(String), missingField(String), badInstall }
+    public enum LoadError: Error, Equatable { case badID(String), missingField(String), badInstall }
 
     // MARK: - Loading
 
     public static func load(url: URL) throws -> ManifestPlugin {
         let data = try Data(contentsOf: url)
-        var plugin = try parse(try JSONDecoder().decode(JSONValue.self, from: data))
-        plugin.directory = url.deletingLastPathComponent()
-        return plugin
+        return try parse(try JSONDecoder().decode(JSONValue.self, from: data))
     }
 
     public static func parse(_ m: JSONValue) throws -> ManifestPlugin {
-        guard m.object != nil else { throw LoadError.notAnObject }
         guard let id = m["id"]?.string else { throw LoadError.missingField("id") }
         guard AgentID.isValid(id) else { throw LoadError.badID(id) }
         guard let name = m["name"]?.string else { throw LoadError.missingField("name") }
@@ -61,6 +56,8 @@ public struct ManifestPlugin: AgentPlugin {
             mode = .jsonHooks(file: file)
             for e in install?["entries"]?.array ?? [] {
                 guard let event = e["event"]?.string, let command = e["command"]?.string else { throw LoadError.badInstall }
+                // Install status and uninstall find the plugin's hooks by this tag.
+                guard command.contains(ClaudeHookInstaller.agentTag(id)) else { throw LoadError.badInstall }
                 entries.append((event, command, Int(e["timeout"]?.double ?? 10)))
             }
         case "manual", nil:
@@ -74,7 +71,7 @@ public struct ManifestPlugin: AgentPlugin {
             guard let canonical = rule["canonical"]?.string else { continue }
             var map: [String: String] = [:]
             for (k, v) in rule["map"]?.object ?? [:] { if let s = v.string { map[k] = s } }
-            events[native] = EventRule(canonical: canonical, blocking: rule["blocking"]?.bool ?? false, map: map)
+            events[native] = EventRule(canonical: canonical, map: map)
         }
 
         return ManifestPlugin(id: id, displayName: name, accentColor: RGB(hexString: m["color"]?.string) ?? RGB(hex: 0x8B8B8B),
@@ -119,7 +116,7 @@ public struct ManifestPlugin: AgentPlugin {
         var root = settings.object ?? [:]
         var hooks = root["hooks"]?.object ?? [:]
         for (event, command, timeout) in installEntries {
-            var groups = (hooks[event]?.array ?? []).filter { !ClaudeHookInstaller.groupIsOurs($0) }
+            var groups = (hooks[event]?.array ?? []).filter { !ClaudeHookInstaller.groupIsOurs($0, agent: id) }
             groups.append(.object(["hooks": .array([.object(["type": .string("command"), "command": .string(command), "timeout": .number(Double(timeout))])])]))
             hooks[event] = .array(groups)
         }
@@ -133,7 +130,7 @@ public struct ManifestPlugin: AgentPlugin {
         var root = settings.object ?? [:]
         if var hooks = root["hooks"]?.object {
             for (event, groups) in hooks {
-                let kept = (groups.array ?? []).filter { !ClaudeHookInstaller.groupIsOurs($0) }
+                let kept = (groups.array ?? []).filter { !ClaudeHookInstaller.groupIsOurs($0, agent: id) }
                 if kept.isEmpty { hooks.removeValue(forKey: event) } else { hooks[event] = .array(kept) }
             }
             if hooks.isEmpty { root.removeValue(forKey: "hooks") } else { root["hooks"] = .object(hooks) }
@@ -144,37 +141,18 @@ public struct ManifestPlugin: AgentPlugin {
 
     public func installStatus(settings: JSONValue) -> ClaudeHookInstaller.Status {
         let hooks = settings["hooks"]?.object ?? [:]
-        let installed = hooks.values.contains { ($0.array ?? []).contains(where: ClaudeHookInstaller.groupIsOurs) }
+        let installed = hooks.values.contains { ($0.array ?? []).contains { ClaudeHookInstaller.groupIsOurs($0, agent: id) } }
         return ClaudeHookInstaller.Status(hooksInstalled: installed, statuslineChained: false, legacyNotificationCommands: [])
     }
 
-    // MARK: - Tiny JSON path: "$.a.b" and "$.a[0].b"
+    // MARK: - Tiny JSON path: "$.a.b"
 
     static func path(_ expr: String, in value: JSONValue) -> JSONValue? {
         guard expr.hasPrefix("$") else { return nil }
         var current = value
-        let body = expr.dropFirst()
-        let tokens = body.split(whereSeparator: { $0 == "." }).flatMap { part -> [String] in
-            // "a[0]" → ["a", "[0]"]
-            var out: [String] = []
-            var name = ""
-            var rest = Substring(part)
-            if let b = rest.firstIndex(of: "[") { name = String(rest[..<b]); rest = rest[b...] } else { name = String(rest); rest = "" }
-            if !name.isEmpty { out.append(name) }
-            while let open = rest.firstIndex(of: "["), let close = rest.firstIndex(of: "]") {
-                out.append(String(rest[open...close]))
-                rest = rest[rest.index(after: close)...]
-            }
-            return out
-        }
-        for t in tokens {
-            if t.hasPrefix("["), let i = Int(t.dropFirst().dropLast()), let a = current.array, a.indices.contains(i) {
-                current = a[i]
-            } else if let next = current[t] {
-                current = next
-            } else {
-                return nil
-            }
+        for key in expr.dropFirst().split(separator: ".") {
+            guard let next = current[String(key)] else { return nil }
+            current = next
         }
         return current
     }

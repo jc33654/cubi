@@ -105,8 +105,9 @@ final class SessionCoordinator {
             return
         }
 
-        // Any later event for this session means the terminal (or Esc) settled the request.
-        if decoded.event.endsPendingRequest, hasPending(sessionID) {
+        // A later event for the same tool call (or the turn moving on) means the terminal or Esc
+        // settled the request.
+        if let waiting = pending.first(where: { $0.sessionID == sessionID }), decoded.settlesPendingRequest(toolUseID: waiting.toolUseID) {
             CubiLog.write("request settled elsewhere (\(decoded.event.name)): session=\(sessionID.prefix(8))")
             withdraw(sessionID: sessionID, outcome: .handledElsewhere)
         }
@@ -161,10 +162,6 @@ final class SessionCoordinator {
     /// PermissionRequest carries no tool_use_id; the PreToolUse just before it did.
     private func toolUseID(_ decoded: DecodedHook) -> String? {
         decoded.toolUseID ?? store.sessions[decoded.session.id]?.lastToolUseID
-    }
-
-    private func hasPending(_ sessionID: String) -> Bool {
-        pending.contains { $0.sessionID == sessionID }
     }
 
     private func hold(_ request: PendingRequest, transcript: String?) {
@@ -247,7 +244,9 @@ final class SessionCoordinator {
         } else {
             if canonical == nil {
                 CubiLog.write("deferred to terminal: session=\(request.sessionID.prefix(8))")
-                if request.isQuestion { deferredQuestions[request.sessionID] = Date() }
+                // Only a PreToolUse question is followed by a PermissionRequest for the same
+                // tool, which must then be left to the terminal as well.
+                if case .question(_, _, .preToolUse) = request.kind { deferredQuestions[request.sessionID] = Date() }
             } else {
                 CubiLog.write("plugin \(request.agent) has no reply for \(decision); leaving it to the agent")
             }
@@ -270,8 +269,6 @@ final class SessionCoordinator {
     private func run(_ effects: [StoreEffect]) {
         for effect in effects {
             switch effect {
-            case .added, .removed:
-                break
             case .revertToIdle(let id, let after):
                 DispatchQueue.main.asyncAfter(deadline: .now() + after) { [weak self] in
                     MainActor.assumeIsolated {
@@ -291,9 +288,12 @@ final class SessionCoordinator {
             case .notify(let session, let title, let body):
                 notifier.notify(title: title, body: body, thread: session)
             case .usage(let info):
-                CubiLog.write("usage 5h=\(info.fiveHour.map { "\(Int($0.usedPercent))%" } ?? "nil") 7d=\(info.sevenDay.map { "\(Int($0.usedPercent))%" } ?? "nil") ctx=\(info.contextPercent.map { "\(Int($0))%" } ?? "nil") name=\(info.sessionName ?? "-")")
+                // The cost moves every tick; only a rate-limit window is worth a log line and a save.
+                if SessionStore.windowsChanged(from: lastUsage, to: info) {
+                    CubiLog.write("usage 5h=\(info.fiveHour.map { "\(Int($0.usedPercent))%" } ?? "nil") 7d=\(info.sevenDay.map { "\(Int($0.usedPercent))%" } ?? "nil") ctx=\(info.contextPercent.map { "\(Int($0))%" } ?? "nil") name=\(info.sessionName ?? "-")")
+                    if let data = try? JSONEncoder().encode(info) { UserDefaults.standard.set(data, forKey: Self.usageKey) }
+                }
                 lastUsage = info
-                if let data = try? JSONEncoder().encode(info) { UserDefaults.standard.set(data, forKey: Self.usageKey) }
             }
         }
     }

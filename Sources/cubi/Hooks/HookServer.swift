@@ -74,7 +74,7 @@ final class HookServer: @unchecked Sendable {
     private var readers: [Int32: Reader] = [:]
 
     static var defaultSocketPath: String {
-        FileManager.default.homeDirectoryForCurrentUser.path + "/Library/Application Support/cubi/cubi.sock"
+        CubiPaths.home.path + "/Library/Application Support/cubi/cubi.sock"
     }
 
     init(socketPath: String = HookServer.defaultSocketPath, handler: @escaping Handler, onClientClosed: @escaping ClosedHandler) {
@@ -141,6 +141,10 @@ final class HookServer: @unchecked Sendable {
                 continue
             }
             _ = fcntl(client, F_SETFL, fcntl(client, F_GETFL) | O_NONBLOCK)
+            // The relay may be gone by the time we reply (Esc in the terminal); a write to a
+            // closed peer must fail with EPIPE, not kill the app.
+            var one: Int32 = 1
+            _ = setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &one, socklen_t(MemoryLayout<Int32>.size))
 
             let source = DispatchSource.makeReadSource(fileDescriptor: client, queue: queue)
             let connection = HookConnection(fd: client) { [queue] in

@@ -13,8 +13,8 @@ private func hook(_ id: String, _ event: CanonicalEvent, cwd: String? = "/Users/
         t += 1
         return store.apply(try Fixtures.decoded(name), now: t)
     }
-    let added = try feed("SessionStart-2")
-    #expect(added.contains { if case .added = $0 { return true }; return false })
+    _ = try feed("SessionStart-2")
+    #expect(store.order.count == 1)
     let id = store.order[0]
     #expect(store.sessions[id]?.botState == .idle)
     #expect(store.sessions[id]?.name == "cubi")   // cwd basename
@@ -29,7 +29,7 @@ private func hook(_ id: String, _ event: CanonicalEvent, cwd: String? = "/Users/
     let fx = try feed("PermissionRequest-1")
     #expect(store.sessions[id]?.botState == .waiting)
     #expect(store.sessions[id]?.waitingBadge == .exclaim)
-    #expect(store.anyPending)
+    #expect(store.sessions[id]?.pending != nil)
     #expect(fx.contains { if case .notify = $0 { return true }; return false })
 
     _ = try feed("PostToolUse-2")
@@ -68,7 +68,7 @@ private func hook(_ id: String, _ event: CanonicalEvent, cwd: String? = "/Users/
 @Test func statuslineNamesAndTires() {
     var store = SessionStore()
     _ = store.apply(hook("s", .sessionStart(source: nil)), now: 1)
-    let fx = store.apply(hook("s", .statusline(StatuslineInfo(sessionName: "小工具", contextPercent: 91))), now: 2)
+    let fx = store.apply(hook("s", .statusline(StatuslineInfo(sessionName: "小工具", contextPercent: 91, sevenDay: UsageWindow(usedPercent: 30, resetsAt: nil)))), now: 2)
     #expect(store.sessions["s"]?.name == "小工具")
     #expect(store.sessions["s"]?.botState == .tired)
     #expect(store.sessions["s"]?.contextPercent == 91)
@@ -148,4 +148,24 @@ private func hook(_ id: String, _ event: CanonicalEvent, cwd: String? = "/Users/
     #expect(store.sessions["s"]?.botState == .idle)
     _ = store.apply(hook("s", .subagentStop(type: "Explore")), now: 60)
     #expect(store.sessions["s"]?.botState == .idle)
+}
+
+@Test func statuslineAfterSessionEndDoesNotResurrect() {
+    var store = SessionStore()
+    _ = store.apply(hook("s", .sessionStart(source: nil)), now: 1)
+    _ = store.apply(hook("s", .sessionEnd(reason: nil)), now: 2)
+    #expect(store.sessions["s"]?.ended == true)
+    _ = store.apply(hook("s", .statusline(StatuslineInfo(contextPercent: 10))), now: 3)
+    #expect(store.sessions["s"]?.ended == true)
+}
+
+@Test func costChangesStillReachTheIslandButAreNotWindowChanges() {
+    var store = SessionStore()
+    let w = UsageWindow(usedPercent: 14, resetsAt: nil)
+    _ = store.apply(hook("a", .sessionStart(source: nil)), now: 1)
+    _ = store.apply(hook("a", .statusline(StatuslineInfo(fiveHour: w, costUSD: 1.0))), now: 2)
+    let fx = store.apply(hook("a", .statusline(StatuslineInfo(fiveHour: w, costUSD: 1.5))), now: 3)
+    #expect(fx == [.usage(StatuslineInfo(fiveHour: w, costUSD: 1.5))])
+    #expect(!SessionStore.windowsChanged(from: StatuslineInfo(fiveHour: w, costUSD: 1.0), to: StatuslineInfo(fiveHour: w, costUSD: 1.5)))
+    #expect(store.apply(hook("a", .statusline(StatuslineInfo(fiveHour: w, costUSD: 1.5))), now: 4).isEmpty)
 }

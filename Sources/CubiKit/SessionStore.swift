@@ -28,8 +28,6 @@ public struct SessionInfo: Sendable, Equatable, Identifiable {
 
 /// Side effects the store cannot perform itself (timers, notifications, usage display).
 public enum StoreEffect: Sendable, Equatable {
-    case added(String)
-    case removed(String)
     case revertToIdle(String, after: Double)
     case removeLater(String, after: Double)
     case notify(session: String, title: String, body: String)
@@ -56,8 +54,13 @@ public struct SessionStore: Sendable {
     /// Restore a reading saved by a previous run.
     public mutating func seedUsage(_ info: StatuslineInfo) { usage = info }
 
+    public static func windowsChanged(from old: StatuslineInfo?, to new: StatuslineInfo) -> Bool {
+        new.fiveHour != old?.fiveHour || new.sevenDay != old?.sevenDay
+    }
+
     /// A window from the most recently active session replaces what we have; from any other
-    /// session it only fills a blank. Returns the merged reading when it changed.
+    /// session it only fills a blank. Returns the merged reading when a window or the cost changed
+    /// (`windowsChanged(from:to:)` tells the two apart).
     private mutating func mergeUsage(_ info: StatuslineInfo, from id: String) -> StatuslineInfo? {
         let newest = sessions.values.map(\.lastEventAt).max()
         let fresh = sessions[id].map { $0.lastEventAt >= (newest ?? 0) } ?? false
@@ -68,11 +71,10 @@ public struct SessionStore: Sendable {
         var merged = info
         merged.fiveHour = pick(info.fiveHour, over: usage?.fiveHour)
         merged.sevenDay = pick(info.sevenDay, over: usage?.sevenDay)
-        guard merged != usage else { return nil }
+        guard Self.windowsChanged(from: usage, to: merged) || merged.costUSD != usage?.costUSD else { return nil }
         usage = merged
         return merged
     }
-    public var anyPending: Bool { sessions.values.contains { $0.pending != nil } }
 
     // MARK: - Reduce
 
@@ -90,12 +92,12 @@ public struct SessionStore: Sendable {
             default:
                 sessions[id] = make(hook.session, now: now)
                 order.append(id)
-                effects.append(.added(id))
             }
         }
         var s = sessions[id]!
         s.lastEventAt = now
-        s.ended = false
+        // The status line keeps running for a short while after SessionEnd; it must not resurrect.
+        if case .statusline = hook.event {} else { s.ended = false }
         if s.cwd == nil { s.cwd = hook.session.cwd }
         if s.client.tty == nil { s.client = hook.session.client }
         if let t = hook.session.transcriptPath { s.transcriptPath = t }

@@ -34,7 +34,7 @@ public struct ClaudeCodePlugin: AgentPlugin {
     }
 
     public func installPlan(settings: JSONValue, retireCommandsContaining: [String]) -> ClaudeHookInstaller.Plan? {
-        ClaudeHookInstaller.installPlan(settings: settings, options: .init(retireCommandsContaining: retireCommandsContaining))
+        ClaudeHookInstaller.installPlan(settings: settings, retireCommandsContaining: retireCommandsContaining)
     }
 
     public func uninstallPlan(settings: JSONValue, previousStatusLine: JSONValue?) -> ClaudeHookInstaller.Plan? {

@@ -135,7 +135,8 @@ func parseArgs() -> Args {
         case "--capture": a.capture = true
         case "statusline": a.statusline = true; a.event = "statusline"
         case "--then":
-            // Everything after --then is the previous command, joined back into one shell string.
+            // The installer passes the previous command as one shell-quoted argument. Older
+            // installs passed it bare, so anything left over is joined back on.
             a.thenCommand = argv.joined(separator: " ")
             argv = argv.dropFirst(argv.count)
         default: break

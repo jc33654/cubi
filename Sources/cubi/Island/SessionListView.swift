@@ -37,6 +37,17 @@ struct SessionListView: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 8)
+            if let edit = bot.lastEdit {
+                Button { state.showingDiffFor = bot.id } label: {
+                    Text("+\(edit.added) −\(edit.removed)")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(Capsule().fill(.white.opacity(0.14)))
+                }
+                .buttonStyle(.plain)
+                .help(edit.path)
+            }
             if bot.contextPercent > 0 {
                 Text("ctx \(Int(bot.contextPercent))%")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
@@ -49,5 +60,7 @@ struct SessionListView: View {
         .padding(.vertical, 5)
         .padding(.horizontal, 8)
         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.white.opacity(0.06)))
+        .contentShape(Rectangle())
+        .onTapGesture { state.onFocus(bot.id) }
     }
 }

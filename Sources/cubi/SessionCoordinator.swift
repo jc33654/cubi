@@ -23,6 +23,10 @@ final class SessionCoordinator {
     init(island: IslandController) {
         self.island = island
         island.state.onDecision = { [weak self] id, decision in self?.decide(id, decision) }
+        island.state.onFocus = { [weak self] id in
+            guard let info = self?.store.sessions[id] else { return }
+            TerminalFocus.focus(info)
+        }
     }
 
     private static let usageKey = "lastUsage"
@@ -289,11 +293,13 @@ final class SessionCoordinator {
             bot.model.contextPercent = info.contextPercent
             if bot.contextPercent != info.contextPercent { bot.contextPercent = info.contextPercent }
             if bot.modelName != info.model { bot.modelName = info.model }
+            if bot.lastEdit != info.lastEdit { bot.lastEdit = info.lastEdit }
             bot.model.setState(info.botState)
             bots.append(bot)
         }
         if let demo = existing["demo"] { bots.append(demo) }
         if bots.map(\.id) != state.bots.map(\.id) { state.bots = bots }
+        if let shown = state.showingDiffFor, !bots.contains(where: { $0.id == shown }) { state.showingDiffFor = nil }
         if state.usage != lastUsage { state.usage = lastUsage }
 
         let cards = pending.map { card(for: $0) }

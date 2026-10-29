@@ -67,10 +67,18 @@ struct IslandRootView: View {
                 wings(height: state.compactHeight)
                 if let card = state.pendingCards.first {
                     cardView(card)
+                } else if let id = state.showingDiffFor, let bot = state.bots.first(where: { $0.id == id }), let edit = bot.lastEdit {
+                    DiffCardView(sessionName: bot.name, color: bot.color, summary: edit) { state.showingDiffFor = nil }
+                        .fixedSize(horizontal: false, vertical: true)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
+                            let wanted = state.compactHeight + 6 + h
+                            if abs(wanted - state.expandedHeight) > 1 { state.expandedHeight = wanted }
+                        }
                 } else {
                     UsageStripView(usage: state.usage)
                     SessionListView(state: state)
                         .padding(.bottom, 10)
+                        .onAppear { if state.expandedHeight != 190 { state.expandedHeight = 190 } }
                 }
             }
         }
@@ -109,7 +117,13 @@ struct IslandRootView: View {
         let botSize = state.botSize
         return HStack(spacing: 0) {
             HStack(spacing: 6) {
-                ForEach(state.bots) { bot in BotView(bot: bot, paused: state.mode == .hidden).frame(width: botSize, height: botSize) }
+                ForEach(state.bots) { bot in
+                    BotView(bot: bot, paused: state.mode == .hidden)
+                        .frame(width: botSize, height: botSize)
+                        .contentShape(Rectangle())
+                        .onTapGesture { state.onFocus(bot.id) }
+                        .help(bot.name)
+                }
             }
             .frame(width: state.leftWingWidth, height: height, alignment: .trailing)
             .padding(.trailing, 0)

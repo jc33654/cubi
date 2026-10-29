@@ -1,0 +1,31 @@
+{
+  "v": 1,
+  "agent": "claude-code",
+  "event": "PreToolUse",
+  "tool": null,
+  "pid": 13299,
+  "ppid": 13165,
+  "client": {
+    "term_program": "ghostty",
+    "bundle_id": "com.mitchellh.ghostty",
+    "term_session_id": null,
+    "tty": "/dev/ttys009"
+  },
+  "payload": {
+    "session_id": "6ff235bc-aeb2-4719-9dcf-89258dc2de8e",
+    "transcript_path": "/Users/me/.claude/projects/-Users-me-Documents-cubi/6ff235bc-aeb2-4719-9dcf-89258dc2de8e.jsonl",
+    "cwd": "/Users/me/Documents/cubi",
+    "prompt_id": "7a0dbf82-6bac-4f56-8ba2-9bd7eda264ec",
+    "permission_mode": "acceptEdits",
+    "effort": {
+      "level": "high"
+    },
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Write",
+    "tool_input": {
+      "file_path": "/private/tmp/claude-501/-Users-me-Documents-project-note/3d221898-146f-45b1-ab8c-611ed154d752/scratchpad/diff-probe.txt",
+      "content": "alpha\nbeta\ngamma\n"
+    },
+    "tool_use_id": "toolu_01MwSGcHHUpFtJ4rYU53MMnF"
+  }
+}

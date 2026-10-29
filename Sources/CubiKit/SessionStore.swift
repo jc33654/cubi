@@ -19,6 +19,8 @@ public struct SessionInfo: Sendable, Equatable, Identifiable {
     public var model: String?
     public var pending: Pending? = nil
     public var ended = false
+    /// The most recent Edit/Write, for the diff card.
+    public var lastEdit: EditSummary? = nil
 
     public enum Pending: Sendable, Equatable { case approval(tool: String), question }
 }
@@ -90,11 +92,15 @@ public struct SessionStore: Sendable {
             s.botState = .working
             s.pending = nil
             s.ticker = ClaudeCodeDecoder.toolLabel(tool: tool, input: input)
-        case .toolEnd(let tool, let ok, let input, _):
+        case .toolEnd(let tool, let ok, let input, let response):
             s.pending = nil
             // The tool is done; Claude is composing what comes next.
             s.botState = ok ? .thinking : .error
             s.ticker = ok ? "思考中" : "失敗：" + ClaudeCodeDecoder.toolLabel(tool: tool, input: input)
+            if ok, let edit = EditSummaryBuilder.build(tool: tool, input: input, response: response) {
+                s.lastEdit = edit
+                s.ticker = edit.label
+            }
         case .permissionRequest(let tool, let input, _):
             s.botState = .waiting
             if tool == "AskUserQuestion" {

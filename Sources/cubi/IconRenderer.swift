@@ -48,6 +48,9 @@ enum IconRenderer {
             state.usage = StatuslineInfo(fiveHour: UsageWindow(usedPercent: 42, resetsAt: Date().timeIntervalSince1970 + 5400),
                                          sevenDay: UsageWindow(usedPercent: 81, resetsAt: Date().timeIntervalSince1970 + 200_000),
                                          costUSD: 1.45)
+        case "diff":
+            state.mode = .expanded
+            state.showingDiffFor = "alpha"
         case "question":
             state.mode = .expanded
             let q = AskQuestion(question: "curl 已被拒絕兩次，接下來要怎麼處理？", header: "下一步", options: [
@@ -70,6 +73,16 @@ enum IconRenderer {
             let bot = BotRuntime(id: name, name: name, color: SessionPalette.colors[i * 3])
             bot.model.setState(i == 0 ? bs : .idle)
             bot.contextPercent = [92, 35, 0][i]
+            if i == 0 {
+                bot.lastEdit = EditSummary(path: "/Users/me/Documents/cubi/Sources/cubi/Island/IslandRootView.swift", added: 2, removed: 1, lines: [
+                    DiffLine(kind: .hunk, text: "@@ -41 +41 @@"),
+                    DiffLine(kind: .context, text: "        VStack(spacing: 6) {"),
+                    DiffLine(kind: .removed, text: "            wings(height: state.geometry.notchHeight)"),
+                    DiffLine(kind: .added, text: "            wings(height: state.compactHeight)"),
+                    DiffLine(kind: .added, text: "            UsageStripView(usage: state.usage)"),
+                    DiffLine(kind: .context, text: "        }"),
+                ], truncated: false)
+            }
             if bs == .tired { bot.model.contextPercent = 92 }
             bot.model.update(dt: 0.3, random: { 0.5 })
             state.bots.append(bot)

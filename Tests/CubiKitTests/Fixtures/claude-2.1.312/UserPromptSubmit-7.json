@@ -1,0 +1,23 @@
+{
+  "v": 1,
+  "agent": "claude-code",
+  "event": "UserPromptSubmit",
+  "tool": null,
+  "pid": 13298,
+  "ppid": 13165,
+  "client": {
+    "term_program": "ghostty",
+    "bundle_id": "com.mitchellh.ghostty",
+    "term_session_id": null,
+    "tty": "/dev/ttys009"
+  },
+  "payload": {
+    "session_id": "6ff235bc-aeb2-4719-9dcf-89258dc2de8e",
+    "transcript_path": "/Users/me/.claude/projects/-Users-me-Documents-cubi/6ff235bc-aeb2-4719-9dcf-89258dc2de8e.jsonl",
+    "cwd": "/Users/me/Documents/cubi",
+    "prompt_id": "7a0dbf82-6bac-4f56-8ba2-9bd7eda264ec",
+    "permission_mode": "acceptEdits",
+    "hook_event_name": "UserPromptSubmit",
+    "prompt": "Use the Write tool to create the file /private/tmp/claude-501/-Users-me-Documents-project-note/3d221898-146f-45b1-ab8c-611ed154d752/scratchpad/diff-probe.txt with exactly three lines: alpha, beta…"
+  }
+}

@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Copy captured hook envelopes into the test fixtures, with personal paths scrubbed.
 
-Usage: scripts/import-fixtures.py <claude-code-version> [capture-dir]
+Usage: scripts/import-fixtures.py <claude-code-version> [capture-dir] [--sessions id1,id2,…]
+
+Only the listed sessions are imported (prefix match), so real work sessions recorded in the
+capture directory never end up in the repo. Without --sessions everything is imported.
 
 Reads ~/Library/Application Support/cubi/capture/*.jsonl (written by `cubi-hook --capture`),
 replaces the home directory and user name, truncates long free text, and writes one pretty JSON
@@ -18,8 +21,13 @@ from pathlib import Path
 if len(sys.argv) < 2:
     sys.exit(__doc__)
 
-version = sys.argv[1]
-capture_dir = Path(sys.argv[2]) if len(sys.argv) > 2 else Path.home() / "Library/Application Support/cubi/capture"
+args = [a for a in sys.argv[1:] if not a.startswith("--sessions")]
+sessions = None
+for a in sys.argv[1:]:
+    if a.startswith("--sessions="):
+        sessions = [x.strip() for x in a.split("=", 1)[1].split(",") if x.strip()]
+version = args[0]
+capture_dir = Path(args[1]) if len(args) > 1 else Path.home() / "Library/Application Support/cubi/capture"
 repo = Path(__file__).resolve().parent.parent
 out_dir = repo / "Tests/CubiKitTests/Fixtures" / f"claude-{version}"
 
@@ -65,6 +73,9 @@ for src in sorted(capture_dir.glob("*.jsonl")):
         payload = raw.get("payload")
         # Hand-fed test payloads (no session_id) are not real Claude Code events.
         if not isinstance(payload, dict) or not payload.get("session_id"):
+            skipped += 1
+            continue
+        if sessions is not None and not any(payload["session_id"].startswith(x) for x in sessions):
             skipped += 1
             continue
         n += 1

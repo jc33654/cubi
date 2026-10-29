@@ -19,6 +19,7 @@ final class BotRuntime: Identifiable {
     var stateLabel = "idle"
     var contextPercent: Double = 0
     var modelName: String?
+    var lastEdit: EditSummary?
     @ObservationIgnored var model = BotModel()
     /// Timestamp of the last drawn frame, for a real-time step (0 = not yet drawn).
     @ObservationIgnored var lastFrame: TimeInterval = 0
@@ -42,6 +43,10 @@ final class IslandState {
     var pendingCards: [PendingCard] = []
     /// Where a card's buttons report to. Set by the coordinator.
     @ObservationIgnored var onDecision: (UUID, Decision) -> Void = { _, _ in }
+    /// Tapping a robot or a list row: bring that session's terminal to the front.
+    @ObservationIgnored var onFocus: (String) -> Void = { _ in }
+    /// Session whose last diff is open in the expanded view.
+    var showingDiffFor: String?
     /// Expanded height follows the card being shown.
     var expandedHeight: CGFloat = 190
     /// Account-wide plan usage from the latest status line; nil until one arrives.

@@ -65,9 +65,10 @@ struct QuestionCardView: View {
                     .buttonStyle(.plain)
                 }
             }
-            if current.multiSelect {
-                HStack {
-                    Spacer()
+            HStack {
+                CardButton(title: "在終端回答", role: .quiet) { decide(.deferToTerminal) }
+                Spacer()
+                if current.multiSelect {
                     CardButton(title: index + 1 < questions.count ? "下一題" : "送出", role: .primary) { commit() }
                 }
             }

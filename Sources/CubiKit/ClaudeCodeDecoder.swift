@@ -18,7 +18,10 @@ public enum ClaudeCodeDecoder {
         case "PreToolUse":
             let tool = p["tool_name"]?.string ?? e.tool ?? "?"
             let input = p["tool_input"] ?? .null
-            event = tool == "AskUserQuestion" ? .question(input) : .toolStart(tool: tool, input: input)
+            // Only the matcher hook (`--tool AskUserQuestion`) holds its connection for an answer.
+            // The plain PreToolUse hook also fires for the same call but is fire-and-forget.
+            event = (tool == "AskUserQuestion" && e.tool == "AskUserQuestion")
+                ? .question(input) : .toolStart(tool: tool, input: input)
         case "PostToolUse", "PostToolUseFailure":
             event = .toolEnd(tool: p["tool_name"]?.string ?? "?", ok: name == "PostToolUse",
                              input: p["tool_input"] ?? .null, response: p["tool_response"] ?? .null)

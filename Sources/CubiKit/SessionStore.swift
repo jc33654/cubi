@@ -72,13 +72,16 @@ public struct SessionStore: Sendable {
             s.pending = nil
             s.ticker = text.split(separator: "\n").first.map(String.init) ?? text
         case .toolStart(let tool, let input):
+            // The plain PreToolUse hook for AskUserQuestion carries no state of its own.
+            guard tool != "AskUserQuestion" else { break }
             s.botState = .working
             s.pending = nil
             s.ticker = ClaudeCodeDecoder.toolLabel(tool: tool, input: input)
         case .toolEnd(let tool, let ok, let input, _):
             s.pending = nil
-            s.botState = ok ? .working : .error
-            if !ok { s.ticker = "失敗：" + ClaudeCodeDecoder.toolLabel(tool: tool, input: input) }
+            // The tool is done; Claude is composing what comes next.
+            s.botState = ok ? .thinking : .error
+            s.ticker = ok ? "思考中" : "失敗：" + ClaudeCodeDecoder.toolLabel(tool: tool, input: input)
         case .permissionRequest(let tool, let input, _):
             s.botState = .waiting
             if tool == "AskUserQuestion" {

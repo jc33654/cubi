@@ -75,20 +75,22 @@ struct IslandRootView: View {
         }
     }
 
-    @ViewBuilder
+    /// The card takes its natural height and reports it, and the island grows to fit: no estimates.
     private func cardView(_ card: PendingCard) -> some View {
-        let waiting = state.pendingCards.count - 1
-        switch card.content {
-        case .approval(let title, let detail, let canAlways):
-            ApprovalCardView(card: card, title: title, detail: detail, canAlways: canAlways, waitingCount: waiting) { d in
-                state.onDecision(card.id, d)
+        Group {
+            switch card.content {
+            case .approval(let title, let detail, let canAlways):
+                ApprovalCardView(card: card, title: title, detail: detail, canAlways: canAlways,
+                                 waitingCount: state.pendingCards.count - 1) { d in state.onDecision(card.id, d) }
+            case .question(let questions):
+                QuestionCardView(card: card, questions: questions) { d in state.onDecision(card.id, d) }
             }
-            .id(card.id)
-        case .question(let questions):
-            QuestionCardView(card: card, questions: questions) { d in
-                state.onDecision(card.id, d)
-            }
-            .id(card.id)
+        }
+        .id(card.id)
+        .fixedSize(horizontal: false, vertical: true)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
+            let wanted = state.compactHeight + 6 + h
+            if abs(wanted - state.expandedHeight) > 1 { state.expandedHeight = wanted }
         }
     }
 

@@ -23,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         NSApp.setActivationPolicy(.accessory)
+        Sounds.prewarm()
 
         let island = IslandController()
         self.island = island

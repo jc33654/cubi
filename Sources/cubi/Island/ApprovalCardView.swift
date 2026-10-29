@@ -43,6 +43,7 @@ struct ApprovalCardView: View {
                 .textSelection(.enabled)
             HStack(spacing: 8) {
                 CardButton(title: "拒絕", role: .deny) { decide(.deny) }
+                CardButton(title: "在終端處理", role: .quiet) { decide(.deferToTerminal) }
                 Spacer()
                 if canAlways {
                     CardButton(title: "總是允許", role: .secondary) { decide(.always) }
@@ -56,7 +57,7 @@ struct ApprovalCardView: View {
 }
 
 struct CardButton: View {
-    enum Role { case primary, secondary, deny }
+    enum Role { case primary, secondary, deny, quiet }
     let title: String
     let role: Role
     let action: () -> Void
@@ -65,7 +66,7 @@ struct CardButton: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(role == .primary ? .black : .white)
+                .foregroundStyle(role == .primary ? .black : (role == .quiet ? .white.opacity(0.6) : .white))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 6)
                 .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(fill))
@@ -78,6 +79,7 @@ struct CardButton: View {
         case .primary: return Color(red: 0.31, green: 0.84, blue: 0.55)
         case .secondary: return .white.opacity(0.18)
         case .deny: return Color(red: 0.95, green: 0.33, blue: 0.37).opacity(0.85)
+        case .quiet: return .white.opacity(0.06)
         }
     }
 }

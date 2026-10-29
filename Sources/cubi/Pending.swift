@@ -4,10 +4,15 @@ import CubiKit
 /// A blocking request the island is showing. The relay connection stays open until `decide`.
 @MainActor
 final class PendingRequest: Identifiable {
+    /// Which hook a question came through decides the reply shape.
+    enum QuestionChannel { case preToolUse, permissionRequest }
+
     enum Kind {
         case approval(tool: String, input: JSONValue, suggestions: JSONValue)
-        case question(questions: [AskQuestion], raw: JSONValue)
+        case question(questions: [AskQuestion], raw: JSONValue, channel: QuestionChannel)
     }
+
+    var isQuestion: Bool { if case .question = kind { return true }; return false }
 
     let id = UUID()
     let sessionID: String
@@ -28,6 +33,8 @@ enum Decision: Sendable, Equatable {
     case always
     case deny
     case answers([String: String])
+    /// Close without a decision: the terminal's own prompt takes over.
+    case deferToTerminal
 }
 
 /// View model for one card: everything SwiftUI needs, nothing it must not touch.

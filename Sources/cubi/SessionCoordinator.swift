@@ -57,14 +57,23 @@ final class SessionCoordinator {
         switch decoded.event {
         case .permissionRequest(let tool, let input, let suggestions):
             if tool == "AskUserQuestion" {
-                // The question itself comes through PreToolUse; this is the terminal's own flow.
-                connection.close()
-                return
+                // The question reached the permission flow (the PreToolUse answer was not taken, or
+                // came too late). Answer it here instead; the earlier card is replaced, not duplicated.
+                guard let questions = AskQuestion.parse(input) else {
+                    CubiLog.write("AskUserQuestion (permission) input not understood, leaving it to the terminal")
+                    connection.close()
+                    return
+                }
+                withdraw(sessionID: sessionID, outcome: .handledElsewhere)
+                pending.append(PendingRequest(sessionID: sessionID,
+                                              kind: .question(questions: questions, raw: input, channel: .permissionRequest),
+                                              connection: connection))
+            } else {
+                // One outstanding request per session: a newer one replaces a stale one.
+                withdraw(sessionID: sessionID, outcome: .handledElsewhere)
+                pending.append(PendingRequest(sessionID: sessionID, kind: .approval(tool: tool, input: input, suggestions: suggestions),
+                                              connection: connection))
             }
-            // One outstanding request per session: a newer one replaces a stale one.
-            withdraw(sessionID: sessionID, outcome: .handledElsewhere)
-            pending.append(PendingRequest(sessionID: sessionID, kind: .approval(tool: tool, input: input, suggestions: suggestions),
-                                          connection: connection))
         case .question(let raw):
             guard let questions = AskQuestion.parse(raw) else {
                 CubiLog.write("AskUserQuestion input not understood, leaving it to the terminal")
@@ -72,8 +81,10 @@ final class SessionCoordinator {
                 return
             }
             withdraw(sessionID: sessionID, outcome: .handledElsewhere)
-            pending.append(PendingRequest(sessionID: sessionID, kind: .question(questions: questions, raw: raw),
+            pending.append(PendingRequest(sessionID: sessionID, kind: .question(questions: questions, raw: raw, channel: .preToolUse),
                                           connection: connection))
+        case .stop:
+            connection.close()
         default:
             connection.close()
         }
@@ -81,8 +92,9 @@ final class SessionCoordinator {
         let effects = store.apply(decoded, now: Date().timeIntervalSinceReferenceDate)
         CubiLog.write("event \(decoded.event.name) session=\(sessionID.prefix(8)) pending=\(pending.count)")
         run(effects)
-        if decoded.event.isBlocking { Sounds.play(.pending) }
         sync()
+        if decoded.event.isBlocking { Sounds.play(.pending) }
+        if case .stop = decoded.event { Sounds.play(.done) }
     }
 
     /// The relay went away before we answered: the user pressed Esc, answered in the terminal,
@@ -111,19 +123,25 @@ final class SessionCoordinator {
         case (.approval, .allow):
             request.connection.reply(ClaudeCodeReplies.permission(.allow))
             outcome = .allowed
-            Sounds.play(.allow)
         case (.approval(_, _, let suggestions), .always):
             request.connection.reply(ClaudeCodeReplies.permission(.always(suggestions: suggestions)))
             outcome = .allowed
-            Sounds.play(.allow)
         case (.approval, .deny):
             request.connection.reply(ClaudeCodeReplies.permission(.deny(message: "Denied from Cubi")))
             outcome = .denied
-            Sounds.play(.deny)
-        case (.question(_, let raw), .answers(let answers)):
-            request.connection.reply(ClaudeCodeReplies.question(questions: raw["questions"] ?? .array([]), answers: answers))
+        case (.question(_, let raw, let channel), .answers(let answers)):
+            let questions = raw["questions"] ?? .array([])
+            switch channel {
+            case .preToolUse:
+                request.connection.reply(ClaudeCodeReplies.question(questions: questions, answers: answers))
+            case .permissionRequest:
+                request.connection.reply(ClaudeCodeReplies.questionViaPermission(questions: questions, answers: answers))
+            }
             outcome = .answered
-            Sounds.play(.answer)
+        case (_, .deferToTerminal):
+            CubiLog.write("deferred to terminal: session=\(request.sessionID.prefix(8))")
+            request.connection.close()
+            outcome = .handledElsewhere
         default:
             CubiLog.write("decision \(decision) does not fit request, closing without a decision")
             request.connection.close()
@@ -131,6 +149,12 @@ final class SessionCoordinator {
         }
         store.resolvePending(request.sessionID, outcome: outcome)
         sync()
+        switch outcome {
+        case .allowed: Sounds.play(.allow)
+        case .denied: Sounds.play(.deny)
+        case .answered: Sounds.play(.answer)
+        case .handledElsewhere: break
+        }
     }
 
     // MARK: - Effects and timers
@@ -214,7 +238,7 @@ final class SessionCoordinator {
             let canAlways = (suggestions.array?.isEmpty == false)
             return PendingCard(id: request.id, sessionName: name, color: color,
                                content: .approval(title: summary.title, detail: summary.detail, canAlways: canAlways))
-        case .question(let questions, _):
+        case .question(let questions, _, _):
             return PendingCard(id: request.id, sessionName: name, color: color, content: .question(questions))
         }
     }

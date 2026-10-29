@@ -40,6 +40,20 @@ public enum ClaudeCodeReplies {
         ])]))
     }
 
+    /// The same answers, when the question arrived through the PermissionRequest flow instead.
+    public static func questionViaPermission(questions: JSONValue, answers: [String: String]) -> String {
+        encode(.object(["hookSpecificOutput": .object([
+            "hookEventName": .string("PermissionRequest"),
+            "decision": .object([
+                "behavior": .string("allow"),
+                "updatedInput": .object([
+                    "questions": questions,
+                    "answers": .object(answers.mapValues { .string($0) }),
+                ]),
+            ]),
+        ])]))
+    }
+
     static func encode(_ value: JSONValue) -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]

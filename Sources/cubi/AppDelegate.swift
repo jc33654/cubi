@@ -31,7 +31,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.island = island
         let coordinator = SessionCoordinator(island: island)
         self.coordinator = coordinator
-        let settings = SettingsWindow(island: island.state, notifier: coordinator.notifier, ignored: coordinator.ignored, toolkit: toolkit)
+        let settings = SettingsWindow(island: island.state, notifier: coordinator.notifier, ignored: coordinator.ignored,
+                                      registry: coordinator.registry, toolkit: toolkit)
         self.settings = settings
         let statusBar = StatusBarController(island: island, notifier: coordinator.notifier,
                                             openSettings: { [settings] in settings.show() },
@@ -43,7 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if UserDefaults.standard.stringArray(forKey: HookSetupModel.projectLocalKey) == nil {
             UserDefaults.standard.set(["~/Documents/cubi"], forKey: HookSetupModel.projectLocalKey)
         }
-        if !((try? HookSetup.status())?.hooksInstalled ?? false) { settings.show() }
+        if !((try? HookSetup.status())?.hooksInstalled ?? false) || CommandLine.arguments.contains("--settings") { settings.show() }
 
         showObserver = DistributedNotificationCenter.default().addObserver(
             forName: Self.showNotification, object: nil, queue: .main

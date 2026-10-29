@@ -20,6 +20,7 @@ final class BotRuntime: Identifiable {
     var contextPercent: Double = 0
     var modelName: String?
     var lastEdit: EditSummary?
+    var agent = "claude-code"
     @ObservationIgnored var model = BotModel()
     /// Timestamp of the last drawn frame, for a real-time step (0 = not yet drawn).
     @ObservationIgnored var lastFrame: TimeInterval = 0

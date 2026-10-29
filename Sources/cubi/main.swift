@@ -39,11 +39,11 @@ if let i = arguments.firstIndex(where: { ["--hooks-status", "--hooks-plan", "--i
             if !s.legacyNotificationCommands.isEmpty { print("legacy Notification hooks: \(s.legacyNotificationCommands.joined(separator: ", "))") }
             exit(0)
         case "--hooks-plan":
-            let p = try HookSetup.installPreview(options: options)
+            guard let p = try HookSetup.installPreview(options: options) else { exit(1) }
             print(p.plan.changed ? p.plan.diff : "already installed, nothing to change")
             exit(0)
         case "--install-hooks":
-            let p = try HookSetup.installPreview(options: options)
+            guard let p = try HookSetup.installPreview(options: options) else { exit(1) }
             guard p.plan.changed else { print("already installed, nothing to change"); exit(0) }
             print(p.plan.diff)
             let backup = try HookSetup.apply(p)
@@ -51,7 +51,7 @@ if let i = arguments.firstIndex(where: { ["--hooks-status", "--hooks-plan", "--i
             print("Restart your Claude Code sessions: hooks are read when a session starts.")
             exit(0)
         default:
-            let p = try HookSetup.uninstallPreview()
+            guard let p = try HookSetup.uninstallPreview() else { exit(1) }
             guard p.plan.changed else { print("nothing of Cubi's in settings.json"); exit(0) }
             print(p.plan.diff)
             let backup = try HookSetup.apply(p)

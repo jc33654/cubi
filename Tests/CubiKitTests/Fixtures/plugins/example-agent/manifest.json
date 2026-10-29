@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "id": "example-agent",
+  "name": "Example Agent",
+  "color": "#2DD4BF",
+  "capabilities": ["approvals"],
+  "secrets": [
+    { "key": "EXAMPLE_API_KEY", "label": "API key", "required": false }
+  ],
+  "install": {
+    "mode": "json-hooks",
+    "file": "~/.example-agent/settings.json",
+    "entries": [
+      { "event": "SessionStart", "command": "$HOME/.cubi/bin/cubi-hook --agent example-agent --event SessionStart", "timeout": 10 },
+      { "event": "BeforeTool",   "command": "$HOME/.cubi/bin/cubi-hook --agent example-agent --event BeforeTool", "timeout": 10 },
+      { "event": "AfterTool",    "command": "$HOME/.cubi/bin/cubi-hook --agent example-agent --event AfterTool", "timeout": 10 },
+      { "event": "AgentDone",    "command": "$HOME/.cubi/bin/cubi-hook --agent example-agent --event AgentDone", "timeout": 10 }
+    ]
+  },
+  "events": {
+    "SessionStart": { "canonical": "sessionStart", "map": { "session": "$.session_id", "cwd": "$.workdir" } },
+    "BeforeTool":   { "canonical": "toolStart",    "map": { "session": "$.session_id", "tool": "$.toolCall.name", "input": "$.toolCall.args" } },
+    "AfterTool":    { "canonical": "toolEnd",      "map": { "session": "$.session_id", "tool": "$.toolCall.name", "ok": "$.success" } },
+    "AgentDone":    { "canonical": "stop",         "map": { "session": "$.session_id" } }
+  }
+}

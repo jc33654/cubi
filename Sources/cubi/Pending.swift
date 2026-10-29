@@ -14,17 +14,30 @@ final class PendingRequest: Identifiable {
 
     var isQuestion: Bool { if case .question = kind { return true }; return false }
 
+    /// What the plugin needs to build the reply.
+    var context: PendingContext {
+        switch kind {
+        case .approval: return PendingContext(kind: .approval, envelope: envelope)
+        case .question(_, _, .preToolUse): return PendingContext(kind: .questionPreToolUse, envelope: envelope)
+        case .question(_, _, .permissionRequest): return PendingContext(kind: .questionPermission, envelope: envelope)
+        }
+    }
+
     let id = UUID()
     let sessionID: String
+    let agent: String
     let kind: Kind
+    let envelope: HookEnvelope
     let connection: HookConnection
     /// Id of the tool call being decided, when a PreToolUse for it was seen.
     let toolUseID: String?
     let receivedAt = Date()
 
-    init(sessionID: String, kind: Kind, connection: HookConnection, toolUseID: String?) {
+    init(sessionID: String, agent: String, kind: Kind, envelope: HookEnvelope, connection: HookConnection, toolUseID: String?) {
         self.sessionID = sessionID
+        self.agent = agent
         self.kind = kind
+        self.envelope = envelope
         self.connection = connection
         self.toolUseID = toolUseID
     }

@@ -7,12 +7,15 @@ public struct SessionRef: Sendable, Equatable {
     public var client: HookClient
     /// Claude Code's own JSONL transcript for the session, when the payload names it.
     public var transcriptPath: String?
+    /// Which plugin produced this session's events.
+    public var agent: String = "claude-code"
 
-    public init(id: String, cwd: String?, client: HookClient, transcriptPath: String? = nil) {
+    public init(id: String, cwd: String?, client: HookClient, transcriptPath: String? = nil, agent: String = "claude-code") {
         self.id = id
         self.cwd = cwd
         self.client = client
         self.transcriptPath = transcriptPath
+        self.agent = agent
     }
 }
 

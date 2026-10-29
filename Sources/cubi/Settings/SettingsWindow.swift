@@ -10,11 +10,13 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private let notifier: Notifier
     private let ignored: IgnoredDirectories
     private let toolkit: ToolkitPanel
+    private let registry: PluginRegistry
 
-    init(island: IslandState, notifier: Notifier, ignored: IgnoredDirectories, toolkit: ToolkitPanel) {
+    init(island: IslandState, notifier: Notifier, ignored: IgnoredDirectories, registry: PluginRegistry, toolkit: ToolkitPanel) {
         self.island = island
         self.notifier = notifier
         self.ignored = ignored
+        self.registry = registry
         self.toolkit = toolkit
     }
 
@@ -24,7 +26,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             NSApp.activate(ignoringOtherApps: true)
             return
         }
-        let view = SettingsView(hooks: model, island: island, notifier: notifier, ignored: ignored) { [toolkit] in toolkit.show() }
+        let view = SettingsView(hooks: model, island: island, registry: registry, notifier: notifier, ignored: ignored) { [toolkit] in toolkit.show() }
         let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 620, height: 600),
                          styleMask: [.titled, .closable, .miniaturizable, .resizable],
                          backing: .buffered, defer: false)

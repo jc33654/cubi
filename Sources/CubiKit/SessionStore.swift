@@ -8,6 +8,7 @@ public struct SessionInfo: Sendable, Equatable, Identifiable {
     public var cwd: String?
     public var client: HookClient
     public var transcriptPath: String?
+    public var agent = "claude-code"
     /// The most recent tool call id seen for the session (PermissionRequest itself carries none).
     public var lastToolUseID: String?
     public var colorIndex: Int
@@ -217,7 +218,7 @@ public struct SessionStore: Sendable {
     private func make(_ ref: SessionRef, now: Double) -> SessionInfo {
         let taken = Set(sessions.values.map(\.colorIndex))
         return SessionInfo(id: ref.id, name: Self.defaultName(id: ref.id, cwd: ref.cwd), cwd: ref.cwd,
-                           client: ref.client, transcriptPath: ref.transcriptPath,
+                           client: ref.client, transcriptPath: ref.transcriptPath, agent: ref.agent,
                            colorIndex: SessionPalette.index(for: ref.id, taken: taken), lastEventAt: now)
     }
 

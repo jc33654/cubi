@@ -27,10 +27,19 @@ struct SessionListView: View {
                 .fill(BotPainter.swift(bot.color))
                 .frame(width: 12, height: 12)
             VStack(alignment: .leading, spacing: 1) {
-                Text(bot.name)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(bot.name)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    if bot.agent != "claude-code" {
+                        Text(bot.agent)
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.6))
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(Capsule().fill(.white.opacity(0.12)))
+                    }
+                }
                 Text(bot.ticker)
                     .font(.system(size: 11))
                     .foregroundStyle(.white.opacity(0.6))

@@ -5,6 +5,7 @@ import CubiKit
 struct SettingsView: View {
     @Bindable var hooks: HookSetupModel
     @Bindable var island: IslandState
+    @Bindable var registry: PluginRegistry
     let notifier: Notifier
     let ignored: IgnoredDirectories
     let openToolkit: () -> Void
@@ -18,6 +19,8 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 claudeSection
+                Divider()
+                PluginsSection(registry: registry, hooks: hooks)
                 Divider()
                 displaySection
                 Divider()
@@ -37,7 +40,7 @@ struct SettingsView: View {
         }
         .sheet(item: Binding(get: { hooks.pending.map { PreviewBox(preview: $0) } }, set: { if $0 == nil { hooks.cancelPending() } })) { box in
             DiffSheet(title: hooks.pendingIsUninstall ? "解除安裝 Claude Code hooks" : "安裝 Claude Code hooks",
-                      diff: box.preview.plan.diff, path: HookSetup.settingsURL.path,
+                      diff: box.preview.plan.diff, path: box.preview.url.path,
                       confirm: { hooks.confirmPending() }, cancel: { hooks.cancelPending() })
         }
     }

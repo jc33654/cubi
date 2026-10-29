@@ -1,7 +1,7 @@
 import Foundation
 import CubiKit
 
-/// The app's side of installing Claude Code hooks: real paths, the saved previous statusLine,
+/// The app's side of installing an agent's hooks: real paths, the saved previous statusLine,
 /// and the project-local capture file left over from development.
 enum HookSetup {
     static let home = FileManager.default.homeDirectoryForCurrentUser
@@ -12,33 +12,50 @@ enum HookSetup {
     struct Preview {
         let plan: ClaudeHookInstaller.Plan
         let snapshot: SettingsFile.Snapshot
+        let url: URL
+        let pluginID: String
     }
 
-    static func status() throws -> ClaudeHookInstaller.Status {
-        ClaudeHookInstaller.status(try SettingsFile.read(at: settingsURL).object)
+    /// The settings file a plugin installs into, or nil when it is installed by hand.
+    static func settingsURL(for plugin: any AgentPlugin) -> URL? {
+        guard case .jsonHooks(let file) = plugin.installMode else { return nil }
+        return URL(fileURLWithPath: (file as NSString).expandingTildeInPath)
     }
 
-    static func installPreview(options: ClaudeHookInstaller.Options) throws -> Preview {
-        let snapshot = try SettingsFile.read(at: settingsURL)
-        return Preview(plan: ClaudeHookInstaller.installPlan(settings: snapshot.object, options: options), snapshot: snapshot)
+    static func status(plugin: any AgentPlugin = ClaudeCodePlugin()) throws -> ClaudeHookInstaller.Status {
+        guard let url = settingsURL(for: plugin) else { return plugin.installStatus(settings: .object([:])) }
+        return plugin.installStatus(settings: try SettingsFile.read(at: url).object)
     }
 
-    static func uninstallPreview() throws -> Preview {
-        let snapshot = try SettingsFile.read(at: settingsURL)
-        return Preview(plan: ClaudeHookInstaller.uninstallPlan(settings: snapshot.object, previousStatusLine: savedPreviousStatusLine()), snapshot: snapshot)
+    static func installPreview(plugin: any AgentPlugin = ClaudeCodePlugin(), options: ClaudeHookInstaller.Options = .init()) throws -> Preview? {
+        guard let url = settingsURL(for: plugin) else { return nil }
+        let snapshot = try SettingsFile.read(at: url)
+        guard let plan = plugin.installPlan(settings: snapshot.object, retireCommandsContaining: options.retireCommandsContaining) else { return nil }
+        return Preview(plan: plan, snapshot: snapshot, url: url, pluginID: plugin.id)
+    }
+
+    static func uninstallPreview(plugin: any AgentPlugin = ClaudeCodePlugin()) throws -> Preview? {
+        guard let url = settingsURL(for: plugin) else { return nil }
+        let snapshot = try SettingsFile.read(at: url)
+        let previous = plugin.id == ClaudeCodePlugin.agentID ? savedPreviousStatusLine() : nil
+        guard let plan = plugin.uninstallPlan(settings: snapshot.object, previousStatusLine: previous) else { return nil }
+        return Preview(plan: plan, snapshot: snapshot, url: url, pluginID: plugin.id)
     }
 
     /// Writes the previewed result. Fails if the file changed since the preview.
     @discardableResult
     static func apply(_ preview: Preview) throws -> URL? {
-        let backup = try SettingsFile.write(SettingsFile.serialize(preview.plan.after), to: settingsURL,
+        let backupDir = preview.url.deletingLastPathComponent().appendingPathComponent("backups/cubi")
+        let backup = try SettingsFile.write(SettingsFile.serialize(preview.plan.after), to: preview.url,
                                             expecting: preview.snapshot.bytes, backupDir: backupDir)
-        if let previous = preview.plan.previousStatusLine {
-            savePreviousStatusLine(previous)
-        } else if !ClaudeHookInstaller.status(preview.plan.after).statuslineChained {
-            try? FileManager.default.removeItem(at: agentRecordURL)
+        if preview.pluginID == ClaudeCodePlugin.agentID {
+            if let previous = preview.plan.previousStatusLine {
+                savePreviousStatusLine(previous)
+            } else if !ClaudeHookInstaller.status(preview.plan.after).statuslineChained {
+                try? FileManager.default.removeItem(at: agentRecordURL)
+            }
         }
-        CubiLog.write("settings.json written (backup: \(backup?.lastPathComponent ?? "none"))")
+        CubiLog.write("\(preview.url.lastPathComponent) written for \(preview.pluginID) (backup: \(backup?.lastPathComponent ?? "none"))")
         return backup
     }
 

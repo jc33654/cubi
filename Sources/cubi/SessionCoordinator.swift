@@ -9,6 +9,7 @@ final class SessionCoordinator {
     private let island: IslandController
     let notifier = Notifier()
     let ignored = IgnoredDirectories()
+    let registry = PluginRegistry()
     private var ignoredLogged: Set<String> = []
     private var server: HookServer?
     private var sleepTimer: Timer?
@@ -41,10 +42,17 @@ final class SessionCoordinator {
         RelayInstaller.ensureInstalled()
         // The status line only fires when a session changes; restore the last reading so the
         // readout is not blank until then.
-        if let data = UserDefaults.standard.data(forKey: Self.usageKey),
-           let saved = try? JSONDecoder().decode(StatuslineInfo.self, from: data) {
-            lastUsage = saved
-            sync()
+        if let data = UserDefaults.standard.data(forKey: Self.usageKey) {
+            do {
+                let saved = try JSONDecoder().decode(StatuslineInfo.self, from: data)
+                lastUsage = saved
+                sync()
+                CubiLog.write("restored usage 5h=\(saved.fiveHour.map { "\(Int($0.usedPercent))%" } ?? "nil") 7d=\(saved.sevenDay.map { "\(Int($0.usedPercent))%" } ?? "nil")")
+            } catch {
+                CubiLog.write("saved usage unreadable: \(error)")
+            }
+        } else {
+            CubiLog.write("no saved usage")
         }
         let server = HookServer(
             handler: { [weak self] envelope, connection in self?.handle(envelope, connection) },
@@ -73,11 +81,21 @@ final class SessionCoordinator {
     // MARK: - Events
 
     private func handle(_ envelope: HookEnvelope, _ connection: HookConnection) {
-        guard let decoded = ClaudeCodeDecoder.decode(envelope) else {
+        guard let plugin = registry.plugin(for: envelope.agent) else {
+            if ignoredLogged.insert("agent:" + envelope.agent).inserted { CubiLog.write("no plugin for agent \(envelope.agent)") }
+            connection.close()
+            return
+        }
+        guard registry.isEnabled(plugin.id) else {
+            connection.close()
+            return
+        }
+        guard var decoded = plugin.decode(envelope) else {
             CubiLog.write("ignored \(envelope.agent)/\(envelope.event ?? "?")")
             connection.close()
             return
         }
+        decoded.session.agent = plugin.id
         let sessionID = decoded.session.id
 
         if store.sessions[sessionID] == nil, ignored.ignores(decoded.session.cwd) {
@@ -107,14 +125,14 @@ final class SessionCoordinator {
                     return
                 }
                 withdraw(sessionID: sessionID, outcome: .handledElsewhere)
-                hold(PendingRequest(sessionID: sessionID,
+                hold(PendingRequest(sessionID: sessionID, agent: plugin.id,
                                     kind: .question(questions: questions, raw: input, channel: .permissionRequest),
-                                    connection: connection, toolUseID: toolUseID(decoded)),
+                                    envelope: envelope, connection: connection, toolUseID: toolUseID(decoded)),
                      transcript: decoded.session.transcriptPath)
             } else {
                 withdraw(sessionID: sessionID, outcome: .handledElsewhere)
-                hold(PendingRequest(sessionID: sessionID, kind: .approval(tool: tool, input: input, suggestions: suggestions),
-                                    connection: connection, toolUseID: toolUseID(decoded)),
+                hold(PendingRequest(sessionID: sessionID, agent: plugin.id, kind: .approval(tool: tool, input: input, suggestions: suggestions),
+                                    envelope: envelope, connection: connection, toolUseID: toolUseID(decoded)),
                      transcript: decoded.session.transcriptPath)
             }
         case .question(let raw):
@@ -124,8 +142,8 @@ final class SessionCoordinator {
                 return
             }
             withdraw(sessionID: sessionID, outcome: .handledElsewhere)
-            hold(PendingRequest(sessionID: sessionID, kind: .question(questions: questions, raw: raw, channel: .preToolUse),
-                                connection: connection, toolUseID: toolUseID(decoded)),
+            hold(PendingRequest(sessionID: sessionID, agent: plugin.id, kind: .question(questions: questions, raw: raw, channel: .preToolUse),
+                                envelope: envelope, connection: connection, toolUseID: toolUseID(decoded)),
                  transcript: decoded.session.transcriptPath)
         default:
             connection.close()
@@ -209,32 +227,29 @@ final class SessionCoordinator {
         let request = pending.remove(at: i)
         watchers.removeValue(forKey: request.id)
         let outcome: SessionStore.PendingOutcome
-        switch (request.kind, decision) {
-        case (.approval, .allow):
-            request.connection.reply(ClaudeCodeReplies.permission(.allow))
-            outcome = .allowed
-        case (.approval(_, _, let suggestions), .always):
-            request.connection.reply(ClaudeCodeReplies.permission(.always(suggestions: suggestions)))
-            outcome = .allowed
-        case (.approval, .deny):
-            request.connection.reply(ClaudeCodeReplies.permission(.deny(message: "Denied from Cubi")))
-            outcome = .denied
-        case (.question(_, let raw, let channel), .answers(let answers)):
-            let questions = raw["questions"] ?? .array([])
-            switch channel {
-            case .preToolUse:
-                request.connection.reply(ClaudeCodeReplies.question(questions: questions, answers: answers))
-            case .permissionRequest:
-                request.connection.reply(ClaudeCodeReplies.questionViaPermission(questions: questions, answers: answers))
+        let canonical: CanonicalReply?
+        switch decision {
+        case .allow: canonical = .allow
+        case .always: canonical = .always
+        case .deny: canonical = .deny(message: "Denied from Cubi")
+        case .answers(let a): canonical = .answers(a)
+        case .deferToTerminal: canonical = nil
+        }
+        if let canonical, let plugin = registry.plugin(for: request.agent),
+           let line = plugin.reply(canonical, for: request.context) {
+            request.connection.reply(line)
+            switch canonical {
+            case .allow, .always: outcome = .allowed
+            case .deny: outcome = .denied
+            case .answers: outcome = .answered
             }
-            outcome = .answered
-        case (_, .deferToTerminal):
-            CubiLog.write("deferred to terminal: session=\(request.sessionID.prefix(8))")
-            if request.isQuestion { deferredQuestions[request.sessionID] = Date() }
-            request.connection.close()
-            outcome = .handledElsewhere
-        default:
-            CubiLog.write("decision \(decision) does not fit request, closing without a decision")
+        } else {
+            if canonical == nil {
+                CubiLog.write("deferred to terminal: session=\(request.sessionID.prefix(8))")
+                if request.isQuestion { deferredQuestions[request.sessionID] = Date() }
+            } else {
+                CubiLog.write("plugin \(request.agent) has no reply for \(decision); leaving it to the agent")
+            }
             request.connection.close()
             outcome = .handledElsewhere
         }
@@ -306,6 +321,7 @@ final class SessionCoordinator {
             if bot.contextPercent != info.contextPercent { bot.contextPercent = info.contextPercent }
             if bot.modelName != info.model { bot.modelName = info.model }
             if bot.lastEdit != info.lastEdit { bot.lastEdit = info.lastEdit }
+            if bot.agent != info.agent { bot.agent = info.agent }
             bot.model.setState(info.botState)
             bots.append(bot)
         }

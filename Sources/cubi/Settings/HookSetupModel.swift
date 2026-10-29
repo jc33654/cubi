@@ -32,20 +32,22 @@ final class HookSetupModel {
         projectLocalFiles = HookSetup.projectLocalHookFiles(in: dirs)
     }
 
-    func previewInstall() {
+    func previewInstall(plugin: any AgentPlugin = ClaudeCodePlugin()) {
         do {
-            let options = ClaudeHookInstaller.Options(retireCommandsContaining: retireLegacyNotification ? ["notify-hook.sh"] : [])
-            let p = try HookSetup.installPreview(options: options)
+            let retire = plugin.id == ClaudeCodePlugin.agentID && retireLegacyNotification ? ["notify-hook.sh"] : []
+            guard let p = try HookSetup.installPreview(plugin: plugin, options: .init(retireCommandsContaining: retire)) else {
+                message = "\(plugin.displayName) 要手動安裝。"; return
+            }
             if !p.plan.changed { message = "已經裝好了，沒有要改的東西。"; return }
             pending = p
             pendingIsUninstall = false
         } catch { self.error = error.localizedDescription }
     }
 
-    func previewUninstall() {
+    func previewUninstall(plugin: any AgentPlugin = ClaudeCodePlugin()) {
         do {
-            let p = try HookSetup.uninstallPreview()
-            if !p.plan.changed { message = "settings.json 裡沒有 Cubi 的東西。"; return }
+            guard let p = try HookSetup.uninstallPreview(plugin: plugin) else { message = "\(plugin.displayName) 要手動移除。"; return }
+            if !p.plan.changed { message = "\(p.url.lastPathComponent) 裡沒有 Cubi 的東西。"; return }
             pending = p
             pendingIsUninstall = true
         } catch { self.error = error.localizedDescription }

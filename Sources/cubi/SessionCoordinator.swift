@@ -46,6 +46,7 @@ final class SessionCoordinator {
             do {
                 let saved = try JSONDecoder().decode(StatuslineInfo.self, from: data)
                 lastUsage = saved
+                store.seedUsage(saved)
                 sync()
                 CubiLog.write("restored usage 5h=\(saved.fiveHour.map { "\(Int($0.usedPercent))%" } ?? "nil") 7d=\(saved.sevenDay.map { "\(Int($0.usedPercent))%" } ?? "nil")")
             } catch {
@@ -290,9 +291,7 @@ final class SessionCoordinator {
             case .notify(let session, let title, let body):
                 notifier.notify(title: title, body: body, thread: session)
             case .usage(let info):
-                if info != lastUsage {
-                    CubiLog.write("usage 5h=\(info.fiveHour.map { "\(Int($0.usedPercent))%" } ?? "nil") 7d=\(info.sevenDay.map { "\(Int($0.usedPercent))%" } ?? "nil") ctx=\(info.contextPercent.map { "\(Int($0))%" } ?? "nil") name=\(info.sessionName ?? "-")")
-                }
+                CubiLog.write("usage 5h=\(info.fiveHour.map { "\(Int($0.usedPercent))%" } ?? "nil") 7d=\(info.sevenDay.map { "\(Int($0.usedPercent))%" } ?? "nil") ctx=\(info.contextPercent.map { "\(Int($0))%" } ?? "nil") name=\(info.sessionName ?? "-")")
                 lastUsage = info
                 if let data = try? JSONEncoder().encode(info) { UserDefaults.standard.set(data, forKey: Self.usageKey) }
             }

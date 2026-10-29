@@ -78,6 +78,10 @@ final class IslandState {
     var botSize: CGFloat { max(16, compactHeight - 10) }
     var leftWingWidth: CGFloat { max(Self.minLeftWingWidth, 16 + CGFloat(bots.count) * (botSize + 6)) }
     var rightWingWidth: CGFloat { Self.rightWingWidth }
+    /// The wings differ in width but the notch must stay in the middle: shift the island (compact)
+    /// or the wing row (expanded) by half the difference, otherwise the robots end up under the notch.
+    var wingOffset: CGFloat { (rightWingWidth - leftWingWidth) / 2 }
+    func xOffset(for mode: IslandMode) -> CGFloat { mode == .compact ? wingOffset : 0 }
 
     func size(for mode: IslandMode) -> CGSize {
         switch mode {

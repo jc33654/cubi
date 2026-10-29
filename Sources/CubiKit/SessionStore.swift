@@ -41,6 +41,9 @@ public struct SessionStore: Sendable {
     public private(set) var sessions: [String: SessionInfo] = [:]
     /// Insertion order, so robots do not shuffle when a dictionary rehashes.
     public private(set) var order: [String] = []
+    /// Account-wide rate limits, merged across sessions: every status line reports what its own
+    /// session last heard from the API, so idle sessions carry stale or missing windows.
+    public private(set) var usage: StatuslineInfo?
 
     public static let happyDuration = 1.5
     public static let endedLinger = 3.0
@@ -49,6 +52,26 @@ public struct SessionStore: Sendable {
     public init() {}
 
     public var ordered: [SessionInfo] { order.compactMap { sessions[$0] } }
+
+    /// Restore a reading saved by a previous run.
+    public mutating func seedUsage(_ info: StatuslineInfo) { usage = info }
+
+    /// A window from the most recently active session replaces what we have; from any other
+    /// session it only fills a blank. Returns the merged reading when it changed.
+    private mutating func mergeUsage(_ info: StatuslineInfo, from id: String) -> StatuslineInfo? {
+        let newest = sessions.values.map(\.lastEventAt).max()
+        let fresh = sessions[id].map { $0.lastEventAt >= (newest ?? 0) } ?? false
+        func pick(_ new: UsageWindow?, over old: UsageWindow?) -> UsageWindow? {
+            guard let new else { return old }
+            return fresh || old == nil ? new : old
+        }
+        var merged = info
+        merged.fiveHour = pick(info.fiveHour, over: usage?.fiveHour)
+        merged.sevenDay = pick(info.sevenDay, over: usage?.sevenDay)
+        guard merged != usage else { return nil }
+        usage = merged
+        return merged
+    }
     public var anyPending: Bool { sessions.values.contains { $0.pending != nil } }
 
     // MARK: - Reduce
@@ -63,7 +86,7 @@ public struct SessionStore: Sendable {
             case .statusline(let info):
                 // The status line runs for every session, hooks or not; only hooked sessions get a
                 // robot, but the account-wide usage is still useful.
-                return [.usage(info)]
+                return mergeUsage(info, from: id).map { [.usage($0)] } ?? []
             default:
                 sessions[id] = make(hook.session, now: now)
                 order.append(id)
@@ -160,7 +183,7 @@ public struct SessionStore: Sendable {
                 s.contextPercent = c
                 if c >= 80, s.pending == nil, s.botState == .idle || s.botState == .tired { s.botState = .tired }
             }
-            effects.append(.usage(info))
+            if let merged = mergeUsage(info, from: id) { effects.append(.usage(merged)) }
             // Status line runs constantly; it is not "activity" for the sleep timer.
             s.lastEventAt = sessions[id]!.lastEventAt
         }

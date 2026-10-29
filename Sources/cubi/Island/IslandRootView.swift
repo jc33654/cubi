@@ -9,6 +9,7 @@ struct IslandRootView: View {
     @State private var width: CGFloat
     @State private var height: CGFloat
     @State private var radius: CGFloat
+    @State private var xOffset: CGFloat
 
     init(state: IslandState, onTap: @escaping () -> Void) {
         self.state = state
@@ -17,6 +18,7 @@ struct IslandRootView: View {
         _width = State(initialValue: size.width)
         _height = State(initialValue: size.height)
         _radius = State(initialValue: state.cornerRadius(for: state.mode))
+        _xOffset = State(initialValue: state.xOffset(for: state.mode))
     }
 
     private let openSpring = Animation.spring(response: 0.5, dampingFraction: 0.72)
@@ -33,6 +35,8 @@ struct IslandRootView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .contentShape(IslandShape(width: width, height: height, radius: radius))
         .onTapGesture { onTap() }
+        .offset(x: xOffset)
+        .onChange(of: state.bots.count) { _, _ in apply(state.mode, animated: true) }
         .onAppear { apply(state.mode, animated: false) }
         .onChange(of: state.mode) { _, new in apply(new, animated: true) }
         .onChange(of: state.geometry) { _, _ in apply(state.mode, animated: false) }
@@ -47,6 +51,7 @@ struct IslandRootView: View {
             width = size.width
             height = size.height
             radius = r
+            xOffset = state.xOffset(for: mode)
         }
         if animated {
             withAnimation(shrinking ? closeEase : openSpring, change)
@@ -142,5 +147,6 @@ struct IslandRootView: View {
             .padding(.trailing, 10)
         }
         .frame(height: height)
+        .offset(x: state.mode == .expanded ? state.wingOffset : 0)
     }
 }

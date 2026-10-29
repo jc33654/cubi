@@ -56,7 +56,8 @@ final class IslandController {
     private func islandRect() -> CGRect {
         let size = state.size(for: state.mode)
         let f = state.geometry.screenFrame
-        return CGRect(x: f.midX - size.width / 2, y: f.maxY - size.height, width: size.width, height: size.height)
+        return CGRect(x: f.midX - size.width / 2 + state.xOffset(for: state.mode), y: f.maxY - size.height,
+                      width: size.width, height: size.height)
     }
 
     // MARK: - Pointer polling

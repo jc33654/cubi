@@ -93,3 +93,44 @@ private func hook(_ id: String, _ event: CanonicalEvent, cwd: String? = "/Users/
     #expect(store.apply(hook("ghost", .sessionEnd(reason: "other")), now: 1).isEmpty)
     #expect(store.sessions.isEmpty)
 }
+
+// Every session's status line reports the rate limits its own session last heard; idle ones are
+// stale or blank. The island shows one account-wide reading.
+@Test func usageMergesAcrossSessions() {
+    var store = SessionStore()
+    let w = { (p: Double) in UsageWindow(usedPercent: p, resetsAt: nil) }
+    _ = store.apply(hook("a", .sessionStart(source: nil)), now: 1)
+    _ = store.apply(hook("b", .sessionStart(source: nil)), now: 2)   // b is the active one
+    var fx = store.apply(hook("b", .statusline(StatuslineInfo(fiveHour: w(14), sevenDay: w(30)))), now: 3)
+    #expect(fx == [.usage(StatuslineInfo(fiveHour: w(14), sevenDay: w(30)))])
+
+    // Idle session a: nil 5h must not blank the reading, stale 7d must not replace it.
+    fx = store.apply(hook("a", .statusline(StatuslineInfo(fiveHour: nil, sevenDay: w(5)))), now: 4)
+    #expect(fx.isEmpty)
+    #expect(store.usage?.fiveHour == w(14))
+    #expect(store.usage?.sevenDay == w(30))
+
+    // a becomes active again: its next reading wins.
+    _ = store.apply(hook("a", .prompt("hi")), now: 5)
+    fx = store.apply(hook("a", .statusline(StatuslineInfo(fiveHour: w(16), sevenDay: nil))), now: 6)
+    #expect(store.usage?.fiveHour == w(16))
+    #expect(store.usage?.sevenDay == w(30))
+    #expect(fx.count == 1)
+
+    // A session without a robot only fills blanks.
+    _ = store.apply(hook("z", .statusline(StatuslineInfo(fiveHour: w(99), sevenDay: w(99)))), now: 7)
+    #expect(store.usage?.fiveHour == w(16))
+    #expect(store.sessions["z"] == nil)
+}
+
+@Test func seededUsageFillsBlanksOnly() {
+    var store = SessionStore()
+    let w = { (p: Double) in UsageWindow(usedPercent: p, resetsAt: nil) }
+    store.seedUsage(StatuslineInfo(fiveHour: w(10), sevenDay: w(20)))
+    _ = store.apply(hook("z", .statusline(StatuslineInfo(fiveHour: nil, sevenDay: nil))), now: 1)
+    #expect(store.usage?.fiveHour == w(10))
+    _ = store.apply(hook("a", .sessionStart(source: nil)), now: 2)
+    _ = store.apply(hook("a", .statusline(StatuslineInfo(fiveHour: w(11)))), now: 3)
+    #expect(store.usage?.fiveHour == w(11))
+    #expect(store.usage?.sevenDay == w(20))
+}

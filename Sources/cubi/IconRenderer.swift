@@ -43,8 +43,8 @@ enum IconRenderer {
             state.pendingCards = [PendingCard(id: UUID(), sessionName: "alpha", color: SessionPalette.colors[0],
                 content: .approval(title: "執行指令", detail: "curl -s https://example.com | head -3", canAlways: true))]
             state.expandedHeight = state.compactHeight + 150
-        case "usage":
-            state.mode = .expanded
+        case "usage", "usage-compact":
+            state.mode = mode == "usage" ? .expanded : .compact
             state.usage = StatuslineInfo(fiveHour: UsageWindow(usedPercent: 42, resetsAt: Date().timeIntervalSince1970 + 5400),
                                          sevenDay: UsageWindow(usedPercent: 81, resetsAt: Date().timeIntervalSince1970 + 200_000),
                                          costUSD: 1.45)
@@ -65,7 +65,8 @@ enum IconRenderer {
             FileHandle.standardError.write(Data("cubi: unknown bot state \(botState)\n".utf8))
             return false
         }
-        for (i, name) in ["alpha", "beta", "gamma"].enumerated() {
+        let names: [String] = mode == "usage-compact" ? ["alpha"] : ["alpha", "beta", "gamma"]
+        for (i, name) in names.enumerated() {
             let bot = BotRuntime(id: name, name: name, color: SessionPalette.colors[i * 3])
             bot.model.setState(i == 0 ? bs : .idle)
             bot.contextPercent = [92, 35, 0][i]

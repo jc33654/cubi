@@ -215,6 +215,17 @@ Manifest 草案（`plugins/<id>/manifest.json`，目錄 0700）：`id / name / c
 
 每個 Phase 結束：`swift test`、手動驗收、commit（訊息我擬、你核准）。Phase 1 完成即可先用。
 
+### Cubi 完成後要退役的舊工具（Jade 2026-10-29 指示）
+
+| 舊工具 | 由誰取代 | 退役時機 |
+|---|---|---|
+| `~/.claude/notify-hook.sh` + `claude-notify.sh` + `focus-terminal-tab.sh`（Notification hook 桌面通知、點擊聚焦分頁） | Cubi 系統通知（右鍵「系統通知」）+ Phase 5 聚焦 | Phase 6 安裝器可選「移除舊 Notification hook」 |
+| `ClaudeToolkit.app` menubar 用量（`cctl menubar`） | 島的右翼用量與 expanded 用量列 | Phase 6（面板併入後 `cctl menubar stop`） |
+| `statusline.sh` 裡的 context / 5h / 7d 門檻通知 | tired 表情、用量列顏色 | Phase 6，改 statusline.sh 時只留顯示與 usage.json |
+| `~/.claude-toolkit/panel/`（WKWebView 管理面板） | 併入 Cubi（Phase 6） | Phase 6 |
+
+保留：`statusline.sh` 的狀態列顯示本身、`cctl` CLI、`zh-reply-guard.py`。
+
 ## 驗證
 
 - 單元：`CubiKit` 的事件解析（用 Phase 0 錄到的真實 payload 當 fixture）、狀態機轉換、顏色雜湊穩定、`SettingsFile` 的備份／stale／原子寫入（在 temp 目錄）。

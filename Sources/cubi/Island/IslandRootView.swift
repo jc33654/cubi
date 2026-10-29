@@ -95,6 +95,15 @@ struct IslandRootView: View {
         }
     }
 
+    private func usageLine(_ title: String, _ window: UsageWindow) -> some View {
+        HStack(spacing: 3) {
+            Text(title).foregroundStyle(.white.opacity(0.55))
+            Text("\(Int(window.usedPercent))%").foregroundStyle(UsageStripView.levelColor(window.usedPercent))
+        }
+        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+        .lineLimit(1)
+    }
+
     /// Robots sit on the two wings beside the notch, alternating left and right.
     private func wings(height: CGFloat) -> some View {
         let botSize = state.botSize
@@ -110,15 +119,15 @@ struct IslandRootView: View {
             HStack(spacing: 6) {
                 ForEach(right) { bot in BotView(bot: bot, paused: state.mode == .hidden).frame(width: botSize, height: botSize) }
                 // The right wing doubles as the usage readout while no robot needs it.
-                if right.isEmpty, let line = UsageFormat.compactLine(state.usage) {
-                    Text(line)
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.75))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                if right.isEmpty, let u = state.usage, u.fiveHour != nil || u.sevenDay != nil {
+                    VStack(alignment: .trailing, spacing: 1) {
+                        if let w = u.fiveHour { usageLine("5h", w) }
+                        if let w = u.sevenDay { usageLine("7d", w) }
+                    }
+                    .padding(.trailing, 4)
                 }
             }
-            .frame(width: wingWidth, height: height)
+            .frame(width: wingWidth, height: height, alignment: right.isEmpty ? .trailing : .center)
         }
         .frame(height: height)
     }

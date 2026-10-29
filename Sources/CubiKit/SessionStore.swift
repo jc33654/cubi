@@ -7,6 +7,7 @@ public struct SessionInfo: Sendable, Equatable, Identifiable {
     public var explicitName = false
     public var cwd: String?
     public var client: HookClient
+    public var transcriptPath: String?
     public var colorIndex: Int
     public var botState: BotState = .idle
     public var waitingBadge: Badge = .exclaim
@@ -61,6 +62,7 @@ public struct SessionStore: Sendable {
         s.ended = false
         if s.cwd == nil { s.cwd = hook.session.cwd }
         if s.client.tty == nil { s.client = hook.session.client }
+        if let t = hook.session.transcriptPath { s.transcriptPath = t }
 
         switch hook.event {
         case .sessionStart:
@@ -160,7 +162,8 @@ public struct SessionStore: Sendable {
             s.botState = .thinking
             s.ticker = "已回答"
         case .handledElsewhere:
-            s.botState = .thinking
+            // Esc, a terminal answer, or a timeout: nothing more may come for a while.
+            s.botState = s.contextPercent >= 80 ? .tired : .idle
             s.ticker = "已在終端處理"
         }
         sessions[id] = s
@@ -192,8 +195,8 @@ public struct SessionStore: Sendable {
     private func make(_ ref: SessionRef, now: Double) -> SessionInfo {
         let taken = Set(sessions.values.map(\.colorIndex))
         return SessionInfo(id: ref.id, name: Self.defaultName(id: ref.id, cwd: ref.cwd), cwd: ref.cwd,
-                           client: ref.client, colorIndex: SessionPalette.index(for: ref.id, taken: taken),
-                           lastEventAt: now)
+                           client: ref.client, transcriptPath: ref.transcriptPath,
+                           colorIndex: SessionPalette.index(for: ref.id, taken: taken), lastEventAt: now)
     }
 
     /// Same fallback chain as notify-hook.sh: session name, else cwd basename, else id prefix.

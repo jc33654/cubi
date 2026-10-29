@@ -10,9 +10,15 @@ final class SessionCoordinator {
     let notifier = Notifier()
     private var server: HookServer?
     private var sleepTimer: Timer?
+    private var watchTimer: Timer?
     private(set) var lastUsage: StatuslineInfo?
     /// Oldest first. At most one per session: Claude Code waits on each.
     private var pending: [PendingRequest] = []
+    private var watchers: [UUID: TranscriptWatcher] = [:]
+    /// Sessions whose question the user sent back to the terminal, with when. The permission-flow
+    /// copy of the same question that follows must not open a new card.
+    private var deferredQuestions: [String: Date] = [:]
+    private static let deferGrace: TimeInterval = 60
 
     init(island: IslandController) {
         self.island = island
@@ -42,6 +48,7 @@ final class SessionCoordinator {
     func stop() {
         server?.stop()
         sleepTimer?.invalidate()
+        watchTimer?.invalidate()
     }
 
     // MARK: - Events
@@ -54,25 +61,34 @@ final class SessionCoordinator {
         }
         let sessionID = decoded.session.id
 
+        // Any later event for this session means the terminal (or Esc) settled the request.
+        if decoded.event.endsPendingRequest, hasPending(sessionID) {
+            CubiLog.write("request settled elsewhere (\(decoded.event.name)): session=\(sessionID.prefix(8))")
+            withdraw(sessionID: sessionID, outcome: .handledElsewhere)
+        }
+
         switch decoded.event {
         case .permissionRequest(let tool, let input, let suggestions):
             if tool == "AskUserQuestion" {
-                // The question reached the permission flow (the PreToolUse answer was not taken, or
-                // came too late). Answer it here instead; the earlier card is replaced, not duplicated.
+                if let at = deferredQuestions[sessionID], Date().timeIntervalSince(at) < Self.deferGrace {
+                    // The user asked for the terminal: let it have this one.
+                    deferredQuestions.removeValue(forKey: sessionID)
+                    connection.close()
+                    return
+                }
                 guard let questions = AskQuestion.parse(input) else {
                     CubiLog.write("AskUserQuestion (permission) input not understood, leaving it to the terminal")
                     connection.close()
                     return
                 }
                 withdraw(sessionID: sessionID, outcome: .handledElsewhere)
-                pending.append(PendingRequest(sessionID: sessionID,
-                                              kind: .question(questions: questions, raw: input, channel: .permissionRequest),
-                                              connection: connection))
+                hold(PendingRequest(sessionID: sessionID,
+                                    kind: .question(questions: questions, raw: input, channel: .permissionRequest),
+                                    connection: connection), transcript: decoded.session.transcriptPath)
             } else {
-                // One outstanding request per session: a newer one replaces a stale one.
                 withdraw(sessionID: sessionID, outcome: .handledElsewhere)
-                pending.append(PendingRequest(sessionID: sessionID, kind: .approval(tool: tool, input: input, suggestions: suggestions),
-                                              connection: connection))
+                hold(PendingRequest(sessionID: sessionID, kind: .approval(tool: tool, input: input, suggestions: suggestions),
+                                    connection: connection), transcript: decoded.session.transcriptPath)
             }
         case .question(let raw):
             guard let questions = AskQuestion.parse(raw) else {
@@ -81,10 +97,8 @@ final class SessionCoordinator {
                 return
             }
             withdraw(sessionID: sessionID, outcome: .handledElsewhere)
-            pending.append(PendingRequest(sessionID: sessionID, kind: .question(questions: questions, raw: raw, channel: .preToolUse),
-                                          connection: connection))
-        case .stop:
-            connection.close()
+            hold(PendingRequest(sessionID: sessionID, kind: .question(questions: questions, raw: raw, channel: .preToolUse),
+                                connection: connection), transcript: decoded.session.transcriptPath)
         default:
             connection.close()
         }
@@ -97,11 +111,23 @@ final class SessionCoordinator {
         if case .stop = decoded.event { Sounds.play(.done) }
     }
 
+    private func hasPending(_ sessionID: String) -> Bool {
+        pending.contains { $0.sessionID == sessionID }
+    }
+
+    private func hold(_ request: PendingRequest, transcript: String?) {
+        pending.append(request)
+        if let w = TranscriptWatcher(path: transcript) { watchers[request.id] = w }
+        startWatchingIfNeeded()
+    }
+
     /// The relay went away before we answered: the user pressed Esc, answered in the terminal,
     /// or the relay's deadline passed. Either way the card is moot.
     private func clientClosed(_ connection: HookConnection) {
         guard let i = pending.firstIndex(where: { $0.connection === connection }) else { return }
         let request = pending.remove(at: i)
+        watchers.removeValue(forKey: request.id)
+        CubiLog.write("relay closed first: session=\(request.sessionID.prefix(8))")
         store.resolvePending(request.sessionID, outcome: .handledElsewhere)
         sync()
     }
@@ -109,8 +135,37 @@ final class SessionCoordinator {
     private func withdraw(sessionID: String, outcome: SessionStore.PendingOutcome) {
         guard let i = pending.firstIndex(where: { $0.sessionID == sessionID }) else { return }
         let request = pending.remove(at: i)
+        watchers.removeValue(forKey: request.id)
         request.connection.close()
         store.resolvePending(sessionID, outcome: outcome)
+    }
+
+    // MARK: - Transcript watching (terminal decisions that do not cancel the hook)
+
+    private func startWatchingIfNeeded() {
+        guard watchTimer == nil, !watchers.isEmpty else { return }
+        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.pollTranscripts() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        watchTimer = timer
+    }
+
+    private func pollTranscripts() {
+        var settled: [String] = []
+        for request in pending {
+            guard var w = watchers[request.id] else { continue }
+            if w.userEntryAppended() { settled.append(request.sessionID) } else { watchers[request.id] = w }
+        }
+        for id in settled {
+            CubiLog.write("transcript moved on: session=\(id.prefix(8))")
+            withdraw(sessionID: id, outcome: .handledElsewhere)
+        }
+        if !settled.isEmpty { sync() }
+        if watchers.isEmpty {
+            watchTimer?.invalidate()
+            watchTimer = nil
+        }
     }
 
     // MARK: - Decisions from the island
@@ -118,6 +173,7 @@ final class SessionCoordinator {
     private func decide(_ id: UUID, _ decision: Decision) {
         guard let i = pending.firstIndex(where: { $0.id == id }) else { return }
         let request = pending.remove(at: i)
+        watchers.removeValue(forKey: request.id)
         let outcome: SessionStore.PendingOutcome
         switch (request.kind, decision) {
         case (.approval, .allow):
@@ -140,6 +196,7 @@ final class SessionCoordinator {
             outcome = .answered
         case (_, .deferToTerminal):
             CubiLog.write("deferred to terminal: session=\(request.sessionID.prefix(8))")
+            if request.isQuestion { deferredQuestions[request.sessionID] = Date() }
             request.connection.close()
             outcome = .handledElsewhere
         default:
@@ -147,6 +204,7 @@ final class SessionCoordinator {
             request.connection.close()
             outcome = .handledElsewhere
         }
+        CubiLog.write("decided \(outcome): session=\(request.sessionID.prefix(8))")
         store.resolvePending(request.sessionID, outcome: outcome)
         sync()
         switch outcome {
@@ -216,7 +274,7 @@ final class SessionCoordinator {
         let cards = pending.map { card(for: $0) }
         if cards != state.pendingCards {
             state.pendingCards = cards
-            state.expandedHeight = Self.expandedHeight(for: cards.first, compact: state.compactHeight)
+            if cards.isEmpty { state.expandedHeight = 190 }
         }
 
         let hold = !pending.isEmpty
@@ -240,19 +298,6 @@ final class SessionCoordinator {
                                content: .approval(title: summary.title, detail: summary.detail, canAlways: canAlways))
         case .question(let questions, _, _):
             return PendingCard(id: request.id, sessionName: name, color: color, content: .question(questions))
-        }
-    }
-
-    private static func expandedHeight(for card: PendingCard?, compact: CGFloat) -> CGFloat {
-        guard let card else { return 190 }
-        switch card.content {
-        case .approval:
-            return compact + 150
-        case .question(let questions):
-            let q = questions.first
-            let options = CGFloat(q?.options.count ?? 1)
-            let rows = options * 36 + (q?.multiSelect == true ? 34 : 0)
-            return min(360, compact + 70 + rows)
         }
     }
 }

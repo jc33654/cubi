@@ -6,7 +6,8 @@ public enum ClaudeCodeDecoder {
     public static func decode(_ e: HookEnvelope) -> DecodedHook? {
         let p = e.payload
         guard let sessionID = p["session_id"]?.string else { return nil }
-        let session = SessionRef(id: sessionID, cwd: p["cwd"]?.string, client: e.client)
+        let session = SessionRef(id: sessionID, cwd: p["cwd"]?.string, client: e.client,
+                                 transcriptPath: p["transcript_path"]?.string)
         let name = e.event ?? p["hook_event_name"]?.string ?? ""
 
         let event: CanonicalEvent?

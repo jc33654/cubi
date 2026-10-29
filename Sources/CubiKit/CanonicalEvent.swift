@@ -5,11 +5,14 @@ public struct SessionRef: Sendable, Equatable {
     public var id: String
     public var cwd: String?
     public var client: HookClient
+    /// Claude Code's own JSONL transcript for the session, when the payload names it.
+    public var transcriptPath: String?
 
-    public init(id: String, cwd: String?, client: HookClient) {
+    public init(id: String, cwd: String?, client: HookClient, transcriptPath: String? = nil) {
         self.id = id
         self.cwd = cwd
         self.client = client
+        self.transcriptPath = transcriptPath
     }
 }
 
@@ -74,6 +77,16 @@ public enum CanonicalEvent: Sendable, Equatable {
         case .subagentStart: return "subagentStart"
         case .subagentStop: return "subagentStop"
         case .statusline: return "statusline"
+        }
+    }
+
+    /// True when this event proves the session has moved past any request still waiting on
+    /// the island (the user answered in the terminal, pressed Esc, or the request timed out).
+    public var endsPendingRequest: Bool {
+        switch self {
+        case .toolEnd, .stop, .prompt, .sessionEnd, .subagentStart, .subagentStop: return true
+        case .toolStart(let tool, _): return tool != "AskUserQuestion"
+        default: return false
         }
     }
 

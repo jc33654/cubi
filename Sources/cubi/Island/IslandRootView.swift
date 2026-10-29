@@ -68,6 +68,7 @@ struct IslandRootView: View {
                 if let card = state.pendingCards.first {
                     cardView(card)
                 } else {
+                    UsageStripView(usage: state.usage)
                     SessionListView(state: state)
                         .padding(.bottom, 10)
                 }
@@ -108,6 +109,14 @@ struct IslandRootView: View {
             Spacer().frame(width: state.geometry.notchWidth)
             HStack(spacing: 6) {
                 ForEach(right) { bot in BotView(bot: bot, paused: state.mode == .hidden).frame(width: botSize, height: botSize) }
+                // The right wing doubles as the usage readout while no robot needs it.
+                if right.isEmpty, let line = UsageFormat.compactLine(state.usage) {
+                    Text(line)
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.75))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
             }
             .frame(width: wingWidth, height: height)
         }

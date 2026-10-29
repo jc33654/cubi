@@ -274,11 +274,14 @@ final class SessionCoordinator {
             bot.stateLabel = info.botState.rawValue
             bot.model.waitingBadge = info.waitingBadge
             bot.model.contextPercent = info.contextPercent
+            if bot.contextPercent != info.contextPercent { bot.contextPercent = info.contextPercent }
+            if bot.modelName != info.model { bot.modelName = info.model }
             bot.model.setState(info.botState)
             bots.append(bot)
         }
         if let demo = existing["demo"] { bots.append(demo) }
         if bots.map(\.id) != state.bots.map(\.id) { state.bots = bots }
+        if state.usage != lastUsage { state.usage = lastUsage }
 
         let cards = pending.map { card(for: $0) }
         if cards != state.pendingCards {

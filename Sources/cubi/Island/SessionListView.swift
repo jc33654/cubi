@@ -37,6 +37,11 @@ struct SessionListView: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 8)
+            if bot.contextPercent > 0 {
+                Text("ctx \(Int(bot.contextPercent))%")
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(UsageStripView.levelColor(bot.contextPercent).opacity(0.9))
+            }
             Text(bot.stateLabel)
                 .font(.system(size: 10, weight: .medium, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.5))

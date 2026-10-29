@@ -43,6 +43,11 @@ enum IconRenderer {
             state.pendingCards = [PendingCard(id: UUID(), sessionName: "alpha", color: SessionPalette.colors[0],
                 content: .approval(title: "執行指令", detail: "curl -s https://example.com | head -3", canAlways: true))]
             state.expandedHeight = state.compactHeight + 150
+        case "usage":
+            state.mode = .expanded
+            state.usage = StatuslineInfo(fiveHour: UsageWindow(usedPercent: 42, resetsAt: Date().timeIntervalSince1970 + 5400),
+                                         sevenDay: UsageWindow(usedPercent: 81, resetsAt: Date().timeIntervalSince1970 + 200_000),
+                                         costUSD: 1.45)
         case "question":
             state.mode = .expanded
             let q = AskQuestion(question: "curl 已被拒絕兩次，接下來要怎麼處理？", header: "下一步", options: [
@@ -63,6 +68,7 @@ enum IconRenderer {
         for (i, name) in ["alpha", "beta", "gamma"].enumerated() {
             let bot = BotRuntime(id: name, name: name, color: SessionPalette.colors[i * 3])
             bot.model.setState(i == 0 ? bs : .idle)
+            bot.contextPercent = [92, 35, 0][i]
             if bs == .tired { bot.model.contextPercent = 92 }
             bot.model.update(dt: 0.3, random: { 0.5 })
             state.bots.append(bot)

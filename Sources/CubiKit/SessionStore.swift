@@ -54,10 +54,18 @@ public struct SessionStore: Sendable {
         var effects: [StoreEffect] = []
         let id = hook.session.id
         if sessions[id] == nil {
-            if case .sessionEnd = hook.event { return [] }
-            sessions[id] = make(hook.session, now: now)
-            order.append(id)
-            effects.append(.added(id))
+            switch hook.event {
+            case .sessionEnd:
+                return []
+            case .statusline(let info):
+                // The status line runs for every session, hooks or not; only hooked sessions get a
+                // robot, but the account-wide usage is still useful.
+                return [.usage(info)]
+            default:
+                sessions[id] = make(hook.session, now: now)
+                order.append(id)
+                effects.append(.added(id))
+            }
         }
         var s = sessions[id]!
         s.lastEventAt = now

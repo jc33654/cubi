@@ -17,6 +17,8 @@ final class BotRuntime: Identifiable {
     /// One line of what the session is doing right now.
     var ticker = ""
     var stateLabel = "idle"
+    var contextPercent: Double = 0
+    var modelName: String?
     @ObservationIgnored var model = BotModel()
     /// Timestamp of the last drawn frame, for a real-time step (0 = not yet drawn).
     @ObservationIgnored var lastFrame: TimeInterval = 0
@@ -42,6 +44,8 @@ final class IslandState {
     @ObservationIgnored var onDecision: (UUID, Decision) -> Void = { _, _ in }
     /// Expanded height follows the card being shown.
     var expandedHeight: CGFloat = 190
+    /// Account-wide plan usage from the latest status line; nil until one arrives.
+    var usage: StatuslineInfo?
     /// User setting: the island never hides; its resting mode is compact so every robot stays visible.
     var pinned: Bool {
         didSet { UserDefaults.standard.set(pinned, forKey: Self.pinnedKey) }

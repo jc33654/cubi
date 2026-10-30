@@ -1,6 +1,6 @@
 # cubi 狀態與進度（2026-10-30）
 
-最新 commit `38e40a1`，27 個 commit，Sources 約 6,200 行 Swift，測試 94 個全過。跑著的 app 就是這版。
+commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字。Sources 約 6,000 多行 Swift。
 
 ## 已完成
 
@@ -14,7 +14,7 @@
 | 審批／問題卡片 | 拒絕／在終端處理／總是允許／允許；AskUserQuestion 選項卡；終端先答或 Esc 自動撤卡；只認同一 tool call 的事件 | 真機驗證 |
 | Session 資訊面板 | 專案、模型／effort／版本、開始時間（transcript 建立時間）、使用時間、回合與工具呼叫數、花費、變更行數、context、終端、跳到終端 | 離線渲染驗證；點列待 Jade 親手試 |
 | 用量 | 5h / 7d / cost 跨 session 合併，最近活動的 session 才能覆寫 | 真機驗證 |
-| 聚焦終端 | Terminal.app（tty）、Ghostty（標題／cwd）、其他 app 只切 app | 真機驗證 |
+| 聚焦終端 | Terminal.app（tty）、Ghostty（標題／cwd）、其他 app 只切 app；沒有終端身分時用名稱／cwd 猜 Ghostty 再 Terminal.app；點沉睡的機器人會叫醒 | 有身分路徑真機驗證；猜測路徑只有腳本語法驗證 |
 | 安裝器 UI | 設定頁：Claude Code hooks 安裝／解除（看 diff 再寫）、退役舊 notify hook、Agents 開關與 API key、顯示、範圍、工具箱面板 | 真機驗證 |
 | Plugin 架構 | `AgentPlugin` 協定；`ClaudeCodePlugin` 內建；`ManifestPlugin` 以 JSON 接新 agent（只能監看） | 單元測試＋假 manifest 真機 |
 | 文件 | README（建置、憑證、安裝、用法、解除）、`docs/protocol.md`（relay 協定、欄位、manifest 格式）、`docs/plan.md` | 經審查員對帳 |
@@ -32,6 +32,7 @@
 - `cost.total_duration_ms`、`total_api_duration_ms`、`total_lines_*`、`version` 依官方文件解，實錄沒有 statusline 樣本。
 - 回合數、工具呼叫數只算 Cubi 看到的；Cubi 重啟歸零。
 - 形狀／顏色純記憶體：session 消失或 Cubi 重啟就忘（決策）。
+- hooks 環境沒有 `TERM_PROGRAM`／tty 的 session（來源不明，log 曾出現）只能用名稱／cwd 猜終端，猜不到就不動。
 - 離線渲染（`--render-island`）畫不出 `ScrollView` 內容，清單只能真機看。
 - 從瀏海拖出的瞬間島直接出現在滑鼠下方，沒有飛出動畫。
 - 沒有 `git push`（紅線），GitHub 上的 repo 還是空的；Coucou 還沒 `brew uninstall --cask coucou`。

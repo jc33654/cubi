@@ -84,7 +84,7 @@ CLI 跟 app 一樣以 `$HOME` 為家目錄；要對假目錄測就 `HOME=/tmp/x 
 | 滑鼠靠近瀏海 | 島展開成 compact（機器人一排 + 用量） |
 | 點島 | expanded：session 清單（名稱、context %、最近一次編輯的 +N −M）、用量列。高度隨內容長，最多到螢幕七成 |
 | 點清單的一列 | 右邊打開這個 session 的資訊：專案、模型／effort／版本、開始時間、使用時間（Claude Code 回報的時長加上之後經過的時間，每秒走）、回合與工具呼叫數、花費、變更行數、context、終端。按「跳到終端」切到它的分頁，✕ 關閉 |
-| 點機器人 | 跳到那個 session 的終端分頁（Terminal.app 用 tty、Ghostty 用標題／cwd、其他 app 只切到 app） |
+| 點機器人 | 跳到那個 session 的終端分頁（Terminal.app 用 tty、Ghostty 用標題／cwd、其他 app 只切到 app）；hooks 環境沒有 `TERM_PROGRAM`／tty 的 session 只能用名稱／cwd 猜：先問 Ghostty 再問 Terminal.app，都沒中就不動。沉睡中的機器人點一下會醒 |
 | 有審批 | 島自動打開卡片：**拒絕 / 在終端處理 / 總是允許 / 允許**。「總是允許」會把 Claude Code 自己建議的規則寫進 session 與 `settings.local.json` |
 | 有 AskUserQuestion | 每題一組選項按鈕；多選用勾選；也可「在終端回答」 |
 | 終端自己答了或按 Esc | 卡片自動收回 |
@@ -93,7 +93,7 @@ CLI 跟 app 一樣以 `$HOME` 為家目錄；要對假目錄測就 `HOME=/tmp/x 
 | 把島拖離瀏海 | 變成浮動視窗，可以拖到任何螢幕（外接螢幕也行）；卡片會在浮動視窗裡展開，瀏海那邊不再顯示。拖回瀏海頂端放開就回去；右鍵選單「浮動視窗」也能切換 |
 | 右鍵 → 保持顯示 | 島不收回，休息時停在 compact |
 
-機器人狀態：idle、thinking（頭頂三點）、working、waiting（跳動 + ! 或 ?）、error（抖一下）、happy（完成後 1.5 秒）、sleeping（10 分鐘無事件）、tired（context ≥ 80%，≥ 90% 描邊紅色脈動）。
+機器人狀態：idle、thinking（頭頂三點）、working、waiting（跳動 + ! 或 ?）、error（抖一下）、happy（完成後 1.5 秒）、sleeping（10 分鐘無事件，點一下叫醒）、tired（context ≥ 80%，≥ 90% 描邊紅色脈動）。
 
 音效用 macOS 內建系統音，設定頁可關。
 

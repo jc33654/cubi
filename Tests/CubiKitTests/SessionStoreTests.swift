@@ -169,3 +169,21 @@ private func hook(_ id: String, _ event: CanonicalEvent, cwd: String? = "/Users/
     #expect(!SessionStore.windowsChanged(from: StatuslineInfo(fiveHour: w, costUSD: 1.0), to: StatuslineInfo(fiveHour: w, costUSD: 1.5)))
     #expect(store.apply(hook("a", .statusline(StatuslineInfo(fiveHour: w, costUSD: 1.5))), now: 4).isEmpty)
 }
+
+@Test func sessionKeepsCountsAndStatuslineStats() {
+    var store = SessionStore()
+    _ = store.apply(hook("s", .sessionStart(source: nil)), now: 100)
+    _ = store.apply(hook("s", .prompt("hi")), now: 101)
+    _ = store.apply(hook("s", .toolStart(tool: "Bash", input: .null)), now: 102)
+    _ = store.apply(hook("s", .toolStart(tool: "AskUserQuestion", input: .null)), now: 103)   // not a tool call
+    _ = store.apply(hook("s", .prompt("again")), now: 104)
+    let stats = SessionStats(modelDisplayName: "Opus", projectDir: "/p", version: "2.1.312", totalDurationMS: 5000, linesAdded: 3)
+    _ = store.apply(hook("s", .statusline(StatuslineInfo(costUSD: 1.25, session: stats))), now: 105)
+    _ = store.apply(hook("s", .statusline(StatuslineInfo(session: SessionStats(apiDurationMS: 900)))), now: 106)
+    let s = store.sessions["s"]!
+    #expect(s.startedAt == 100)
+    #expect(s.prompts == 2 && s.toolCalls == 1)
+    #expect(s.costUSD == 1.25)
+    #expect(s.stats.modelDisplayName == "Opus" && s.stats.projectDir == "/p" && s.stats.version == "2.1.312")
+    #expect(s.stats.totalDurationMS == 5000 && s.stats.apiDurationMS == 900 && s.stats.linesAdded == 3)   // merged, not replaced
+}

@@ -3,7 +3,7 @@ import AppKit
 /// A transparent, always-on-top, non-activating panel pinned to the top of the screen. The island
 /// itself is drawn inside it with SwiftUI; the panel never changes size, only its content does.
 final class IslandPanel: NSPanel {
-    static let size = CGSize(width: 720, height: 320)
+    static let size = CGSize(width: 1000, height: 700)
 
     init() {
         super.init(

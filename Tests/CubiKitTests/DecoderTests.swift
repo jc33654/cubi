@@ -60,3 +60,22 @@ import Testing
     let noSession = HookEnvelope(agent: "claude-code", event: "Stop", payload: .object([:]))
     #expect(ClaudeCodeDecoder.decode(noSession) == nil)
 }
+
+@Test func statuslineDecodesSessionStats() {
+    let p: JSONValue = .object([
+        "session_id": .string("s"), "hook_event_name": .string("Status"),
+        "model": .object(["id": .string("claude-opus"), "display_name": .string("Opus")]),
+        "workspace": .object(["project_dir": .string("/Users/me/p"), "current_dir": .string("/Users/me/p/src")]),
+        "version": .string("2.1.312"), "effort": .string("high"),
+        "cost": .object(["total_cost_usd": .number(0.5), "total_duration_ms": .number(12000), "total_api_duration_ms": .number(3000),
+                         "total_lines_added": .number(10), "total_lines_removed": .number(2)]),
+        "context_window": .object(["used_percentage": .number(40)]),
+    ])
+    let info = ClaudeCodeDecoder.statusline(p)
+    #expect(info.model == "claude-opus" && info.session.modelDisplayName == "Opus")
+    #expect(info.session.projectDir == "/Users/me/p" && info.session.currentDir == "/Users/me/p/src")
+    #expect(info.session.version == "2.1.312" && info.session.effort == "high")
+    #expect(info.session.totalDurationMS == 12000 && info.session.apiDurationMS == 3000)
+    #expect(info.session.linesAdded == 10 && info.session.linesRemoved == 2 && info.costUSD == 0.5)
+    #expect(ClaudeCodeDecoder.statusline(.object(["session_id": .string("s")])).session == SessionStats())
+}

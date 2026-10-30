@@ -22,6 +22,14 @@ public struct SessionInfo: Sendable, Equatable, Identifiable {
     public var ended = false
     /// The most recent Edit/Write, for the diff card.
     public var lastEdit: EditSummary? = nil
+    /// When Cubi first saw the session (reference-date seconds, same clock as `lastEventAt`).
+    public var startedAt: Double = 0
+    /// Turns and tool calls seen by Cubi (not the session's whole history).
+    public var prompts = 0
+    public var toolCalls = 0
+    /// What the status line reports about this session.
+    public var stats = SessionStats()
+    public var costUSD: Double? = nil
 
     public enum Pending: Sendable, Equatable { case approval(tool: String), question }
 }
@@ -111,12 +119,14 @@ public struct SessionStore: Sendable {
         case .prompt(let text):
             s.botState = .thinking
             s.pending = nil
+            s.prompts += 1
             s.ticker = text.split(separator: "\n").first.map(String.init) ?? text
         case .toolStart(let tool, let input):
             // The plain PreToolUse hook for AskUserQuestion carries no state of its own.
             guard tool != "AskUserQuestion" else { break }
             s.botState = .working
             s.pending = nil
+            s.toolCalls += 1
             s.ticker = ClaudeCodeDecoder.toolLabel(tool: tool, input: input)
         case .toolEnd(let tool, let ok, let input, let response):
             s.pending = nil
@@ -186,6 +196,8 @@ public struct SessionStore: Sendable {
         case .statusline(let info):
             if let n = info.sessionName, !n.isEmpty { s.name = n; s.explicitName = true }
             if let m = info.model { s.model = m }
+            if let cost = info.costUSD { s.costUSD = cost }
+            s.stats.merge(info.session)
             if let c = info.contextPercent {
                 s.contextPercent = c
                 if c >= 80, s.pending == nil, s.botState == .idle || s.botState == .tired { s.botState = .tired }
@@ -247,9 +259,11 @@ public struct SessionStore: Sendable {
 
     private func make(_ ref: SessionRef, now: Double) -> SessionInfo {
         let taken = Set(sessions.values.map(\.colorIndex))
-        return SessionInfo(id: ref.id, name: Self.defaultName(id: ref.id, cwd: ref.cwd), cwd: ref.cwd,
-                           client: ref.client, transcriptPath: ref.transcriptPath, agent: ref.agent,
-                           colorIndex: SessionPalette.index(for: ref.id, taken: taken), lastEventAt: now)
+        var info = SessionInfo(id: ref.id, name: Self.defaultName(id: ref.id, cwd: ref.cwd), cwd: ref.cwd,
+                               client: ref.client, transcriptPath: ref.transcriptPath, agent: ref.agent,
+                               colorIndex: SessionPalette.index(for: ref.id, taken: taken), lastEventAt: now)
+        info.startedAt = now
+        return info
     }
 
     /// Same fallback chain as notify-hook.sh: session name, else cwd basename, else id prefix.

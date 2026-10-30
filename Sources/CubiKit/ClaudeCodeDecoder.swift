@@ -58,7 +58,17 @@ public enum ClaudeCodeDecoder {
             contextPercent: p["context_window"]?["used_percentage"]?.double,
             fiveHour: window(p["rate_limits"]?["five_hour"]),
             sevenDay: window(p["rate_limits"]?["seven_day"]),
-            costUSD: p["cost"]?["total_cost_usd"]?.double)
+            costUSD: p["cost"]?["total_cost_usd"]?.double,
+            session: SessionStats(
+                modelDisplayName: p["model"]?["display_name"]?.string,
+                projectDir: p["workspace"]?["project_dir"]?.string,
+                currentDir: p["workspace"]?["current_dir"]?.string,
+                version: p["version"]?.string,
+                effort: p["effort"]?.string ?? p["effort"]?["level"]?.string,
+                totalDurationMS: p["cost"]?["total_duration_ms"]?.double,
+                apiDurationMS: p["cost"]?["total_api_duration_ms"]?.double,
+                linesAdded: p["cost"]?["total_lines_added"]?.double.map { Int($0) },
+                linesRemoved: p["cost"]?["total_lines_removed"]?.double.map { Int($0) }))
     }
 
     /// Short label for the ticker: what the tool is about to touch.

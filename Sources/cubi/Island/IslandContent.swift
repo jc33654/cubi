@@ -27,10 +27,22 @@ struct IslandContent: View {
                             if abs(wanted - state.expandedHeight) > 1 { state.expandedHeight = wanted }
                         }
                 } else {
-                    UsageStripView(usage: state.usage)
-                    SessionListView(state: state)
+                    VStack(spacing: 6) {
+                        UsageStripView(usage: state.usage)
+                        HStack(alignment: .top, spacing: 8) {
+                            SessionListView(state: state, maxHeight: state.maxExpandedSize.height - state.compactHeight - 60)
+                                .frame(width: state.selectedSession == nil ? nil : 300)
+                            if let id = state.selectedSession, let bot = state.bots.first(where: { $0.id == id }) {
+                                SessionDetailView(bot: bot, state: state).padding(.trailing, 14)
+                            }
+                        }
                         .padding(.bottom, 10)
-                        .onAppear { if state.expandedHeight != 190 { state.expandedHeight = 190 } }
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
+                        let wanted = state.compactHeight + 6 + h
+                        if abs(wanted - state.expandedHeight) > 1 { state.expandedHeight = wanted }
+                    }
                 }
             }
         }

@@ -4,20 +4,25 @@ import CubiKit
 /// Expanded island: one row per session with its colour, name, state and ticker.
 struct SessionListView: View {
     @Bindable var state: IslandState
+    /// The list takes its natural height up to this, then scrolls.
+    var maxHeight: CGFloat = 400
+    @State private var contentHeight: CGFloat = 40
 
     var body: some View {
         if state.bots.isEmpty {
             Text("沒有 Claude Code session")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.white.opacity(0.6))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(maxWidth: .infinity, minHeight: 60)
         } else {
             ScrollView(.vertical) {
                 VStack(spacing: 4) {
                     ForEach(state.bots) { bot in row(bot) }
                 }
                 .padding(.horizontal, 14)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
             }
+            .frame(height: min(contentHeight, maxHeight))
         }
     }
 
@@ -66,9 +71,9 @@ struct SessionListView: View {
         }
         .padding(.vertical, 5)
         .padding(.horizontal, 8)
-        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.white.opacity(0.06)))
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.white.opacity(state.selectedSession == bot.id ? 0.16 : 0.06)))
         .contentShape(Rectangle())
-        .onTapGesture { state.onFocus(bot.id) }
+        .onTapGesture { state.selectedSession = state.selectedSession == bot.id ? nil : bot.id }
         .contextMenu { BotLookMenu(bot: bot, state: state) }
     }
 }

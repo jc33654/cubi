@@ -34,6 +34,8 @@ enum IconRenderer {
         let geometry = NotchGeometry(screenFrame: CGRect(x: 0, y: 0, width: 1512, height: 982),
                                      hasNotch: true, notchWidth: 190, notchHeight: 32)
         let state = IslandState(geometry: geometry)
+        state.persists = false
+        state.placement = .notch
         var floatingShell = false
         switch mode {
         case "floating", "floating-approval":
@@ -48,6 +50,9 @@ enum IconRenderer {
         case "hidden": state.mode = .hidden
         case "compact": state.mode = .compact
         case "expanded": state.mode = .expanded
+        case "detail":
+            state.mode = .expanded
+            state.selectedSession = "alpha"
         case "approval":
             state.mode = .expanded
             state.pendingCards = [PendingCard(id: UUID(), sessionName: "alpha", color: SessionPalette.colors[0],
@@ -95,6 +100,14 @@ enum IconRenderer {
                 ], truncated: false)
             }
             if bs == .tired { bot.model.contextPercent = 92 }
+            if i == 0 {
+                bot.cwd = "/Users/me/Documents/cubi"
+                bot.client = HookClient(termProgram: "ghostty", bundleID: "com.mitchellh.ghostty", termSessionID: nil, tty: "/dev/ttys014")
+                bot.startedAt = Date().timeIntervalSinceReferenceDate - 4000
+                bot.prompts = 12; bot.toolCalls = 57; bot.costUSD = 3.21
+                bot.stats = SessionStats(modelDisplayName: "Opus 4.8", projectDir: "/Users/me/Documents/cubi", version: "2.1.312",
+                                         effort: "high", totalDurationMS: 4_500_000, apiDurationMS: 1_200_000, linesAdded: 240, linesRemoved: 88)
+            }
             bot.model.update(dt: 0.3, random: { 0.5 })
             state.bots.append(bot)
         }
@@ -105,7 +118,7 @@ enum IconRenderer {
                 IslandRootView(state: state, onTap: {})
             }
         }
-        .frame(width: IslandPanel.size.width, height: 220, alignment: .top)
+        .frame(width: IslandPanel.size.width, height: mode == "detail" || mode == "expanded" ? 420 : 220, alignment: .top)
         .background(Color(white: 0.35))
         return writePNG(ImageRenderer(content: view), scale: 2, to: path)
     }

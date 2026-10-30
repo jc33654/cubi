@@ -333,12 +333,26 @@ final class SessionCoordinator {
             if bot.modelName != info.model { bot.modelName = info.model }
             if bot.lastEdit != info.lastEdit { bot.lastEdit = info.lastEdit }
             if bot.agent != info.agent { bot.agent = info.agent }
+            if bot.cwd != info.cwd { bot.cwd = info.cwd }
+            if bot.client != info.client { bot.client = info.client }
+            if bot.startedAt != info.startedAt { bot.startedAt = info.startedAt }
+            if bot.prompts != info.prompts { bot.prompts = info.prompts }
+            if bot.toolCalls != info.toolCalls { bot.toolCalls = info.toolCalls }
+            if bot.stats != info.stats { bot.stats = info.stats }
+            if bot.costUSD != info.costUSD { bot.costUSD = info.costUSD }
+            if bot.transcriptPath != info.transcriptPath {
+                bot.transcriptPath = info.transcriptPath
+                bot.transcriptCreatedAt = info.transcriptPath.flatMap {
+                    (try? FileManager.default.attributesOfItem(atPath: $0))?[.creationDate] as? Date
+                }
+            }
             bot.model.setState(info.botState)
             bots.append(bot)
         }
         if let demo = existing["demo"] { bots.append(demo) }
         if bots.map(\.id) != state.bots.map(\.id) { state.bots = bots }
         if let shown = state.showingDiffFor, !bots.contains(where: { $0.id == shown }) { state.showingDiffFor = nil }
+        if let sel = state.selectedSession, !bots.contains(where: { $0.id == sel }) { state.selectedSession = nil }
         if state.usage != lastUsage { state.usage = lastUsage }
 
         let cards = pending.map { card(for: $0) }

@@ -48,6 +48,7 @@ struct IslandRootView: View {
         .onChange(of: state.placement) { _, _ in apply(animated: true) }
         .onChange(of: state.geometry) { _, _ in apply(animated: false) }
         .onChange(of: state.expandedHeight) { _, _ in if state.mode == .expanded { apply(animated: true) } }
+        .onChange(of: state.expandedWidth) { _, _ in if state.mode == .expanded { apply(animated: true) } }
     }
 
     private func apply(animated: Bool) {

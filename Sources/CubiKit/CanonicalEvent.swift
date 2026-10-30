@@ -37,15 +37,59 @@ public struct StatuslineInfo: Sendable, Equatable, Codable {
     public var fiveHour: UsageWindow?
     public var sevenDay: UsageWindow?
     public var costUSD: Double?
+    /// Per-session details for the info panel; all optional, shown only when the agent sends them.
+    public var session = SessionStats()
 
     public init(sessionName: String? = nil, model: String? = nil, contextPercent: Double? = nil,
-                fiveHour: UsageWindow? = nil, sevenDay: UsageWindow? = nil, costUSD: Double? = nil) {
+                fiveHour: UsageWindow? = nil, sevenDay: UsageWindow? = nil, costUSD: Double? = nil,
+                session: SessionStats = SessionStats()) {
         self.sessionName = sessionName
         self.model = model
         self.contextPercent = contextPercent
         self.fiveHour = fiveHour
         self.sevenDay = sevenDay
         self.costUSD = costUSD
+        self.session = session
+    }
+}
+
+/// What a status line says about its own session (Claude Code's `workspace`, `cost`, `model`…).
+public struct SessionStats: Sendable, Equatable, Codable {
+    public var modelDisplayName: String?
+    public var projectDir: String?
+    public var currentDir: String?
+    public var version: String?
+    public var effort: String?
+    public var totalDurationMS: Double?
+    public var apiDurationMS: Double?
+    public var linesAdded: Int?
+    public var linesRemoved: Int?
+
+    public init(modelDisplayName: String? = nil, projectDir: String? = nil, currentDir: String? = nil, version: String? = nil,
+                effort: String? = nil, totalDurationMS: Double? = nil, apiDurationMS: Double? = nil,
+                linesAdded: Int? = nil, linesRemoved: Int? = nil) {
+        self.modelDisplayName = modelDisplayName
+        self.projectDir = projectDir
+        self.currentDir = currentDir
+        self.version = version
+        self.effort = effort
+        self.totalDurationMS = totalDurationMS
+        self.apiDurationMS = apiDurationMS
+        self.linesAdded = linesAdded
+        self.linesRemoved = linesRemoved
+    }
+
+    /// Fields the newer reading has replace the older ones; nothing is ever blanked.
+    public mutating func merge(_ newer: SessionStats) {
+        modelDisplayName = newer.modelDisplayName ?? modelDisplayName
+        projectDir = newer.projectDir ?? projectDir
+        currentDir = newer.currentDir ?? currentDir
+        version = newer.version ?? version
+        effort = newer.effort ?? effort
+        totalDurationMS = newer.totalDurationMS ?? totalDurationMS
+        apiDurationMS = newer.apiDurationMS ?? apiDurationMS
+        linesAdded = newer.linesAdded ?? linesAdded
+        linesRemoved = newer.linesRemoved ?? linesRemoved
     }
 }
 

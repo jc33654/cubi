@@ -40,6 +40,7 @@ struct FloatingRootView: View {
         .onAppear { apply(animated: false) }
         .onChange(of: state.mode) { _, _ in apply(animated: true) }
         .onChange(of: state.expandedHeight) { _, _ in if state.mode == .expanded { apply(animated: true) } }
+        .onChange(of: state.expandedWidth) { _, _ in if state.mode == .expanded { apply(animated: true) } }
     }
 
     private func apply(animated: Bool) {

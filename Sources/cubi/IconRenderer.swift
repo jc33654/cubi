@@ -34,7 +34,17 @@ enum IconRenderer {
         let geometry = NotchGeometry(screenFrame: CGRect(x: 0, y: 0, width: 1512, height: 982),
                                      hasNotch: true, notchWidth: 190, notchHeight: 32)
         let state = IslandState(geometry: geometry)
+        var floatingShell = false
         switch mode {
+        case "floating", "floating-approval":
+            floatingShell = true
+            state.placement = .floating
+            state.mode = mode == "floating" ? .compact : .expanded
+            if mode == "floating-approval" {
+                state.pendingCards = [PendingCard(id: UUID(), sessionName: "alpha", color: SessionPalette.colors[0],
+                    content: .approval(title: "執行指令", detail: "curl -s https://example.com | head -3", canAlways: true))]
+                state.expandedHeight = state.compactHeight + 150
+            }
         case "hidden": state.mode = .hidden
         case "compact": state.mode = .compact
         case "expanded": state.mode = .expanded
@@ -88,9 +98,15 @@ enum IconRenderer {
             bot.model.update(dt: 0.3, random: { 0.5 })
             state.bots.append(bot)
         }
-        let view = IslandRootView(state: state, onTap: {})
-            .frame(width: IslandPanel.size.width, height: 220, alignment: .top)
-            .background(Color(white: 0.35))
+        let view = Group {
+            if floatingShell {
+                FloatingRootView(state: state, onTap: {}, onDrag: { _ in })
+            } else {
+                IslandRootView(state: state, onTap: {})
+            }
+        }
+        .frame(width: IslandPanel.size.width, height: 220, alignment: .top)
+        .background(Color(white: 0.35))
         return writePNG(ImageRenderer(content: view), scale: 2, to: path)
     }
 

@@ -110,8 +110,39 @@ final class IslandState {
         if let data = try? JSONEncoder().encode(looks) { UserDefaults.standard.set(data, forKey: Self.looksKey) }
     }
 
-    /// Where auto-close ends up.
-    var restingMode: IslandMode { pinned ? .compact : .hidden }
+    /// Where auto-close ends up. The floating window has nothing to hide behind: it rests compact.
+    var restingMode: IslandMode { pinned || placement == .floating ? .compact : .hidden }
+
+    // MARK: - Placement: in the notch, or a floating window the user dragged out
+
+    enum Placement: String { case notch, floating }
+    static let placementKey = "islandPlacement"
+    static let floatingOriginKey = "floatingOrigin"
+
+    var placement: Placement = Placement(rawValue: UserDefaults.standard.string(forKey: IslandState.placementKey) ?? "") ?? .notch {
+        didSet { UserDefaults.standard.set(placement.rawValue, forKey: Self.placementKey) }
+    }
+    /// Bottom-left of the floating panel in screen coordinates, remembered across launches.
+    var floatingOrigin: CGPoint? = {
+        guard let a = UserDefaults.standard.array(forKey: IslandState.floatingOriginKey) as? [Double], a.count == 2 else { return nil }
+        return CGPoint(x: a[0], y: a[1])
+    }() {
+        didSet { UserDefaults.standard.set(floatingOrigin.map { [$0.x, $0.y] }, forKey: Self.floatingOriginKey) }
+    }
+
+    /// What the notch panel draws: nothing while the island is floating.
+    var notchMode: IslandMode { placement == .notch ? mode : .hidden }
+
+    /// Gap between the robot row and the usage readout in the floating window (no notch to skip).
+    static let floatingGap: CGFloat = 14
+    static let floatingRadius: CGFloat = 18
+
+    func floatingSize(for mode: IslandMode) -> CGSize {
+        switch mode {
+        case .hidden, .compact: return CGSize(width: leftWingWidth + Self.floatingGap + Self.rightWingWidth, height: compactHeight)
+        case .expanded: return CGSize(width: Self.expandedSize.width, height: expandedHeight)
+        }
+    }
 
     static let expandedSize = CGSize(width: 640, height: 190)
     /// Right wing: the usage readout. Left wing: the robots, growing with their number.

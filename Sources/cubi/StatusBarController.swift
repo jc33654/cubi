@@ -4,13 +4,14 @@ import CubiKit
 
 /// The menubar item: an icon now, usage numbers from Phase 4.
 @MainActor
-final class StatusBarController: NSObject {
+final class StatusBarController: NSObject, NSMenuDelegate {
     private let item: NSStatusItem
     private let island: IslandController
     private let notifier: Notifier
     private let loginItem = NSMenuItem(title: "登入時啟動", action: #selector(toggleLogin), keyEquivalent: "")
     private let notifyItem = NSMenuItem(title: "系統通知", action: #selector(toggleNotifications), keyEquivalent: "")
     private let pinItem = NSMenuItem(title: "保持顯示", action: #selector(togglePinned), keyEquivalent: "")
+    private let floatItem = NSMenuItem(title: "浮動視窗（可拖到任何螢幕）", action: #selector(toggleFloating), keyEquivalent: "")
     private let soundItem = NSMenuItem(title: "音效", action: #selector(toggleSounds), keyEquivalent: "")
     /// Shared with the island's right-click menu.
     let menu: NSMenu
@@ -33,6 +34,7 @@ final class StatusBarController: NSObject {
             button.image = image
         }
         fill(menu)
+        menu.delegate = self
         item.menu = menu
     }
 
@@ -43,6 +45,9 @@ final class StatusBarController: NSObject {
         pinItem.target = self
         pinItem.state = island.state.pinned ? .on : .off
         menu.addItem(pinItem)
+        floatItem.target = self
+        floatItem.state = island.isFloating ? .on : .off
+        menu.addItem(floatItem)
 
         let demo = NSMenuItem(title: "Demo 狀態", action: nil, keyEquivalent: "")
         let sub = NSMenu()
@@ -84,6 +89,11 @@ final class StatusBarController: NSObject {
         menu.addItem(quit)
     }
 
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        floatItem.state = island.isFloating ? .on : .off
+        pinItem.state = island.state.pinned ? .on : .off
+    }
+
     @objc private func toggleIsland() {
         island.toggleFromMenu()
     }
@@ -99,6 +109,11 @@ final class StatusBarController: NSObject {
     @objc private func toggleSounds() {
         Sounds.enabled.toggle()
         soundItem.state = Sounds.enabled ? .on : .off
+    }
+
+    @objc private func toggleFloating() {
+        island.setPlacement(island.isFloating ? .notch : .floating)
+        floatItem.state = island.isFloating ? .on : .off
     }
 
     @objc private func togglePinned() {

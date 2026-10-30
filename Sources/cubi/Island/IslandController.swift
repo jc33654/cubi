@@ -12,6 +12,7 @@ final class IslandController {
     private var pointerInside = false
     private var screenObserver: NSObjectProtocol?
     private var demoBot: BotRuntime?
+    private var floating: FloatingController!
 
     init() {
         let screen = NotchGeometry.preferredScreen()
@@ -19,15 +20,23 @@ final class IslandController {
             screenFrame: CGRect(x: 0, y: 0, width: 1440, height: 900), hasNotch: false,
             notchWidth: NotchGeometry.barWidth, notchHeight: NotchGeometry.barHeight)
         state = IslandState(geometry: geometry)
+        floating = FloatingController(state: state, onTap: { [weak self] in self?.tapped() },
+                                      onDrag: { [weak self] phase in self?.drag(phase) })
 
-        let root = IslandRootView(state: state) { [weak self] in self?.tapped() }
+        let root = IslandRootView(state: state, onTap: { [weak self] in self?.tapped() },
+                                  onDrag: { [weak self] phase in self?.drag(phase) })
         let hosting = NSHostingView(rootView: root)
         hosting.frame = CGRect(origin: .zero, size: IslandPanel.size)
         hosting.autoresizingMask = [.width, .height]
         panel.contentView = hosting
         panel.pin(to: geometry)
-        panel.orderFrontRegardless()
-        if state.pinned { state.mode = .compact }
+        if state.placement == .floating {
+            state.mode = .compact
+            floating.show()
+        } else {
+            panel.orderFrontRegardless()
+            if state.pinned { state.mode = .compact }
+        }
 
         screenObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
@@ -50,10 +59,12 @@ final class IslandController {
         guard geometry != state.geometry else { return }
         state.geometry = geometry
         panel.pin(to: geometry)
+        floating.clampToScreens()
     }
 
     /// The island's rectangle in screen coordinates for the current mode.
     private func islandRect() -> CGRect {
+        if state.placement == .floating, let r = floating.islandRect() { return r }
         let size = state.size(for: state.mode)
         let f = state.geometry.screenFrame
         return CGRect(x: f.midX - size.width / 2 + state.xOffset(for: state.mode), y: f.maxY - size.height,
@@ -74,13 +85,19 @@ final class IslandController {
 
     private func poll() {
         let mouse = NSEvent.mouseLocation
+        if floating.isDragging { return }
         let rect = islandRect()
+        let isFloating = state.placement == .floating
         // On a notched screen the resting island is the notch itself, so a little padding helps
         // the pointer "find" it; elsewhere padding would steal clicks from the menu bar.
-        let hover = state.geometry.hasNotch && state.mode != .expanded ? rect.insetBy(dx: -6, dy: -6) : rect
+        let hover = state.geometry.hasNotch && !isFloating && state.mode != .expanded ? rect.insetBy(dx: -6, dy: -6) : rect
         let inside = hover.contains(mouse)
 
-        if panel.ignoresMouseEvents == inside { panel.ignoresMouseEvents = !inside }
+        if isFloating {
+            if floating.ignoresMouseEvents == inside { floating.ignoresMouseEvents = !inside }
+        } else if panel.ignoresMouseEvents == inside {
+            panel.ignoresMouseEvents = !inside
+        }
 
         if inside != pointerInside {
             pointerInside = inside
@@ -107,8 +124,8 @@ final class IslandController {
         closeWork = nil
         switch state.mode {
         case .hidden: setMode(.compact)
-        // Pinned: compact is the resting state, so hovering goes straight to the full view.
-        case .compact where state.pinned: setMode(.expanded)
+        // Pinned or floating: compact is the resting state, so hovering goes straight to the full view.
+        case .compact where state.pinned || state.placement == .floating: setMode(.expanded)
         default: break
         }
     }
@@ -142,11 +159,52 @@ final class IslandController {
         setMode(state.mode == .expanded ? .compact : .expanded)
     }
 
+    // MARK: - Floating placement
+
+    var isFloating: Bool { state.placement == .floating }
+
+    /// Moves the island into the floating window (at `islandTop`, screen coordinates, or where it
+    /// last was) or back into the notch.
+    func setPlacement(_ placement: IslandState.Placement, islandTopAt islandTop: CGPoint? = nil) {
+        guard state.placement != placement else { return }
+        closeWork?.cancel()
+        closeWork = nil
+        CubiLog.write("island placement → \(placement.rawValue)")
+        switch placement {
+        case .floating:
+            state.placement = .floating
+            if state.mode == .hidden { state.mode = .compact }
+            floating.show(islandTopAt: islandTop)
+            panel.orderOut(nil)
+        case .notch:
+            state.placement = .notch
+            floating.hide()
+            panel.orderFrontRegardless()
+            if !state.pinned && !state.holdOpen { scheduleClose(after: 2) }
+        }
+    }
+
+    /// Drag on either island. From the notch the first move tears the island off into the floating
+    /// window under the pointer; dropping it back on the notch docks it again.
+    private func drag(_ phase: IslandDrag) {
+        let mouse = NSEvent.mouseLocation
+        switch phase {
+        case .moved:
+            if state.placement == .notch {
+                let h = state.compactHeight
+                setPlacement(.floating, islandTopAt: CGPoint(x: mouse.x, y: mouse.y + h / 2))
+            }
+            floating.dragMoved(mouse: mouse)
+        case .ended:
+            if floating.dragEnded(notch: state.geometry) { setPlacement(.notch) }
+        }
+    }
+
     // MARK: - Menu actions
 
     var contextMenu: NSMenu? {
         get { panel.contextMenu }
-        set { panel.contextMenu = newValue }
+        set { panel.contextMenu = newValue; floating.contextMenu = newValue }
     }
 
     /// Opens the island for a few seconds, e.g. when the app is launched a second time.
@@ -168,7 +226,9 @@ final class IslandController {
     }
 
     func toggleFromMenu() {
-        if state.mode == .hidden {
+        if isFloating {
+            setMode(state.mode == .expanded ? .compact : .expanded)
+        } else if state.mode == .hidden {
             setMode(.compact)
             scheduleClose(after: 4)
         } else {

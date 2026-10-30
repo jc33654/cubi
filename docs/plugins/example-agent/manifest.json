@@ -3,7 +3,7 @@
   "id": "example-agent",
   "name": "Example Agent",
   "color": "#2DD4BF",
-  "capabilities": ["approvals"],
+  "capabilities": [],
   "secrets": [
     { "key": "EXAMPLE_API_KEY", "label": "API key", "required": false }
   ],

@@ -56,7 +56,7 @@ open ~/Applications/Cubi.app
 |---|---|
 | `~/.claude/settings.json` | 12 個 hook 事件各一組 `cubi-hook` 指令，加 `PreToolUse` 的 `AskUserQuestion` matcher；`statusLine` 包一層：`cubi-hook … statusline --then '<原指令>'`，原指令照常執行、輸出不變 |
 | `~/.claude/backups/cubi/settings.json.bak-<時間>` | 每次寫入前的備份 |
-| `~/.cubi/bin/cubi-hook` | relay 本體，app 啟動時從 bundle 複製、hash 不同就更新；路徑刻意無空白 |
+| `~/.cubi/bin/cubi-hook` | relay 本體，app 啟動時從 bundle 複製、內容不同就更新；路徑刻意無空白 |
 | `~/.cubi/agents/claude-code.json` | 串接前的 `statusLine`，解除安裝時還原 |
 | `~/Library/Application Support/cubi/cubi.sock` | app 的 unix socket（0600，只收同 UID） |
 | `~/Library/Logs/cubi.log` | 事件與錯誤 log，出問題先看這裡 |
@@ -70,7 +70,10 @@ open ~/Applications/Cubi.app
 ~/Applications/Cubi.app/Contents/MacOS/cubi --hooks-plan            # 只印 diff，不寫
 ~/Applications/Cubi.app/Contents/MacOS/cubi --install-hooks         # 印 diff 後寫入（含備份）
 ~/Applications/Cubi.app/Contents/MacOS/cubi --uninstall-hooks
+~/Applications/Cubi.app/Contents/MacOS/cubi --settings              # 啟動 app 並直接開設定頁
 ```
+
+`--hooks-plan` 與 `--install-hooks` 可加 `--retire-notify`：同時移除舊的 `notify-hook.sh` 桌面通知 hook（設定頁的同一個勾選）。
 
 CLI 跟 app 一樣以 `$HOME` 為家目錄；要對假目錄測就 `HOME=/tmp/x cubi --hooks-plan`。
 
@@ -87,7 +90,7 @@ CLI 跟 app 一樣以 `$HOME` 為家目錄；要對假目錄測就 `HOME=/tmp/x 
 | session 的 `+N −M` 徽章 | 點開看那次 Edit / Write 的 diff |
 | 右鍵 → 保持顯示 | 島不收回，休息時停在 compact |
 
-機器人狀態：idle、thinking（頭頂三點）、working、waiting（跳動 + ! 或 ?）、error（抖一下）、happy（完成後 1.5 秒）、sleeping（10 分鐘無事件）、tired（context ≥ 80%，≥ 90% 加紅框）。
+機器人狀態：idle、thinking（頭頂三點）、working、waiting（跳動 + ! 或 ?）、error（抖一下）、happy（完成後 1.5 秒）、sleeping（10 分鐘無事件）、tired（context ≥ 80%，≥ 90% 描邊紅色脈動）。
 
 音效用 macOS 內建系統音，設定頁可關。
 
@@ -110,7 +113,10 @@ Claude Code 是內建 plugin。其他 agent 可以用一份 manifest 接進來�
 
 1. 設定頁按 **解除安裝…**（或 `cubi --uninstall-hooks`）：移除 Cubi 的 hook 條目、還原 `statusLine`。
 2. 「登入時啟動」有開的話先在設定頁關掉。
-3. 結束 app，刪 `~/Applications/Cubi.app`、`~/.cubi/`、`~/Library/Application Support/cubi/`。
+3. 結束 app，刪 `~/Applications/Cubi.app`、`~/.cubi/`、`~/Library/Application Support/cubi/`、`~/Library/Logs/cubi.log`。
+4. 偏好設定：`defaults delete cc.dotdot.cubi`。
+5. 有存過 plugin 的 API key 的話，Keychain Access 搜尋 service `cc.dotdot.cubi` 刪掉。
+6. `~/.claude/backups/cubi/` 是 settings.json 的歷史備份，可留。
 
 ## 開發
 
@@ -127,7 +133,7 @@ docs/                plan.md（設計與決策）、protocol.md（relay 協定�
 - `make test`
 - 離線渲染島：`.build/release/cubi --render-island <hidden|compact|expanded|approval|question|usage|usage-compact|diff> <botState> out.png`
 - 重播實錄 payload：`python3 -c 'import json;print(json.dumps(json.load(open("Tests/CubiKitTests/Fixtures/claude-2.1.312/SessionStart-1.json"))["payload"]))' | ~/.cubi/bin/cubi-hook --agent claude-code --event SessionStart`
-- 錄新版 Claude Code 的 payload：把 `docs/capture.settings.local.json` 的 hooks 放進某個專案的 `.claude/settings.local.json`，跑一輪後用 `scripts/import-fixtures.py <版本>` 匯入（會把路徑洗掉）。錄完記得在設定頁按「移除」，不然該專案的事件會重複觸發。
+- 錄新版 Claude Code 的 payload：先 `make release`（capture 用的是 `.build/release/cubi-hook`），repo 要在 `$HOME/Documents/cubi`（`docs/capture.settings.local.json` 寫死這個路徑，放別處就改它）。把那份 hooks 放進某個專案的 `.claude/settings.local.json`，跑一輪後用 `scripts/import-fixtures.py <版本>` 匯入（會把路徑洗掉）。錄完要把那些 hooks 拿掉，不然該專案的事件會重複觸發：在 `~/Documents/cubi` 錄的可以在設定頁按「移除」（預設只看這個目錄），在別的專案錄的要自己手動刪。
 
 ### 設計上刻意的事
 

@@ -70,10 +70,10 @@
 | 欄位 | 必填 | 說明 |
 |---|---|---|
 | `schema` | | 目前 `1` |
-| `id` | ✔ | `[a-z0-9-]`，同時是 relay 的 `--agent` 值與 socket 信封的 `agent` |
+| `id` | ✔ | `[a-z0-9-]`，最多 24 字元，同時是 relay 的 `--agent` 值與 socket 信封的 `agent` |
 | `name` | ✔ | 設定頁顯示名 |
 | `color` | | `#RRGGBB`，沒給用灰 |
-| `capabilities` | | `approvals`、`questions`、`statusline` 的子集。manifest plugin 目前沒有回覆模板，宣告 `approvals` 只影響設定頁顯示 |
+| `capabilities` | | 只有 `statusline` 有作用。`approvals`、`questions` 會被忽略：manifest 沒有回覆模板，這種 plugin 的審批與問題不會上島（見下方行為） |
 | `secrets[]` | | `{key, label, required}`；值存登入鑰匙圈，不進 manifest |
 | `install.mode` | | `json-hooks` 或 `manual`（預設）。`manual` 時 `install.instructions` 顯示給使用者自己貼 |
 | `install.file` | json-hooks 必填 | 要寫的 JSON 檔，可用 `~`。格式比照 Claude Code：`hooks.<event>[] = { hooks: [{type, command, timeout}] }` |
@@ -100,4 +100,4 @@
 
 - 未知 `agent` 的信封直接丟棄；plugin 關閉時不裝 hooks、不顯示、不解碼。
 - 解除安裝只刪 `command` 含自己 tag 的 group，其他 plugin 與使用者自己的 hooks 不動。
-- blocking 事件（`permissionRequest`、`question`）decode 出來後，因為 manifest plugin 沒有 reply 模板，app 會立刻關連線，agent 退回自己的提示。
+- blocking 事件（`permissionRequest`、`question`）decode 出來後，plugin 沒有對應的 `approvals` / `questions` 能力時 app 不開卡片、不出聲，直接關連線讓 agent 用自己的提示；機器人當成 `toolStart` 顯示 working。manifest plugin 一律如此。

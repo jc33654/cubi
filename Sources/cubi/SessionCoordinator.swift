@@ -112,6 +112,14 @@ final class SessionCoordinator {
             withdraw(sessionID: sessionID, outcome: .handledElsewhere)
         }
 
+        // A prompt the plugin cannot answer from the island (no reply template) goes back to the
+        // agent's own UI at once: no card, no sound, the robot just shows the tool as running.
+        if let needed = decoded.event.requiredCapability, !plugin.capabilities.contains(needed) {
+            CubiLog.write("\(plugin.id) cannot answer \(decoded.event.name) here; left to the agent")
+            connection.close()
+            decoded.event = decoded.event.handedBackToAgent
+        }
+
         switch decoded.event {
         case .permissionRequest(let tool, let input, let suggestions):
             if tool == "AskUserQuestion" {

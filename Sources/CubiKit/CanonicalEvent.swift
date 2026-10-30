@@ -83,6 +83,25 @@ public enum CanonicalEvent: Sendable, Equatable {
         }
     }
 
+    /// The plugin capability a blocking event needs before the island may hold it.
+    public var requiredCapability: AgentCapabilities? {
+        switch self {
+        case .permissionRequest(let tool, _, _): return tool == "AskUserQuestion" ? .questions : .approvals
+        case .question: return .questions
+        default: return nil
+        }
+    }
+
+    /// The same moment seen as plain tool activity: what a session shows while a prompt the
+    /// island cannot answer is handled by the agent's own UI.
+    public var handedBackToAgent: CanonicalEvent {
+        switch self {
+        case .permissionRequest(let tool, let input, _): return .toolStart(tool: tool, input: input)
+        case .question(let raw): return .toolStart(tool: "AskUserQuestion", input: raw)
+        default: return self
+        }
+    }
+
     /// True when the relay holds its connection open for a reply.
     public var isBlocking: Bool {
         switch self {

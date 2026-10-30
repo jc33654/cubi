@@ -26,7 +26,7 @@ private func exampleManifest() throws -> ManifestPlugin {
     let p = try exampleManifest()
     #expect(p.id == "example-agent" && p.displayName == "Example Agent")
     #expect(p.accentColor == RGB(hex: 0x2DD4BF))
-    #expect(p.capabilities == [.approvals])
+    #expect(p.capabilities == [])   // "approvals" in the manifest is ignored: no reply template
     #expect(p.secrets.first?.key == "EXAMPLE_API_KEY")
     guard case .jsonHooks(let file) = p.installMode else { Issue.record("mode"); return }
     #expect(file == "~/.example-agent/settings.json")
@@ -72,6 +72,20 @@ private func exampleManifest() throws -> ManifestPlugin {
     #expect(ManifestPlugin.path("$.a.b", in: v)?.string == "hit")
     #expect(ManifestPlugin.path("$.a.c", in: v) == nil)
     #expect(ManifestPlugin.path("a.b", in: v) == nil)
+}
+
+@Test func blockingEventsNeedACapabilityAManifestPluginCannotHave() throws {
+    let p = try exampleManifest()
+    let approval = CanonicalEvent.permissionRequest(tool: "Bash", input: .object(["command": .string("ls")]), suggestions: .null)
+    #expect(approval.requiredCapability == .approvals)
+    #expect(CanonicalEvent.permissionRequest(tool: "AskUserQuestion", input: .null, suggestions: .null).requiredCapability == .questions)
+    #expect(CanonicalEvent.question(.null).requiredCapability == .questions)
+    #expect(CanonicalEvent.toolStart(tool: "Bash", input: .null).requiredCapability == nil)
+    #expect(!p.capabilities.contains(.approvals) && !p.capabilities.contains(.questions))
+    #expect(ClaudeCodePlugin().capabilities.contains(.approvals) && ClaudeCodePlugin().capabilities.contains(.questions))
+    guard case .toolStart(let tool, let input) = approval.handedBackToAgent else { Issue.record("not toolStart"); return }
+    #expect(tool == "Bash" && input["command"]?.string == "ls")
+    guard case .toolStart("AskUserQuestion", _) = CanonicalEvent.question(.null).handedBackToAgent else { Issue.record("question"); return }
 }
 
 @Test func manifestInstallEntriesMustNameTheirAgent() {

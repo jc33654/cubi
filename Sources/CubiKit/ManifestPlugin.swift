@@ -36,8 +36,7 @@ public struct ManifestPlugin: AgentPlugin {
         var caps = AgentCapabilities()
         for c in m["capabilities"]?.array ?? [] {
             switch c.string {
-            case "approvals": caps.insert(.approvals)
-            case "questions": caps.insert(.questions)
+            // approvals / questions need a reply template, which a manifest cannot carry: ignored.
             case "statusline": caps.insert(.statusline)
             default: break
             }

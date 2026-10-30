@@ -10,14 +10,14 @@ struct BotLookMenu: View {
         Menu("形狀") {
             ForEach(BotShape.allCases, id: \.self) { shape in
                 Button { state.setShape(shape == .square ? nil : shape, for: bot.id) } label: {
-                    if bot.shape == shape { Label(shape.displayName, systemImage: "checkmark") } else { Text(shape.displayName) }
+                    Text((bot.shape == shape ? "✓ " : "") + shape.displayName)
                 }
             }
         }
         Menu("顏色") {
             let picked = state.looks.look(for: bot.id).colorIndex
             Button { state.setColorIndex(nil, for: bot.id) } label: {
-                if picked == nil { Label("自動", systemImage: "checkmark") } else { Text("自動") }
+                Text(picked == nil ? "✓ 自動" : "自動")
             }
             Divider()
             ForEach(Array(SessionPalette.colors.enumerated()), id: \.offset) { i, rgb in
@@ -32,7 +32,12 @@ struct BotLookMenu: View {
         }
     }
 
+    private static let swatches: [NSImage] = SessionPalette.colors.map { makeSwatch($0) }
     private static func swatch(_ rgb: RGB) -> NSImage {
+        SessionPalette.colors.firstIndex(of: rgb).map { swatches[$0] } ?? makeSwatch(rgb)
+    }
+
+    nonisolated private static func makeSwatch(_ rgb: RGB) -> NSImage {
         NSImage(size: NSSize(width: 14, height: 14), flipped: false) { rect in
             NSColor(red: rgb.r, green: rgb.g, blue: rgb.b, alpha: 1).setFill()
             NSBezierPath(roundedRect: rect.insetBy(dx: 1, dy: 1), xRadius: 4, yRadius: 4).fill()

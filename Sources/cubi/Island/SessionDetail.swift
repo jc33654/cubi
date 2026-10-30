@@ -5,16 +5,20 @@ import CubiKit
 @MainActor
 enum SessionDetail {
     /// When the session began: the transcript file's birth time when Claude Code gave us one
-    /// (survives Cubi restarts), else the first event Cubi saw.
-    static func start(_ bot: BotRuntime) -> (date: Date, approximate: Bool) {
+    /// (survives Cubi restarts), else the first event Cubi saw; nil when neither is known (demo).
+    static func start(_ bot: BotRuntime) -> (date: Date, approximate: Bool)? {
         if let created = bot.transcriptCreatedAt { return (created, false) }
+        guard bot.startedAt > 0 else { return nil }
         return (Date(timeIntervalSinceReferenceDate: bot.startedAt), true)
     }
 
-    /// Wall-clock time in the session: Claude Code's own figure when present, else since start.
-    static func elapsed(_ bot: BotRuntime, now: Date) -> TimeInterval {
-        if let ms = bot.stats.totalDurationMS { return ms / 1000 }
-        return max(0, now.timeIntervalSince(start(bot).date))
+    /// Wall-clock time in the session: Claude Code's own figure (plus the time since it was
+    /// reported, so the number keeps moving while the session idles), else since start.
+    static func elapsed(_ bot: BotRuntime, now: Date) -> TimeInterval? {
+        if let ms = bot.stats.totalDurationMS {
+            return ms / 1000 + (bot.statsAt.map { max(0, now.timeIntervalSince($0)) } ?? 0)
+        }
+        return start(bot).map { max(0, now.timeIntervalSince($0.date)) }
     }
 
     static func duration(_ seconds: TimeInterval) -> String {
@@ -25,15 +29,24 @@ enum SessionDetail {
         return "\(sec)s"
     }
 
-    /// Taipei time; the date only when it is not today.
-    static func time(_ date: Date, now: Date = Date()) -> String {
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = UsageFormat.timeZone
+    private static let calendar: Calendar = {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = UsageFormat.timeZone
+        return c
+    }()
+    private static let clock = formatter("HH:mm")
+    private static let dated = formatter("M/d HH:mm")
+    private static func formatter(_ format: String) -> DateFormatter {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.timeZone = UsageFormat.timeZone
-        f.dateFormat = cal.isDate(date, inSameDayAs: now) ? "HH:mm" : "M/d HH:mm"
-        return f.string(from: date)
+        f.dateFormat = format
+        return f
+    }
+
+    /// Taipei time; the date only when it is not today.
+    static func time(_ date: Date, now: Date = Date()) -> String {
+        (calendar.isDate(date, inSameDayAs: now) ? clock : dated).string(from: date)
     }
 
     static func terminal(_ client: HookClient) -> String? {
@@ -48,8 +61,5 @@ enum SessionDetail {
         return client.tty.map { "\(program) · \($0.replacingOccurrences(of: "/dev/", with: ""))" } ?? program
     }
 
-    static func home(_ path: String) -> String {
-        let h = CubiPaths.home.path
-        return path.hasPrefix(h) ? "~" + path.dropFirst(h.count) : path
-    }
+    static func home(_ path: String) -> String { PathFormat.abbreviatingHome(path, home: CubiPaths.home.path) }
 }

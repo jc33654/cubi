@@ -17,7 +17,8 @@ if let i = arguments.firstIndex(of: "--render-icon"), i + 1 < arguments.count {
     exit(ok ? 0 : 1)
 }
 
-// Offline preview of the island for layout work: --render-island <hidden|compact|expanded> <botState> <out.png>
+// Offline preview of the island for layout work:
+//   --render-island <hidden|compact|expanded|detail|approval|question|usage|usage-compact|diff|floating|floating-approval> <botState> <out.png>
 if let i = arguments.firstIndex(of: "--render-island"), i + 3 < arguments.count {
     let ok = IconRenderer.renderIsland(mode: arguments[i + 1], botState: arguments[i + 2], to: arguments[i + 3])
     exit(ok ? 0 : 1)

@@ -21,11 +21,7 @@ struct IslandContent: View {
                     cardView(card)
                 } else if let id = state.showingDiffFor, let bot = state.bots.first(where: { $0.id == id }), let edit = bot.lastEdit {
                     DiffCardView(sessionName: bot.name, color: bot.color, summary: edit) { state.showingDiffFor = nil }
-                        .fixedSize(horizontal: false, vertical: true)
-                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
-                            let wanted = state.compactHeight + 6 + h
-                            if abs(wanted - state.expandedHeight) > 1 { state.expandedHeight = wanted }
-                        }
+                        .reportsExpandedHeight(to: state)
                 } else {
                     VStack(spacing: 6) {
                         UsageStripView(usage: state.usage)
@@ -38,11 +34,7 @@ struct IslandContent: View {
                         }
                         .padding(.bottom, 10)
                     }
-                    .fixedSize(horizontal: false, vertical: true)
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
-                        let wanted = state.compactHeight + 6 + h
-                        if abs(wanted - state.expandedHeight) > 1 { state.expandedHeight = wanted }
-                    }
+                    .reportsExpandedHeight(to: state)
                 }
             }
         }
@@ -60,11 +52,7 @@ struct IslandContent: View {
             }
         }
         .id(card.id)
-        .fixedSize(horizontal: false, vertical: true)
-        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
-            let wanted = state.compactHeight + 6 + h
-            if abs(wanted - state.expandedHeight) > 1 { state.expandedHeight = wanted }
-        }
+        .reportsExpandedHeight(to: state)
     }
 
     private func usageLine(_ title: String, _ window: UsageWindow) -> some View {
@@ -109,4 +97,22 @@ struct IslandContent: View {
         .frame(height: height)
         .offset(x: anchored && state.mode == .expanded ? state.wingOffset : 0)
     }
+}
+
+/// The expanded island is as tall as what it shows: the content takes its natural height and
+/// reports it, no estimates.
+private struct ReportsExpandedHeight: ViewModifier {
+    let state: IslandState
+    func body(content: Content) -> some View {
+        content
+            .fixedSize(horizontal: false, vertical: true)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
+                let wanted = state.compactHeight + 6 + h
+                if abs(wanted - state.expandedHeight) > 1 { state.expandedHeight = wanted }
+            }
+    }
+}
+
+extension View {
+    func reportsExpandedHeight(to state: IslandState) -> some View { modifier(ReportsExpandedHeight(state: state)) }
 }

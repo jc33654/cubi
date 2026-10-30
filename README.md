@@ -83,13 +83,13 @@ CLI 跟 app 一樣以 `$HOME` 為家目錄；要對假目錄測就 `HOME=/tmp/x 
 |---|---|
 | 滑鼠靠近瀏海 | 島展開成 compact（機器人一排 + 用量） |
 | 點島 | expanded：session 清單（名稱、context %、最近一次編輯的 +N −M）、用量列。高度隨內容長，最多到螢幕七成 |
-| 點清單的一列 | 右邊打開這個 session 的資訊：專案、模型／effort／版本、開始時間、使用時間（每秒走）、回合與工具呼叫數、花費、變更行數、context、終端。按「跳到終端」切到它的分頁，✕ 關閉 |
+| 點清單的一列 | 右邊打開這個 session 的資訊：專案、模型／effort／版本、開始時間、使用時間（Claude Code 回報的時長加上之後經過的時間，每秒走）、回合與工具呼叫數、花費、變更行數、context、終端。按「跳到終端」切到它的分頁，✕ 關閉 |
 | 點機器人 | 跳到那個 session 的終端分頁（Terminal.app 用 tty、Ghostty 用標題／cwd、其他 app 只切到 app） |
 | 有審批 | 島自動打開卡片：**拒絕 / 在終端處理 / 總是允許 / 允許**。「總是允許」會把 Claude Code 自己建議的規則寫進 session 與 `settings.local.json` |
 | 有 AskUserQuestion | 每題一組選項按鈕；多選用勾選；也可「在終端回答」 |
 | 終端自己答了或按 Esc | 卡片自動收回 |
 | session 的 `+N −M` 徽章 | 點開看那次 Edit / Write 的 diff |
-| 右鍵機器人（翼上或清單列） | 換形狀（方塊／圓形／三角／六角）與顏色（自動或十色之一），只記這個 session，session 結束就忘 |
+| 右鍵機器人（翼上或清單列） | 換形狀（方塊／圓形／三角／六角）與顏色（自動或十色之一），只記這個 session：session 消失或 Cubi 重啟就忘 |
 | 把島拖離瀏海 | 變成浮動視窗，可以拖到任何螢幕（外接螢幕也行）；卡片會在浮動視窗裡展開，瀏海那邊不再顯示。拖回瀏海頂端放開就回去；右鍵選單「浮動視窗」也能切換 |
 | 右鍵 → 保持顯示 | 島不收回，休息時停在 compact |
 
@@ -134,7 +134,7 @@ docs/                plan.md（設計與決策）、protocol.md（relay 協定�
 常用的驗證方式：
 
 - `make test`
-- 離線渲染島：`.build/release/cubi --render-island <hidden|compact|expanded|approval|question|usage|usage-compact|diff> <botState> out.png`
+- 離線渲染島：`.build/release/cubi --render-island <hidden|compact|expanded|detail|approval|question|usage|usage-compact|diff|floating|floating-approval> <botState> out.png`
 - 重播實錄 payload：`python3 -c 'import json;print(json.dumps(json.load(open("Tests/CubiKitTests/Fixtures/claude-2.1.312/SessionStart-1.json"))["payload"]))' | ~/.cubi/bin/cubi-hook --agent claude-code --event SessionStart`
 - 錄新版 Claude Code 的 payload：先 `make release`（capture 用的是 `.build/release/cubi-hook`），repo 要在 `$HOME/Documents/cubi`（`docs/capture.settings.local.json` 寫死這個路徑，放別處就改它）。把那份 hooks 放進某個專案的 `.claude/settings.local.json`，跑一輪後用 `scripts/import-fixtures.py <版本>` 匯入（會把路徑洗掉）。錄完要把那些 hooks 拿掉，不然該專案的事件會重複觸發：在 `~/Documents/cubi` 錄的可以在設定頁按「移除」（預設只看這個目錄），在別的專案錄的要自己手動刪。
 

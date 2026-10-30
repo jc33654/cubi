@@ -30,6 +30,8 @@ final class BotRuntime: Identifiable {
     var prompts = 0
     var toolCalls = 0
     var stats = SessionStats()
+    /// When `stats` last changed, so the elapsed time keeps moving between status lines.
+    var statsAt: Date?
     var costUSD: Double?
     var transcriptPath: String?
     /// Birth time of the transcript file, looked up once per path by the coordinator.
@@ -48,7 +50,7 @@ final class BotRuntime: Identifiable {
     func apply(_ look: BotLook) {
         let shape = look.shape ?? .square
         if self.shape != shape { self.shape = shape }
-        let color = look.colorIndex.map { SessionPalette.colors[$0] } ?? autoColor
+        let color = look.colorIndex.map { SessionPalette.colors[max(0, min(SessionPalette.colors.count - 1, $0))] } ?? autoColor
         if self.color != color { self.color = color }
     }
 }
@@ -86,14 +88,11 @@ final class IslandState {
     init(geometry: NotchGeometry) {
         self.geometry = geometry
         self.pinned = UserDefaults.standard.bool(forKey: Self.pinnedKey)
-        if let data = UserDefaults.standard.data(forKey: Self.looksKey), let saved = try? JSONDecoder().decode(BotLooks.self, from: data) {
-            looks = saved
-        }
     }
 
-    // MARK: - Per-session looks (shape / colour the user picked)
+    // MARK: - Per-session looks (shape / colour the user picked). In memory only: a look lives
+    // exactly as long as Cubi shows the session.
 
-    static let looksKey = "botLooks"
     private(set) var looks = BotLooks()
 
     func setShape(_ shape: BotShape?, for sessionID: String) {
@@ -106,23 +105,13 @@ final class IslandState {
         looksChanged(sessionID)
     }
 
-    /// The session is gone: forget its look.
-    func forgetLook(_ sessionID: String) {
-        guard looks.bySession[sessionID] != nil else { return }
-        looks.remove(sessionID)
-        saveLooks()
-    }
+    /// Sessions that are gone (with or without a SessionEnd) take their look with them.
+    func pruneLooks(keeping live: Set<String>) { looks.prune(keeping: live) }
 
     private func looksChanged(_ sessionID: String) {
         bots.first { $0.id == sessionID }?.apply(looks.look(for: sessionID))
-        saveLooks()
         let l = looks.look(for: sessionID)
         CubiLog.write("look session=\(sessionID.prefix(8)) shape=\(l.shape?.rawValue ?? "-") color=\(l.colorIndex.map(String.init) ?? "auto")")
-    }
-
-    private func saveLooks() {
-        guard persists else { return }
-        if let data = try? JSONEncoder().encode(looks) { UserDefaults.standard.set(data, forKey: Self.looksKey) }
     }
 
     /// Where auto-close ends up. The floating window has nothing to hide behind: it rests compact.
@@ -132,18 +121,18 @@ final class IslandState {
 
     enum Placement: String { case notch, floating }
     static let placementKey = "islandPlacement"
-    static let floatingOriginKey = "floatingOrigin"
+    static let floatingAnchorKey = "floatingAnchor"
 
     var placement: Placement = Placement(rawValue: UserDefaults.standard.string(forKey: IslandState.placementKey) ?? "") ?? .notch {
         didSet { if persists { UserDefaults.standard.set(placement.rawValue, forKey: Self.placementKey) } }
     }
-    /// Bottom-left of the floating panel in screen coordinates, remembered across launches.
-    var floatingOrigin: CGPoint? = {
-        guard let a = UserDefaults.standard.array(forKey: IslandState.floatingOriginKey) as? [Double], a.count == 2 else { return nil }
-        return CGPoint(x: a[0], y: a[1])
-    }() {
-        didSet { if persists { UserDefaults.standard.set(floatingOrigin.map { [$0.x, $0.y] }, forKey: Self.floatingOriginKey) } }
+    /// Top centre of the floating island in screen coordinates, remembered across launches
+    /// (independent of the panel's size, which may change between builds).
+    var floatingAnchor: CGPoint? = UserDefaults.standard.string(forKey: IslandState.floatingAnchorKey).map(NSPointFromString) {
+        didSet { if persists { UserDefaults.standard.set(floatingAnchor.map(NSStringFromPoint), forKey: Self.floatingAnchorKey) } }
     }
+    /// Visible frame of the screen the floating island sits on; sizes are clamped to it.
+    var floatingScreenFrame: CGRect?
 
     /// What the notch panel draws: nothing while the island is floating.
     var notchMode: IslandMode { placement == .notch ? mode : .hidden }
@@ -165,8 +154,12 @@ final class IslandState {
     var expandedWidth: CGFloat {
         pendingCards.isEmpty && showingDiffFor == nil && selectedSession != nil ? Self.detailWidth : Self.expandedBaseWidth
     }
-    /// Never wider than the screen or taller than most of it.
-    var maxExpandedSize: CGSize { CGSize(width: geometry.screenFrame.width - 80, height: (geometry.screenFrame.height * 0.7).rounded()) }
+    /// Never wider than its screen, taller than most of it, or bigger than the panel it is drawn in.
+    var maxExpandedSize: CGSize {
+        let screen = placement == .floating ? (floatingScreenFrame ?? geometry.screenFrame) : geometry.screenFrame
+        return CGSize(width: min(screen.width - 80, IslandPanel.size.width - 20),
+                      height: min((screen.height * 0.7).rounded(), IslandPanel.size.height - 20))
+    }
     var expandedSize: CGSize {
         CGSize(width: min(expandedWidth, maxExpandedSize.width), height: min(expandedHeight, maxExpandedSize.height))
     }

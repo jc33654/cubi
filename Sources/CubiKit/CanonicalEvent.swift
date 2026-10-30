@@ -51,6 +51,18 @@ public struct StatuslineInfo: Sendable, Equatable, Codable {
         self.costUSD = costUSD
         self.session = session
     }
+
+    /// Readings saved by older builds lack newer keys: every field decodes as optional.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        sessionName = try c.decodeIfPresent(String.self, forKey: .sessionName)
+        model = try c.decodeIfPresent(String.self, forKey: .model)
+        contextPercent = try c.decodeIfPresent(Double.self, forKey: .contextPercent)
+        fiveHour = try c.decodeIfPresent(UsageWindow.self, forKey: .fiveHour)
+        sevenDay = try c.decodeIfPresent(UsageWindow.self, forKey: .sevenDay)
+        costUSD = try c.decodeIfPresent(Double.self, forKey: .costUSD)
+        session = try c.decodeIfPresent(SessionStats.self, forKey: .session) ?? SessionStats()
+    }
 }
 
 /// What a status line says about its own session (Claude Code's `workspace`, `cost`, `model`…).

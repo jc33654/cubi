@@ -46,7 +46,6 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         pinItem.state = island.state.pinned ? .on : .off
         menu.addItem(pinItem)
         floatItem.target = self
-        floatItem.state = island.isFloating ? .on : .off
         menu.addItem(floatItem)
 
         let demo = NSMenuItem(title: "Demo 狀態", action: nil, keyEquivalent: "")
@@ -113,7 +112,6 @@ final class StatusBarController: NSObject, NSMenuDelegate {
 
     @objc private func toggleFloating() {
         island.setPlacement(island.isFloating ? .notch : .floating)
-        floatItem.state = island.isFloating ? .on : .off
     }
 
     @objc private func togglePinned() {

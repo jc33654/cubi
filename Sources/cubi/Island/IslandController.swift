@@ -56,10 +56,12 @@ final class IslandController {
     private func relocate() {
         guard let screen = NotchGeometry.preferredScreen() else { return }
         let geometry = NotchGeometry.measure(screen)
+        // The floating island may have been on a screen that just went away, whether or not the
+        // notch screen itself changed.
+        floating.clampToScreens()
         guard geometry != state.geometry else { return }
         state.geometry = geometry
         panel.pin(to: geometry)
-        floating.clampToScreens()
     }
 
     /// The island's rectangle in screen coordinates for the current mode.
@@ -170,14 +172,13 @@ final class IslandController {
         closeWork?.cancel()
         closeWork = nil
         CubiLog.write("island placement → \(placement.rawValue)")
+        state.placement = placement
         switch placement {
         case .floating:
-            state.placement = .floating
             if state.mode == .hidden { state.mode = .compact }
             floating.show(islandTopAt: islandTop)
             panel.orderOut(nil)
         case .notch:
-            state.placement = .notch
             floating.hide()
             panel.orderFrontRegardless()
             if !state.pinned && !state.holdOpen { scheduleClose(after: 2) }
@@ -252,11 +253,13 @@ final class IslandController {
         let id = "demo"
         let bot = BotRuntime(id: id, name: "demo", color: SessionPalette.color(for: id))
         bot.ticker = "示範用，不是真的 session"
+        bot.startedAt = Date().timeIntervalSinceReferenceDate
         demoBot = bot
         state.bots.append(bot)
     }
 
     func removeDemoBot() {
+        if state.selectedSession == "demo" { state.selectedSession = nil }
         state.bots.removeAll { $0.id == "demo" }
         demoBot = nil
     }

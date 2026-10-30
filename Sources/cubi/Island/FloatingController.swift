@@ -20,22 +20,33 @@ final class FloatingController {
 
     var isDragging: Bool { grab != nil }
 
-    /// Shows the panel with its island's top centre at `islandTop` (screen coordinates), or where it was.
+    /// Shows the panel with its island's top centre at `islandTop` (screen coordinates), else where
+    /// it last was, else (first use from the menu) at the top of the screen the pointer is on.
     func show(islandTopAt islandTop: CGPoint? = nil) {
         let p = panel ?? makePanel()
-        let origin: CGPoint
-        if let top = islandTop {
-            origin = CGPoint(x: top.x - FloatingPanel.size.width / 2, y: top.y - FloatingPanel.size.height)
-        } else if let saved = state.floatingOrigin {
-            origin = saved
-        } else {
+        let anchor = islandTop ?? state.floatingAnchor ?? {
             let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
             let f = screen?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
-            origin = CGPoint(x: f.midX - FloatingPanel.size.width / 2, y: f.maxY - 8 - FloatingPanel.size.height)
-        }
-        p.setFrameOrigin(clamped(origin))
-        state.floatingOrigin = p.frame.origin
+            return CGPoint(x: f.midX, y: f.maxY - 8)
+        }()
+        p.setFrameOrigin(clamped(Self.origin(forAnchor: anchor)))
+        remember(p)
         p.orderFrontRegardless()
+    }
+
+    private static func origin(forAnchor a: CGPoint) -> CGPoint {
+        CGPoint(x: a.x - FloatingPanel.size.width / 2, y: a.y - FloatingPanel.size.height)
+    }
+
+    private static func anchor(of p: NSPanel) -> CGPoint {
+        CGPoint(x: p.frame.midX, y: p.frame.maxY)
+    }
+
+    /// Saves where the island is and which screen it is on.
+    private func remember(_ p: NSPanel) {
+        let a = Self.anchor(of: p)
+        state.floatingAnchor = a
+        state.floatingScreenFrame = NSScreen.screens.first { $0.frame.contains(a) }?.visibleFrame
     }
 
     func hide() {
@@ -68,24 +79,24 @@ final class FloatingController {
         p.setFrameOrigin(CGPoint(x: mouse.x - g.x, y: mouse.y - g.y))
     }
 
-    /// Ends the drag; true when the island was dropped onto the notch area and should dock again.
+    /// Ends the drag; true when the island was dropped onto the island's home spot at the top of
+    /// the main screen (the notch, or the bar on a Mac without one) and should dock again.
     func dragEnded(notch: NotchGeometry) -> Bool {
         grab = nil
         guard let p = panel, let rect = islandRect() else { return false }
         let f = notch.screenFrame
-        if notch.hasNotch, rect.maxY >= f.maxY - 60, abs(rect.midX - f.midX) <= 200 {
-            return true
-        }
+        if rect.maxY >= f.maxY - 60, abs(rect.midX - f.midX) <= 200 { return true }
         p.setFrameOrigin(clamped(p.frame.origin))
-        state.floatingOrigin = p.frame.origin
+        remember(p)
         return false
     }
 
     /// Keeps the island's top strip on some screen after displays change.
     func clampToScreens() {
-        guard let p = panel else { return }
+        guard let p = panel, p.isVisible else { return }
         let o = clamped(p.frame.origin)
-        if o != p.frame.origin { p.setFrameOrigin(o); state.floatingOrigin = o }
+        if o != p.frame.origin { p.setFrameOrigin(o) }
+        remember(p)
     }
 
     private func clamped(_ origin: CGPoint) -> CGPoint {

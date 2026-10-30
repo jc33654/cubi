@@ -30,12 +30,13 @@ struct FloatingRootView: View {
             Capsule().fill(.white.opacity(0.18)).frame(width: 36, height: 3).padding(.top, 3)
         }
         .frame(width: width, height: height)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // Hit-test the island only: sized before the panel-filling frame below.
         .contentShape(shell)
         .onTapGesture { onTap() }
         .gesture(DragGesture(minimumDistance: 6, coordinateSpace: .global)
             .onChanged { _ in onDrag(.moved) }
             .onEnded { _ in onDrag(.ended) })
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .onChange(of: state.bots.count) { _, _ in apply(animated: true) }
         .onAppear { apply(animated: false) }
         .onChange(of: state.mode) { _, _ in apply(animated: true) }

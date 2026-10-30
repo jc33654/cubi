@@ -290,7 +290,6 @@ final class SessionCoordinator {
                         guard let self, self.store.sessions[id]?.ended == true else { return }
                         self.withdraw(sessionID: id, outcome: .handledElsewhere)
                         self.store.remove(id)
-                        self.island.state.forgetLook(id)
                         self.sync()
                     }
                 }
@@ -338,9 +337,10 @@ final class SessionCoordinator {
             if bot.startedAt != info.startedAt { bot.startedAt = info.startedAt }
             if bot.prompts != info.prompts { bot.prompts = info.prompts }
             if bot.toolCalls != info.toolCalls { bot.toolCalls = info.toolCalls }
-            if bot.stats != info.stats { bot.stats = info.stats }
+            if bot.stats != info.stats { bot.stats = info.stats; bot.statsAt = Date() }
             if bot.costUSD != info.costUSD { bot.costUSD = info.costUSD }
-            if bot.transcriptPath != info.transcriptPath {
+            // Looked up once per path, again on a later sync if the file was not there yet.
+            if bot.transcriptPath != info.transcriptPath || (bot.transcriptCreatedAt == nil && info.transcriptPath != nil) {
                 bot.transcriptPath = info.transcriptPath
                 bot.transcriptCreatedAt = info.transcriptPath.flatMap {
                     (try? FileManager.default.attributesOfItem(atPath: $0))?[.creationDate] as? Date
@@ -351,15 +351,13 @@ final class SessionCoordinator {
         }
         if let demo = existing["demo"] { bots.append(demo) }
         if bots.map(\.id) != state.bots.map(\.id) { state.bots = bots }
+        state.pruneLooks(keeping: Set(bots.map(\.id)))
         if let shown = state.showingDiffFor, !bots.contains(where: { $0.id == shown }) { state.showingDiffFor = nil }
         if let sel = state.selectedSession, !bots.contains(where: { $0.id == sel }) { state.selectedSession = nil }
         if state.usage != lastUsage { state.usage = lastUsage }
 
         let cards = pending.map { card(for: $0) }
-        if cards != state.pendingCards {
-            state.pendingCards = cards
-            if cards.isEmpty { state.expandedHeight = 190 }
-        }
+        if cards != state.pendingCards { state.pendingCards = cards }
 
         let hold = !pending.isEmpty
         if hold != state.holdOpen {
@@ -373,7 +371,8 @@ final class SessionCoordinator {
     private func card(for request: PendingRequest) -> PendingCard {
         let info = store.sessions[request.sessionID]
         let name = info?.name ?? SessionStore.defaultName(id: request.sessionID, cwd: nil)
-        let color = SessionPalette.colors[info?.colorIndex ?? 0]
+        // The robot's colour, including one the user picked.
+        let color = island.state.bots.first { $0.id == request.sessionID }?.color ?? SessionPalette.colors[info?.colorIndex ?? 0]
         switch request.kind {
         case .approval(let tool, let input, let suggestions):
             let summary = ApprovalSummary.describe(tool: tool, input: input)

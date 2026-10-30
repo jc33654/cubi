@@ -30,15 +30,15 @@ struct SessionDetailView: View {
                     row("模型", [m, bot.stats.effort.map { "effort \($0)" }, bot.stats.version.map { "Claude Code \($0)" }].compactMap { $0 }.joined(separator: " · "))
                 }
                 let start = SessionDetail.start(bot)
-                row("開始", SessionDetail.time(start.date) + (start.approximate ? "（Cubi 看到起）" : ""))
+                row("開始", start.map { SessionDetail.time($0.date) + ($0.approximate ? "（Cubi 看到起）" : "") } ?? "—")
                 GridRow {
                     label("使用時間")
                     TimelineView(.periodic(from: .now, by: 1)) { tl in
                         let api = bot.stats.apiDurationMS.map { "，API \(SessionDetail.duration($0 / 1000))" } ?? ""
-                        value(SessionDetail.duration(SessionDetail.elapsed(bot, now: tl.date)) + api)
+                        value(SessionDetail.elapsed(bot, now: tl.date).map { SessionDetail.duration($0) + api } ?? "—")
                     }
                 }
-                row("回合", "\(bot.prompts) 次，工具呼叫 \(bot.toolCalls) 次" + (SessionDetail.start(bot).approximate ? "" : "（Cubi 看到起）"))
+                row("回合", "\(bot.prompts) 次，工具呼叫 \(bot.toolCalls) 次" + (start?.approximate == false ? "（Cubi 看到起）" : ""))
                 if let cost = bot.costUSD { row("花費", String(format: "$%.2f", cost)) }
                 if bot.stats.linesAdded != nil || bot.stats.linesRemoved != nil || bot.lastEdit != nil {
                     GridRow {

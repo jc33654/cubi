@@ -7,7 +7,7 @@ struct IslandRootView: View {
     @Bindable var state: IslandState
     var onTap: () -> Void
     /// Pointer dragged far enough on the island: the controller turns it into the floating window.
-    var onDrag: (IslandDrag) -> Void = { _ in }
+    var onDrag: (IslandDrag) -> Void
 
     @State private var width: CGFloat
     @State private var height: CGFloat

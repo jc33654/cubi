@@ -34,3 +34,21 @@ import Testing
     // The account-wide usage is still worth surfacing.
     #expect(fx.contains { if case .usage = $0 { return true }; return false })
 }
+
+@Test func savedUsageFromAnOlderBuildStillDecodes() throws {
+    // What a build before SessionStats wrote to UserDefaults: no "session" key.
+    let old = Data("""
+    {"fiveHour":{"usedPercent":14,"resetsAt":null},"sevenDay":{"usedPercent":30,"resetsAt":1793379600},"costUSD":2.5,"sessionName":"x"}
+    """.utf8)
+    let info = try JSONDecoder().decode(StatuslineInfo.self, from: old)
+    #expect(info.fiveHour?.usedPercent == 14 && info.sevenDay?.resetsAt == 1793379600 && info.costUSD == 2.5)
+    #expect(info.session == SessionStats())
+    let roundTrip = try JSONDecoder().decode(StatuslineInfo.self, from: JSONEncoder().encode(info))
+    #expect(roundTrip == info)
+}
+
+@Test func homeIsAbbreviatedOnlyAtAPathBoundary() {
+    #expect(PathFormat.abbreviatingHome("/Users/me/x", home: "/Users/me") == "~/x")
+    #expect(PathFormat.abbreviatingHome("/Users/me", home: "/Users/me") == "~")
+    #expect(PathFormat.abbreviatingHome("/Users/meow/app", home: "/Users/me") == "/Users/meow/app")
+}

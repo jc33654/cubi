@@ -23,9 +23,7 @@ struct SessionListView: View {
 
     private func row(_ bot: BotRuntime) -> some View {
         HStack(spacing: 10) {
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(BotPainter.swift(bot.color))
-                .frame(width: 12, height: 12)
+            ShapeSwatch(shape: bot.shape, color: bot.color)
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
                     Text(bot.name)
@@ -71,5 +69,6 @@ struct SessionListView: View {
         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.white.opacity(0.06)))
         .contentShape(Rectangle())
         .onTapGesture { state.onFocus(bot.id) }
+        .contextMenu { BotLookMenu(bot: bot, state: state) }
     }
 }

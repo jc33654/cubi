@@ -32,6 +32,9 @@ public struct RGB: Sendable, Equatable, Hashable {
 
 public enum SessionPalette {
     /// Ten colours that stay distinguishable at 16 pt on black (a 12-colour set had near-twins).
+    /// Menu labels, in palette order.
+    public static let names = ["藍", "琥珀", "綠", "粉紅", "紫", "青", "紅", "黃", "萊姆", "銀"]
+
     public static let colors: [RGB] = [
         RGB(hex: 0x4F9CF9), // blue
         RGB(hex: 0xF5A524), // amber

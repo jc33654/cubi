@@ -68,11 +68,12 @@ enum IconRenderer {
             FileHandle.standardError.write(Data("cubi: unknown bot state \(botState)\n".utf8))
             return false
         }
-        let names: [String] = mode == "usage-compact" ? ["alpha"] : ["alpha", "beta", "gamma"]
+        let names: [String] = mode == "usage-compact" ? ["alpha"] : ["alpha", "beta", "gamma", "delta"]
         for (i, name) in names.enumerated() {
-            let bot = BotRuntime(id: name, name: name, color: SessionPalette.colors[i * 3])
+            let bot = BotRuntime(id: name, name: name, color: SessionPalette.colors[i * 2])
+            bot.shape = BotShape.allCases[i]
             bot.model.setState(i == 0 ? bs : .idle)
-            bot.contextPercent = [92, 35, 0][i]
+            bot.contextPercent = [92, 35, 0, 12][i]
             if i == 0 {
                 bot.lastEdit = EditSummary(path: "/Users/me/Documents/cubi/Sources/cubi/Island/IslandRootView.swift", added: 2, removed: 1, lines: [
                     DiffLine(kind: .hunk, text: "@@ -41 +41 @@"),

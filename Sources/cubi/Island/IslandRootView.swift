@@ -127,6 +127,7 @@ struct IslandRootView: View {
                         .frame(width: botSize, height: botSize)
                         .contentShape(Rectangle())
                         .onTapGesture { state.onFocus(bot.id) }
+                        .contextMenu { BotLookMenu(bot: bot, state: state) }
                         .help(bot.name)
                 }
             }

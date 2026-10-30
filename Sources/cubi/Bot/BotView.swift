@@ -15,7 +15,7 @@ struct BotView: View {
                 let dt = last == 0 ? 1.0 / 60 : min(0.1, max(0, now - last))
                 bot.lastFrame = now
                 bot.model.update(dt: dt, random: { Double.random(in: 0..<1) })
-                BotPainter.draw(bot.model.pose, color: bot.color, in: &context, size: size)
+                BotPainter.draw(bot.model.pose, color: bot.color, shape: bot.shape, in: &context, size: size)
             }
         }
         .accessibilityLabel(Text(bot.name))

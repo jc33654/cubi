@@ -290,6 +290,7 @@ final class SessionCoordinator {
                         guard let self, self.store.sessions[id]?.ended == true else { return }
                         self.withdraw(sessionID: id, outcome: .handledElsewhere)
                         self.store.remove(id)
+                        self.island.state.forgetLook(id)
                         self.sync()
                     }
                 }
@@ -318,8 +319,11 @@ final class SessionCoordinator {
         var existing = Dictionary(uniqueKeysWithValues: state.bots.map { ($0.id, $0) })
         var bots: [BotRuntime] = []
         for info in store.ordered {
-            let bot = existing.removeValue(forKey: info.id)
-                ?? BotRuntime(id: info.id, name: info.name, color: SessionPalette.colors[info.colorIndex])
+            let bot = existing.removeValue(forKey: info.id) ?? {
+                let b = BotRuntime(id: info.id, name: info.name, color: SessionPalette.colors[info.colorIndex])
+                b.apply(state.looks.look(for: info.id))
+                return b
+            }()
             if bot.name != info.name { bot.name = info.name }
             bot.ticker = info.ticker
             bot.stateLabel = info.botState.rawValue

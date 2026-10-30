@@ -13,7 +13,10 @@ enum IslandMode: Equatable {
 final class BotRuntime: Identifiable {
     let id: String
     var name: String
+    /// The colour the palette assigned; `color` is this unless the user picked one.
+    var autoColor: RGB
     var color: RGB
+    var shape: BotShape = .square
     /// One line of what the session is doing right now.
     var ticker = ""
     var stateLabel = "idle"
@@ -28,7 +31,15 @@ final class BotRuntime: Identifiable {
     init(id: String, name: String, color: RGB) {
         self.id = id
         self.name = name
+        self.autoColor = color
         self.color = color
+    }
+
+    func apply(_ look: BotLook) {
+        let shape = look.shape ?? .square
+        if self.shape != shape { self.shape = shape }
+        let color = look.colorIndex.map { SessionPalette.colors[$0] } ?? autoColor
+        if self.color != color { self.color = color }
     }
 }
 
@@ -61,6 +72,42 @@ final class IslandState {
     init(geometry: NotchGeometry) {
         self.geometry = geometry
         self.pinned = UserDefaults.standard.bool(forKey: Self.pinnedKey)
+        if let data = UserDefaults.standard.data(forKey: Self.looksKey), let saved = try? JSONDecoder().decode(BotLooks.self, from: data) {
+            looks = saved
+        }
+    }
+
+    // MARK: - Per-session looks (shape / colour the user picked)
+
+    static let looksKey = "botLooks"
+    private(set) var looks = BotLooks()
+
+    func setShape(_ shape: BotShape?, for sessionID: String) {
+        looks.setShape(shape, for: sessionID)
+        looksChanged(sessionID)
+    }
+
+    func setColorIndex(_ index: Int?, for sessionID: String) {
+        looks.setColorIndex(index, for: sessionID)
+        looksChanged(sessionID)
+    }
+
+    /// The session is gone: forget its look.
+    func forgetLook(_ sessionID: String) {
+        guard looks.bySession[sessionID] != nil else { return }
+        looks.remove(sessionID)
+        saveLooks()
+    }
+
+    private func looksChanged(_ sessionID: String) {
+        bots.first { $0.id == sessionID }?.apply(looks.look(for: sessionID))
+        saveLooks()
+        let l = looks.look(for: sessionID)
+        CubiLog.write("look session=\(sessionID.prefix(8)) shape=\(l.shape?.rawValue ?? "-") color=\(l.colorIndex.map(String.init) ?? "auto")")
+    }
+
+    private func saveLooks() {
+        if let data = try? JSONEncoder().encode(looks) { UserDefaults.standard.set(data, forKey: Self.looksKey) }
     }
 
     /// Where auto-close ends up.

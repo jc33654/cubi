@@ -69,6 +69,8 @@ final class IslandState {
     @ObservationIgnored var onDecision: (UUID, Decision) -> Void = { _, _ in }
     /// Tapping a robot or a list row: bring that session's terminal to the front.
     @ObservationIgnored var onFocus: (String) -> Void = { _ in }
+    /// A look changed: the coordinator rebuilds anything that carries the colour (open cards).
+    @ObservationIgnored var onLooksChanged: () -> Void = {}
     /// Session whose last diff is open in the expanded view.
     var showingDiffFor: String?
     /// Session whose info panel is open beside the list.
@@ -110,6 +112,7 @@ final class IslandState {
 
     private func looksChanged(_ sessionID: String) {
         bots.first { $0.id == sessionID }?.apply(looks.look(for: sessionID))
+        onLooksChanged()
         let l = looks.look(for: sessionID)
         CubiLog.write("look session=\(sessionID.prefix(8)) shape=\(l.shape?.rawValue ?? "-") color=\(l.colorIndex.map(String.init) ?? "auto")")
     }
@@ -157,8 +160,9 @@ final class IslandState {
     /// Never wider than its screen, taller than most of it, or bigger than the panel it is drawn in.
     var maxExpandedSize: CGSize {
         let screen = placement == .floating ? (floatingScreenFrame ?? geometry.screenFrame) : geometry.screenFrame
-        return CGSize(width: min(screen.width - 80, IslandPanel.size.width - 20),
-                      height: min((screen.height * 0.7).rounded(), IslandPanel.size.height - 20))
+        let panel = placement == .floating ? FloatingPanel.size : IslandPanel.size
+        return CGSize(width: min(screen.width - 80, panel.width - 20),
+                      height: min((screen.height * 0.7).rounded(), panel.height - 20))
     }
     var expandedSize: CGSize {
         CGSize(width: min(expandedWidth, maxExpandedSize.width), height: min(expandedHeight, maxExpandedSize.height))

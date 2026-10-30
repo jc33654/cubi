@@ -1,4 +1,3 @@
-import Foundation
 import Testing
 @testable import CubiKit
 
@@ -30,14 +29,4 @@ import Testing
     #expect(looks.bySession.keys.sorted() == ["b"])
     looks.remove("b")
     #expect(looks.bySession.isEmpty)
-}
-
-@Test func looksRoundTripThroughJSONWithStableNames() throws {
-    var looks = BotLooks()
-    looks.setShape(.circle, for: "s1")
-    looks.setColorIndex(6, for: "s1")
-    let data = try JSONEncoder().encode(looks)
-    #expect(String(decoding: data, as: UTF8.self).contains("\"circle\""))
-    #expect(try JSONDecoder().decode(BotLooks.self, from: data) == looks)
-    #expect(BotShape.allCases.map(\.rawValue) == ["square", "circle", "triangle", "hexagon"])
 }

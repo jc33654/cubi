@@ -26,6 +26,7 @@ final class SessionCoordinator {
     init(island: IslandController) {
         self.island = island
         island.state.onDecision = { [weak self] id, decision in self?.decide(id, decision) }
+        island.state.onLooksChanged = { [weak self] in self?.sync() }
         island.state.onFocus = { [weak self] id in
             guard let info = self?.store.sessions[id] else { return }
             TerminalFocus.focus(info)

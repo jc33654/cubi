@@ -1,7 +1,7 @@
 // Per-session overrides of a robot's shape and colour, chosen by the user from the island.
-// Keyed by session id on purpose: a session's look dies with the session.
+// Keyed by session id and kept in memory only: a look lives as long as Cubi shows the session.
 
-public enum BotShape: String, CaseIterable, Sendable, Codable {
+public enum BotShape: String, CaseIterable, Sendable {
     case square, circle, triangle, hexagon
 
     public var displayName: String {
@@ -14,7 +14,7 @@ public enum BotShape: String, CaseIterable, Sendable, Codable {
     }
 }
 
-public struct BotLook: Sendable, Equatable, Codable {
+public struct BotLook: Sendable, Equatable {
     /// nil = the default square.
     public var shape: BotShape?
     /// Index into `SessionPalette.colors`; nil = the automatically assigned colour.
@@ -28,7 +28,7 @@ public struct BotLook: Sendable, Equatable, Codable {
     public var isDefault: Bool { shape == nil && colorIndex == nil }
 }
 
-public struct BotLooks: Sendable, Equatable, Codable {
+public struct BotLooks: Sendable, Equatable {
     public private(set) var bySession: [String: BotLook] = [:]
 
     public init() {}

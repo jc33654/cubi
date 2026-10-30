@@ -234,6 +234,15 @@ public struct SessionStore: Sendable {
         sessions[id] = s
     }
 
+    /// The user clicked the robot: a sleeping session wakes up (idle) and the inactivity clock restarts.
+    public mutating func wake(_ id: String, now: Double) {
+        guard var s = sessions[id], s.botState == .sleeping else { return }
+        s.botState = s.contextPercent >= 80 ? .tired : .idle
+        s.lastEventAt = now
+        s.ticker = "醒了"
+        sessions[id] = s
+    }
+
     /// Timer-driven transitions: happy → idle, sleeping after inactivity.
     public mutating func revertToIdle(_ id: String) {
         guard var s = sessions[id], s.botState == .happy else { return }

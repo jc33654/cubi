@@ -187,3 +187,17 @@ private func hook(_ id: String, _ event: CanonicalEvent, cwd: String? = "/Users/
     #expect(s.stats.modelDisplayName == "Opus" && s.stats.projectDir == "/p" && s.stats.version == "2.1.312")
     #expect(s.stats.totalDurationMS == 5000 && s.stats.apiDurationMS == 900 && s.stats.linesAdded == 3)   // merged, not replaced
 }
+
+@Test func clickingASleepingRobotWakesIt() {
+    var store = SessionStore()
+    _ = store.apply(hook("s", .sessionStart(source: nil)), now: 0)
+    store.tick(now: 700)
+    #expect(store.sessions["s"]?.botState == .sleeping)
+    store.wake("s", now: 701)
+    #expect(store.sessions["s"]?.botState == .idle)
+    #expect(store.sessions["s"]?.lastEventAt == 701)
+    store.tick(now: 702)
+    #expect(store.sessions["s"]?.botState == .idle)   // the clock restarted
+    store.wake("s", now: 703)                          // awake already: nothing changes
+    #expect(store.sessions["s"]?.ticker == "醒了")
+}

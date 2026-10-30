@@ -28,7 +28,9 @@ final class SessionCoordinator {
         island.state.onDecision = { [weak self] id, decision in self?.decide(id, decision) }
         island.state.onLooksChanged = { [weak self] in self?.sync() }
         island.state.onFocus = { [weak self] id in
-            guard let info = self?.store.sessions[id] else { return }
+            guard let self, let info = self.store.sessions[id] else { return }
+            store.wake(id, now: Date().timeIntervalSinceReferenceDate)
+            sync()
             TerminalFocus.focus(info)
         }
         notifier.onActivate = { [weak self] id in

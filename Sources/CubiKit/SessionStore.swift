@@ -3,8 +3,12 @@ import Foundation
 /// A reducer: feed it decoded hooks and a clock, read `sessions` back. No AppKit, fully testable.
 public struct SessionStore: Sendable {
     public private(set) var sessions: [String: SessionInfo] = [:]
-    /// Insertion order, so robots do not shuffle when a dictionary rehashes.
-    public private(set) var order: [String] = []
+    /// Insertion order, so robots do not shuffle when a dictionary rehashes; the user can rearrange
+    /// it (SessionStore+Order.swift).
+    public internal(set) var order: [String] = []
+    /// The order the user arranged, including sessions not currently live, so they return to
+    /// their place. Only `reorder` and `seedOrder` touch it.
+    public internal(set) var preferredOrder: [String] = []
     /// Account-wide rate limits, merged across sessions: every status line reports what its own
     /// session last heard from the API, so idle sessions carry stale or missing windows.
     public private(set) var usage: StatuslineInfo?
@@ -80,6 +84,7 @@ public struct SessionStore: Sendable {
             default:
                 sessions[id] = make(hook.session, now: now)
                 order.append(id)
+                placeByPreference(id)
             }
         }
         var s = sessions[id]!

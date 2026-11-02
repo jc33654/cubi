@@ -25,8 +25,7 @@ main() {
   zip="$work/Cubi.zip"
 
   if [ -n "${CUBI_LOCAL_ZIP:-}" ]; then
-    cp "$CUBI_LOCAL_ZIP" "$zip"
-    if [ -f "$CUBI_LOCAL_ZIP.sha256" ]; then cp "$CUBI_LOCAL_ZIP.sha256" "$zip.sha256"; fi
+    zip="$CUBI_LOCAL_ZIP"
   else
     if [ -n "${CUBI_VERSION:-}" ]; then
       base="https://github.com/$REPO/releases/download/$CUBI_VERSION"
@@ -41,7 +40,7 @@ main() {
   # Integrity only: the checksum comes from the same release as the zip, so it catches a
   # damaged download, not a replaced release. Origin is checked by the signature below.
   if [ -f "$zip.sha256" ]; then
-    if ! (cd "$work" && shasum -a 256 -c Cubi.zip.sha256 >/dev/null 2>&1); then
+    if [ "$(shasum -a 256 "$zip" | cut -d' ' -f1)" != "$(cut -d' ' -f1 "$zip.sha256")" ]; then
       echo "完整性校驗失敗：Cubi.zip 跟 Cubi.zip.sha256 對不上，沒有安裝" >&2
       exit 1
     fi
@@ -54,9 +53,8 @@ main() {
     exit 1
   fi
 
-  if ! codesign --verify --strict -R="$REQUIREMENT" "$app" 2>"$work/codesign.err"; then
+  if ! codesign --verify --strict -R="$REQUIREMENT" "$app"; then
     echo "簽章不符：這個包不是用 Cubi 的 cubi-dev 憑證簽的。沒有安裝、沒有拿掉 quarantine。" >&2
-    cat "$work/codesign.err" >&2
     echo "解開的檔案留在 ${app}，可以自己檢查。" >&2
     exit 1
   fi
@@ -70,7 +68,13 @@ main() {
   fi
 
   mkdir -p "$HOME/Applications"
-  pkill -x cubi 2>/dev/null || true
+  # Only the installed copy, not a developer's `swift run`. A second instance quits itself when it
+  # sees the first one, so wait for the old one to be gone before launching the new one.
+  pkill -f "$DEST/Contents/MacOS/cubi" 2>/dev/null || true
+  for _ in $(seq 1 25); do
+    pgrep -f "$DEST/Contents/MacOS/cubi" >/dev/null || break
+    sleep 0.2
+  done
   rsync -a --delete "$app/" "$DEST/"
   # Not notarized by Apple, so Gatekeeper would refuse to open it. The signature check above is
   # what we trust instead; this is the step Gatekeeper would otherwise have blocked.

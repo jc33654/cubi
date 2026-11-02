@@ -2,7 +2,7 @@ name: release
 
 on:
   push:
-    tags: ["v*"]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"] # bundle.sh accepts digits and dots only; no -rc tags
 
 permissions:
   contents: read
@@ -14,6 +14,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0 # the tag must be present for bundle.sh to stamp the version
       - run: swift --version
       - run: swift test
 
@@ -40,11 +42,20 @@ jobs:
 
       - run: make icon
       - run: CUBI_SIGN_IDENTITY=cubi-dev make dist
+      # Unpack the zip we are about to publish and check it the way install.sh will: the
+      # requirement (bundle id + certificate hash) is read from install.sh so there is one source.
       - name: Verify the artefact the way install.sh will
         run: |
           set -euo pipefail
-          cd build && shasum -a 256 -c Cubi.zip.sha256
-          codesign --verify --strict -R='identifier "cc.dotdot.cubi" and certificate leaf = H"902124bf301876614e89d5ea26b874c6d0487189"' Cubi.app
+          REQUIREMENT="$(sed -n "s/^REQUIREMENT='\(.*\)'$/\1/p" scripts/install.sh)"
+          [ -n "$REQUIREMENT" ]
+          ditto -x -k build/Cubi.zip "$RUNNER_TEMP/unpacked"
+          codesign --verify --strict -R="$REQUIREMENT" "$RUNNER_TEMP/unpacked/Cubi.app"
+          VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$RUNNER_TEMP/unpacked/Cubi.app/Contents/Info.plist")"
+          if [ "$VERSION" != "${GITHUB_REF_NAME#v}" ]; then
+            echo "bundle says $VERSION but the tag is $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
 
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:

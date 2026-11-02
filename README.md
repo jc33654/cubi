@@ -145,10 +145,10 @@ Claude Code 是內建 plugin。其他 agent 可以用一份 manifest 接進來�
 ## 發版
 
 1. 一次性：把 `cubi-dev` 憑證放進 GitHub secrets。Keychain Access → 我的憑證 → `cubi-dev` → 右鍵「輸出」存成 `.p12`（設一個密碼），然後 `base64 -i cubi-dev.p12 | pbcopy`。到 repo Settings → Secrets and variables → Actions 新增 `CUBI_CERT_P12`（貼上）與 `CUBI_CERT_PASSWORD`。匯出後把 `.p12` 刪掉。
-2. 每次：`git tag v0.2.0 && git push origin v0.2.0`。`.github/workflows/release.yml` 會在 macOS runner 跑測試、用這張憑證簽、把 `Cubi.zip` 與 `Cubi.zip.sha256` 掛到 Release，release notes 由 commit 自動生成。版本號來自 tag（`bundle.sh` 只在剛好在 tag 上時覆寫 `CFBundleShortVersionString`）。
+2. 每次：`git tag v0.2.0 && git push origin v0.2.0`。`.github/workflows/release.yml` 會在 macOS runner 跑測試、用這張憑證簽、把 `Cubi.zip` 與 `Cubi.zip.sha256` 掛到 Release，release notes 由 commit 自動生成。版本號來自 tag（`bundle.sh` 只在剛好在 tag 上時覆寫 `CFBundleShortVersionString`）；打 tag 前先把 `Packaging/Info.plist` 與 `CubiInfo.version` 改成同一個號碼，`make bundle` 會檢查兩者一致。只接受 `vX.Y.Z`，`-rc` 之類的 tag 不會觸發。
 3. 備援：本機 `make dist`，把 `build/Cubi.zip` 與 `.sha256` 手動上傳到 Release。
 
-**把私鑰放 GitHub secrets 的風險**：有 repo 寫入權或能跑 Actions 的人可能拿到它；拿到只能簽出「在已裝 Cubi 的機器上繼承 Automation 授權」的假 app，Gatekeeper 仍不信任那張憑證。fork 來的 PR 讀不到 secrets，`ci.yml` 也不引用 secrets。懷疑外洩：`make cert` 重建憑證、改 `scripts/install.sh` 裡的憑證 hash、換 secrets、發新版；使用者更新後要重新授權一次 Automation。
+**把私鑰放 GitHub secrets 的風險**：有 repo 寫入權或能跑 Actions 的人可能拿到它；拿到只能簽出「在已裝 Cubi 的機器上繼承 Automation 授權」的假 app，Gatekeeper 仍不信任那張憑證。fork 來的 PR 讀不到 secrets，`ci.yml` 也不引用 secrets。懷疑外洩或換憑證的順序：`make cert` 重建憑證、換 secrets、改 `scripts/install.sh` 裡的 `REQUIREMENT`（`release.yml` 從這行讀，只有這一處）、**先打 tag 把新版發成功，再 push 改了 hash 的 `install.sh`**。反過來會有一段空窗：`main` 上的腳本要求新憑證，Releases 上的 zip 還是舊憑證簽的，所有安裝都會「簽章不符」。使用者更新後要重新授權一次 Automation。
 
 `ci.yml` 在 push `main` 與 PR 時跑 `swift build`、`swift test`、`make bundle`（沒憑證走 ad-hoc，仍會跑本機路徑守門）。
 

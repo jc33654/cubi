@@ -37,6 +37,14 @@ if ! [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
   echo "error: CFBundleShortVersionString '$VERSION' is not digits and dots" >&2
   exit 1
 fi
+# The bundle's Info.plist is the version that counts; CubiInfo.version only serves `swift run`.
+# Keep the two sources in step so they never disagree about what is checked in.
+PLIST_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Packaging/Info.plist)"
+CODE_VERSION="$(sed -n 's/.*public static let version = "\([^"]*\)".*/\1/p' Sources/CubiKit/CubiKit.swift)"
+if [ "$PLIST_VERSION" != "$CODE_VERSION" ]; then
+  echo "error: Packaging/Info.plist says $PLIST_VERSION but CubiInfo.version is $CODE_VERSION; bump both" >&2
+  exit 1
+fi
 
 # SwiftPM resource bundle (index.html, fixtures…). Bundle.module looks next to the executable's
 # bundle first, so copying it into Contents/Resources makes `swift run` and the .app agree.
@@ -66,7 +74,7 @@ codesign --verify --strict "$APP"
 # Gate: no path from the build machine may survive into the bundle. "/Users/me" is the sample
 # data IconRenderer draws in --render-island previews, not a real home.
 for bin in "$APP/Contents/MacOS/cubi" "$APP/Contents/MacOS/cubi-hook"; do
-  if leaked="$(grep -a -o '/Users/[^/"]*' "$bin" | grep -v -x '/Users/me' | sort -u)" && [ -n "$leaked" ]; then
+  if leaked="$(grep -a -o '/Users/[^/"[:cntrl:]]*' "$bin" | grep -v -x '/Users/me' | sort -u)" && [ -n "$leaked" ]; then
     echo "error: $bin still contains local paths:" >&2
     echo "$leaked" >&2
     exit 1

@@ -45,3 +45,10 @@ import Foundation
     #expect(back == looks)
     #expect(back.recent == ["b", "a"])
 }
+
+@Test func pruneStillReachesTheCapWhenRecentIsOutOfStep() throws {
+    let json = #"{"bySession":{"a":{"shape":"circle"},"b":{"shape":"hexagon"},"c":{"colorIndex":1}},"recent":["c"]}"#
+    var looks = try JSONDecoder().decode(BotLooks.self, from: Data(json.utf8))
+    looks.prune(keeping: ["a"], limit: 1)
+    #expect(looks.bySession.keys.sorted() == ["a"])
+}

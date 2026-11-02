@@ -44,10 +44,14 @@ extension SessionCoordinator {
             bots.append(bot)
         }
         if let demo = existing["demo"] { bots.append(demo) }
-        if state.draggingBot != nil {
-            // Mid-drag the island's order is the truth; the store catches up when the robot is dropped.
-            let rank = Dictionary(state.bots.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { a, _ in a })
-            bots.sort { (rank[$0.id] ?? Int.max) < (rank[$1.id] ?? Int.max) }
+        if let dragging = state.draggingBot {
+            if bots.contains(where: { $0.id == dragging }) {
+                // Mid-drag the island's order is the truth; the store catches up when the robot is dropped.
+                let shown = state.bots.map(\.id)
+                bots = SessionStore.sorted(bots.map(\.id), by: shown).compactMap { id in bots.first { $0.id == id } }
+            } else {
+                state.cancelDrag()   // the robot went away under the pointer; onEnded never fires
+            }
         }
         if bots.map(\.id) != state.bots.map(\.id) { state.bots = bots }
         state.pruneLooks(keeping: Set(bots.map(\.id)))
@@ -87,8 +91,14 @@ extension SessionCoordinator {
     }
 
     func persistSets() {
-        UserDefaults.standard.set(Array(store.dismissed), forKey: Self.dismissedKey)
-        UserDefaults.standard.set(Array(store.manuallyRested), forKey: Self.restedKey)
+        if store.dismissed != persistedDismissed {
+            persistedDismissed = store.dismissed
+            UserDefaults.standard.set(Array(store.dismissed), forKey: Self.dismissedKey)
+        }
+        if store.manuallyRested != persistedRested {
+            persistedRested = store.manuallyRested
+            UserDefaults.standard.set(Array(store.manuallyRested), forKey: Self.restedKey)
+        }
         if store.preferredOrder != persistedOrder {
             persistedOrder = store.preferredOrder
             UserDefaults.standard.set(store.preferredOrder, forKey: Self.orderKey)

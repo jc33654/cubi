@@ -11,7 +11,7 @@ public struct SessionStore: Sendable {
     public internal(set) var preferredOrder: [String] = []
     /// Account-wide rate limits, merged across sessions: every status line reports what its own
     /// session last heard from the API, so idle sessions carry stale or missing windows.
-    public private(set) var usage: StatuslineInfo?
+    public internal(set) var usage: StatuslineInfo?
 
     public static let happyDuration = 1.5
     public static let endedLinger = 3.0
@@ -28,31 +28,6 @@ public struct SessionStore: Sendable {
     public init() {}
 
     public var ordered: [SessionInfo] { order.compactMap { sessions[$0] } }
-
-    /// Restore a reading saved by a previous run.
-    public mutating func seedUsage(_ info: StatuslineInfo) { usage = info }
-
-    public static func windowsChanged(from old: StatuslineInfo?, to new: StatuslineInfo) -> Bool {
-        new.fiveHour != old?.fiveHour || new.sevenDay != old?.sevenDay
-    }
-
-    /// A window from the most recently active session replaces what we have; from any other
-    /// session it only fills a blank. Returns the merged reading when a window or the cost changed
-    /// (`windowsChanged(from:to:)` tells the two apart).
-    private mutating func mergeUsage(_ info: StatuslineInfo, from id: String) -> StatuslineInfo? {
-        let newest = sessions.values.map(\.lastEventAt).max()
-        let fresh = sessions[id].map { $0.lastEventAt >= (newest ?? 0) } ?? false
-        func pick(_ new: UsageWindow?, over old: UsageWindow?) -> UsageWindow? {
-            guard let new else { return old }
-            return fresh || old == nil ? new : old
-        }
-        var merged = info
-        merged.fiveHour = pick(info.fiveHour, over: usage?.fiveHour)
-        merged.sevenDay = pick(info.sevenDay, over: usage?.sevenDay)
-        guard Self.windowsChanged(from: usage, to: merged) || merged.costUSD != usage?.costUSD else { return nil }
-        usage = merged
-        return merged
-    }
 
     // MARK: - Reduce
 

@@ -67,6 +67,11 @@ public struct BotLooks: Sendable, Equatable, Codable {
             remove(id)
             excess -= 1
         }
+        // A saved `recent` that lost track of some keys must not leave the cap unreachable.
+        for id in bySession.keys.sorted() where excess > 0 && !live.contains(id) {
+            remove(id)
+            excess -= 1
+        }
     }
 
     private mutating func store(_ look: BotLook, for sessionID: String) {

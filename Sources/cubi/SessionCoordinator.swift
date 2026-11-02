@@ -62,6 +62,8 @@ final class SessionCoordinator {
     private static let usageKey = "lastUsage"
 
     /// What was last written to UserDefaults, so sync() only writes on change.
+    var persistedDismissed: Set<String>?
+    var persistedRested: Set<String>?
     var persistedOrder: [String]?
     var persistedLooks: BotLooks?
 

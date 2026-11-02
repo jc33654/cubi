@@ -2,7 +2,8 @@
 // arrangement across sessions coming and going (and across launches, via the app's defaults).
 
 extension SessionStore {
-    public static let preferredOrderLimit = 200
+    /// Same cap as the looks: how many sessions the app remembers things about.
+    public static let preferredOrderLimit = BotLooks.limit
 
     /// Restore an arrangement saved by a previous run. Sessions already live are rearranged to it.
     public mutating func seedOrder(_ ids: [String]) {
@@ -21,14 +22,13 @@ extension SessionStore {
         preferredOrder = Array((live + remembered).prefix(Self.preferredOrderLimit))
     }
 
-    /// A session just appeared at the end of `order`: if the user had placed it, move it back there.
+    /// A session just appeared at the end of `order`: if the user had placed it, this moves it back.
     mutating func placeByPreference(_ id: String) {
-        guard preferredOrder.contains(id) else { return }
         order = Self.sorted(order, by: preferredOrder)
     }
 
-    /// Stable: arranged sessions in their arranged order, then everything else in its current order.
-    private static func sorted(_ ids: [String], by preferred: [String]) -> [String] {
+    /// Stable: arranged ids in their arranged order, then everything else in its current order.
+    public static func sorted(_ ids: [String], by preferred: [String]) -> [String] {
         let rank = Dictionary(preferred.enumerated().map { ($1, $0) }, uniquingKeysWith: { a, _ in a })
         return ids.enumerated().sorted { a, b in
             let ra = rank[a.element] ?? Int.max, rb = rank[b.element] ?? Int.max

@@ -1,5 +1,4 @@
 import Foundation
-import SwiftUI
 import Observation
 import CubiKit
 
@@ -61,7 +60,9 @@ final class BotRuntime: Identifiable {
 @MainActor
 @Observable
 final class IslandState {
-    var mode: IslandMode = .hidden
+    var mode: IslandMode = .hidden {
+        didSet { if mode == .hidden { cancelDrag() } }
+    }
     var geometry: NotchGeometry
     var bots: [BotRuntime] = []
     /// True while something waits for the user (an approval, a question): the island does not auto-close.
@@ -88,36 +89,47 @@ final class IslandState {
 
     // MARK: - Dragging a robot along the wing to rearrange
 
-    /// The robot being dragged and the pointer's x in the wing's coordinate space.
+    /// The robot being dragged, and where its centre is in the wing's coordinate space.
     var draggingBot: String?
-    var dragX: CGFloat = 0
+    var dragCenterX: CGFloat = 0
+    /// Where inside the robot it was grabbed, so it does not jump to the pointer.
+    private var grabOffset: CGFloat = 0
     /// The user dropped a robot: the new order of every session (resting ones included, demo excluded).
     @ObservationIgnored var onReorder: ([String]) -> Void = { _ in }
 
+    /// Gap between robots on the wing; the drop slot maths relies on the HStack using the same.
+    static let botSpacing: CGFloat = 6
     /// One robot plus the gap after it.
-    var wingSlot: CGFloat { botSize + 6 }
+    var wingSlot: CGFloat { botSize + Self.botSpacing }
     func slotCenter(_ index: Int) -> CGFloat { CGFloat(index) * wingSlot + botSize / 2 }
 
-    /// Moves the dragged robot to the slot under the pointer, live; resting robots keep their places.
-    func dragBot(_ id: String, x: CGFloat) {
-        draggingBot = id
-        dragX = x
+    /// Moves the dragged robot to the slot under its centre, live; resting robots keep their places.
+    /// `start` is where the drag began, `x` where the pointer is now (both in the wing's space).
+    func dragBot(_ id: String, from start: CGFloat, to x: CGFloat) {
         let active = activeBots
-        guard let from = active.firstIndex(where: { $0.id == id }) else { return }
-        let to = max(0, min(active.count - 1, Int(x / wingSlot)))
+        guard let from = active.firstIndex(where: { $0.id == id }) else { return cancelDrag() }
+        if draggingBot != id {
+            draggingBot = id
+            grabOffset = start - slotCenter(from)
+        }
+        dragCenterX = x - grabOffset
+        let to = max(0, min(active.count - 1, Int(dragCenterX / wingSlot)))
         guard to != from else { return }
         var reordered = active
         reordered.insert(reordered.remove(at: from), at: to)
         var next = reordered.makeIterator()
-        let bots = self.bots.map { $0.resting ? $0 : next.next()! }
-        withAnimation(.spring(duration: 0.2)) { self.bots = bots }
+        bots = bots.map { $0.resting ? $0 : next.next()! }
     }
 
+    /// Dropped: the arrangement on the island becomes the store's.
     func endDrag() {
         guard draggingBot != nil else { return }
         draggingBot = nil
         onReorder(bots.map(\.id).filter { $0 != "demo" })
     }
+
+    /// The drag can end without a drop (the robot vanished, the island hid): keep what was arranged.
+    func cancelDrag() { endDrag() }
     /// A look changed: the coordinator rebuilds anything that carries the colour (open cards).
     @ObservationIgnored var onLooksChanged: () -> Void = {}
     /// Session whose last diff is open in the expanded view.
@@ -234,7 +246,7 @@ final class IslandState {
     static let restingPillWidth: CGFloat = 34
     var leftWingWidth: CGFloat {
         let pill = restingBots.isEmpty ? 0 : Self.restingPillWidth + 6
-        return max(Self.minLeftWingWidth, 16 + CGFloat(activeBots.count) * (botSize + 6) + pill)
+        return max(Self.minLeftWingWidth, 16 + CGFloat(activeBots.count) * wingSlot + pill)
     }
     /// The wings differ in width but the notch must stay in the middle: shift the island (compact)
     /// or the wing row (expanded) by half the difference, otherwise the robots end up under the notch.

@@ -68,7 +68,7 @@ struct IslandContent: View {
     private func wings(height: CGFloat) -> some View {
         let botSize = state.botSize
         return HStack(spacing: 0) {
-            HStack(spacing: 6) {
+            HStack(spacing: IslandState.botSpacing) {
                 ForEach(Array(state.activeBots.enumerated()), id: \.element.id) { index, bot in
                     let dragging = state.draggingBot == bot.id
                     BotView(bot: bot, paused: state.mode == .hidden)
@@ -79,12 +79,13 @@ struct IslandContent: View {
                         .help(bot.name)
                         // Rearranging: the robot follows the pointer, the others make room live.
                         // A drag that starts on a robot never moves the island (child gesture wins).
-                        .offset(x: dragging ? state.dragX - state.slotCenter(index) : 0)
+                        .offset(x: dragging ? state.dragCenterX - state.slotCenter(index) : 0)
                         .zIndex(dragging ? 1 : 0)
                         .gesture(DragGesture(minimumDistance: 4, coordinateSpace: .named("wing"))
-                            .onChanged { state.dragBot(bot.id, x: $0.location.x) }
+                            .onChanged { state.dragBot(bot.id, from: $0.startLocation.x, to: $0.location.x) }
                             .onEnded { _ in state.endDrag() })
                 }
+                .animation(.spring(duration: 0.2), value: state.bots.map(\.id))
                 if !state.restingBots.isEmpty {
                     Text("💤 \(state.restingBots.count)")
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))

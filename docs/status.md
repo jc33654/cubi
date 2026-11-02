@@ -10,7 +10,7 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 | 事件模型 CubiKit | canonical events、`SessionStore` reducer、回覆編碼（allow / always / deny / 問題答案）、`EditSummary` diff、`TranscriptWatcher`、安裝器（備份、diff、CAS 寫入、依 `--agent <id> ` 辨識自己的 hooks） | 單元測試 |
 | 島（瀏海） | hidden / compact / expanded；機器人列隨數量變寬並以瀏海為中心；expanded 高度隨內容、有資訊面板時 860 寬；右鍵 app 選單 | 真機驗證 |
 | 浮動視窗 | 拖離瀏海即浮動，可放任何螢幕；位置記島頂中心；拔螢幕夾回；拖回頂端 dock；選單切換 | 真機驗證（外接螢幕） |
-| 機器人 | 8 種狀態（含 tired）；每 session 一色；右鍵換形狀（方塊／圓／三角／六角）與顏色，只記這個 session | 離線渲染驗證；右鍵待 Jade 親手試 |
+| 機器人 | 8 種狀態（含 tired）；每 session 一色；右鍵換形狀（方塊／圓／三角／六角）與顏色，記住（UserDefaults `sessionLooks`，200 上限）；翼上拖曳排順序，清單同序，記住（`sessionOrder`） | 單元測試（順序、looks 淘汰、JSON 往返）；載回路徑真機 log；拖曳與重啟後外觀待 Jade 親手試 |
 | 審批／問題卡片 | 拒絕／在終端處理／總是允許／允許；AskUserQuestion 選項卡；終端先答或 Esc 自動撤卡；只認同一 tool call 的事件 | 真機驗證 |
 | Session 資訊面板 | 專案、模型／effort／版本、開始時間（transcript 建立時間）、使用時間、回合與工具呼叫數、花費、變更行數、context、終端、跳到終端 | 離線渲染驗證；點列待 Jade 親手試 |
 | 工作中／晚安／放生 | 12 小時沒事件自動進晚安區；右鍵「去睡覺」「起床上班」「放生」；放生後只有送訊息、被問、SessionStart 會回來；兩個集合存 UserDefaults | 放生與拉回真機以 fixture 重播驗證；右鍵待 Jade 親手試 |
@@ -30,14 +30,14 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 2. 拖島離開瀏海成浮動視窗、拖回頂端 dock。
 3. 點清單列開資訊面板、「跳到終端」、✕ 關閉；看面板哪些列有出現（判斷 2.1.312 實際送了哪些 `cost.*` 欄位）。
 4. 右鍵「去睡覺」→ 翼上消失、出現「💤 1」、清單在晚安區；「放生」→ 消失；在那個 session 送一句話 → 回來。
-5. 右鍵「開新 session…」：對話框選專案、填第一句話、開始 → 終端開新分頁、島上出現新機器人；機器人右鍵「接續上次對話」。
-6. 在另一台沒裝過的機器跑 `curl -fsSL https://raw.githubusercontent.com/jc33654/cubi/main/scripts/install.sh | bash`，看 Automation 授權與機器人是否出現（v0.1.0 已發，secrets 已設）。
+5. 翼上拖一隻機器人換順序 → 清單同序；重啟 Cubi 順序還在；拖機器人時島不會變浮動；右鍵改形狀／顏色後重啟還在。
+6. 右鍵「開新 session…」：對話框選專案、填第一句話、開始 → 終端開新分頁、島上出現新機器人；機器人右鍵「接續上次對話」。
+7. 在另一台沒裝過的機器跑 `curl -fsSL https://raw.githubusercontent.com/jc33654/cubi/main/scripts/install.sh | bash`，看 Automation 授權與機器人是否出現（v0.1.0 已發，secrets 已設）。
 
 ## 已知限制
 
 - `cost.total_duration_ms`、`total_api_duration_ms`、`total_lines_*`、`version` 依官方文件解，實錄沒有 statusline 樣本。
 - 回合數、工具呼叫數只算 Cubi 看到的；Cubi 重啟歸零。
-- 形狀／顏色純記憶體：session 消失或 Cubi 重啟就忘（決策）。
 - hooks 環境沒有 `TERM_PROGRAM`／tty 的 session（來源不明，log 曾出現）只能用名稱／cwd 猜終端，猜不到就不動。
 - 離線渲染（`--render-island`）畫不出 `ScrollView` 內容，清單只能真機看。
 - 從瀏海拖出的瞬間島直接出現在滑鼠下方，沒有飛出動畫。

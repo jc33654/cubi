@@ -5,7 +5,7 @@ import CubiKit
 /// them to the store, holds blocking requests until the user decides, and mirrors sessions onto robots.
 @MainActor
 final class SessionCoordinator {
-    private(set) var store = SessionStore()
+    var store = SessionStore()
     let island: IslandController
     let notifier = Notifier()
     let ignored = IgnoredDirectories()

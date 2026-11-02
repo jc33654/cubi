@@ -8,7 +8,10 @@ let arguments = CommandLine.arguments
 signal(SIGPIPE, SIG_IGN)
 
 if arguments.contains("--version") {
-    print("cubi \(CubiInfo.version)")
+    // The bundle's Info.plist carries the released version (set from the git tag by scripts/bundle.sh);
+    // `swift run` has no bundle and falls back to the constant.
+    let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? CubiInfo.version
+    print("cubi \(version)")
     exit(0)
 }
 

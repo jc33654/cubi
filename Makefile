@@ -1,4 +1,4 @@
-.PHONY: build release test clean bundle icon install run cert hook-test
+.PHONY: build release test clean bundle dist icon install run cert hook-test
 
 APP_DEST := $(HOME)/Applications/Cubi.app
 IDENTITY ?= cubi-dev
@@ -39,6 +39,11 @@ icon: release
 
 bundle:
 	CUBI_SIGN_IDENTITY=$(IDENTITY) scripts/bundle.sh
+
+# Release artefacts with fixed names: install.sh fetches releases/latest/download/Cubi.zip.
+dist: bundle
+	cd build && ditto -c -k --keepParent Cubi.app Cubi.zip && shasum -a 256 Cubi.zip > Cubi.zip.sha256
+	@echo "wrote build/Cubi.zip and build/Cubi.zip.sha256"
 
 install: bundle
 	mkdir -p $(HOME)/Applications

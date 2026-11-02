@@ -54,19 +54,23 @@ enum SessionLauncher {
         }
     }
 
-    /// A new tab in the front window (a new window when there is none), started in the directory
-    /// with the command as its first input.
+    /// A new tab in the front window (a new window when there is none), started in the directory;
+    /// the command is then typed in with `input text`. Not `initial input`: Ghostty 1.3.1 mangles
+    /// non-ASCII there (UTF-8 bytes re-encoded as Latin-1, so 知識庫 arrives as ç¥èåº«), while
+    /// `input text` passes it through intact.
     static func ghosttyScript(directory: String, command: String) -> String {
         """
         tell application "Ghostty"
           set cfg to new surface configuration
           set initial working directory of cfg to \(TerminalFocus.quote(directory))
-          set initial input of cfg to (\(TerminalFocus.quote(command)) & linefeed)
           if (count of windows) > 0 then
-            new tab in front window with configuration cfg
+            set t to new tab in front window with configuration cfg
+            set target to focused terminal of t
           else
-            new window with configuration cfg
+            set w to new window with configuration cfg
+            set target to focused terminal of selected tab of w
           end if
+          input text (\(TerminalFocus.quote(command)) & linefeed) to target
           activate
           return "ok"
         end tell

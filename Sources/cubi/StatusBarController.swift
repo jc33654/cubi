@@ -18,12 +18,15 @@ final class StatusBarController: NSObject, NSMenuDelegate {
 
     private let openSettings: () -> Void
     private let openToolkit: () -> Void
+    private let openNewSession: () -> Void
 
-    init(island: IslandController, notifier: Notifier, openSettings: @escaping () -> Void, openToolkit: @escaping () -> Void) {
+    init(island: IslandController, notifier: Notifier, openSettings: @escaping () -> Void, openToolkit: @escaping () -> Void,
+         openNewSession: @escaping () -> Void) {
         self.island = island
         self.notifier = notifier
         self.openSettings = openSettings
         self.openToolkit = openToolkit
+        self.openNewSession = openNewSession
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         menu = NSMenu()
         super.init()
@@ -42,6 +45,9 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         let show = NSMenuItem(title: "顯示 / 收起", action: #selector(toggleIsland), keyEquivalent: "")
         show.target = self
         menu.addItem(show)
+        let newSession = NSMenuItem(title: "開新 session…", action: #selector(showNewSession), keyEquivalent: "n")
+        newSession.target = self
+        menu.addItem(newSession)
         pinItem.target = self
         pinItem.state = island.state.pinned ? .on : .off
         menu.addItem(pinItem)
@@ -103,6 +109,7 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     }
 
     @objc private func showSettings() { openSettings() }
+    @objc private func showNewSession() { openNewSession() }
     @objc private func showToolkit() { openToolkit() }
 
     @objc private func toggleSounds() {

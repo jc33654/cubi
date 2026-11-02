@@ -2,7 +2,7 @@ import SwiftUI
 import CubiKit
 
 /// Right-click menu for one robot: shape and colour (remembered for this session only), then
-/// 去睡覺 / 起床上班 and 放生.
+/// 去睡覺 / 起床上班 and 放生, then opening another session in the same project.
 struct BotContextMenu: View {
     let bot: BotRuntime
     let state: IslandState
@@ -38,6 +38,9 @@ struct BotContextMenu: View {
             Button("去睡覺") { state.onSessionAction(.rest, bot.id) }
         }
         Button("放生") { state.onSessionAction(.dismiss, bot.id) }
+        Divider()
+        Button("在這個專案再開一個…") { state.onNewSession(.dialog(fromSession: bot.id)) }
+        Button("接續上次對話") { state.onNewSession(.launch(fromSession: bot.id, continueLast: true)) }
     }
 
     private static let swatches: [NSImage] = SessionPalette.colors.map { makeSwatch($0) }

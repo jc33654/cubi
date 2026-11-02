@@ -13,6 +13,7 @@ struct SessionDetailView: View {
                 Text(bot.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
                 Text(bot.resting ? "晚安" : bot.stateLabel).font(.system(size: 10, weight: .medium, design: .monospaced)).foregroundStyle(.white.opacity(0.5))
                 Spacer()
+                CardButton(title: "再開一個", role: .quiet) { state.onNewSession(.dialog(fromSession: bot.id)) }
                 CardButton(title: bot.resting ? "起床上班" : "去睡覺", role: .quiet) { state.onSessionAction(bot.resting ? .wake : .rest, bot.id) }
                 CardButton(title: "放生", role: .quiet) { state.onSessionAction(.dismiss, bot.id) }
                 CardButton(title: "跳到終端", role: .secondary) { state.onFocus(bot.id) }

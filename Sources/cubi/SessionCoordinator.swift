@@ -39,6 +39,7 @@ final class SessionCoordinator {
             }
             sync()
         }
+        island.state.onNewSession = { [weak self] intent in self?.newSession(intent) }
         island.state.onFocus = { [weak self] id in
             guard let self, let info = self.store.sessions[id] else { return }
             // A look at the terminal opens the robot's eyes but does not pull it out of the 晚安 zone.
@@ -53,6 +54,26 @@ final class SessionCoordinator {
     }
 
     private static let usageKey = "lastUsage"
+
+    /// Set by the app once the dialog exists.
+    var newSessionWindow: NewSessionWindow?
+    let recentProjects = RecentProjects()
+
+    func newSession(_ intent: IslandState.NewSessionIntent) {
+        switch intent {
+        case .dialog(let id):
+            let info = id.flatMap { store.sessions[$0] }
+            newSessionWindow?.show(directory: info.flatMap { $0.stats.projectDir ?? $0.cwd }, terminal: info.flatMap(TerminalKind.forSession))
+        case .launch(let id, let continueLast):
+            guard let info = store.sessions[id], let directory = info.stats.projectDir ?? info.cwd else {
+                CubiLog.write("launch: session \(id.prefix(8)) has no directory")
+                return
+            }
+            recentProjects.note(directory)
+            SessionLauncher.launch(LaunchRequest(directory: directory, prompt: nil, continueLast: continueLast,
+                                                 terminal: TerminalKind.forSession(info) ?? .automatic))
+        }
+    }
 
     func start() {
         RelayInstaller.ensureInstalled()

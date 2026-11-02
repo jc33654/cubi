@@ -34,9 +34,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let settings = SettingsWindow(island: island.state, notifier: coordinator.notifier, ignored: coordinator.ignored,
                                       registry: coordinator.registry, toolkit: toolkit)
         self.settings = settings
+        let newSession = NewSessionWindow(recent: coordinator.recentProjects)
+        coordinator.newSessionWindow = newSession
         let statusBar = StatusBarController(island: island, notifier: coordinator.notifier,
                                             openSettings: { [settings] in settings.show() },
-                                            openToolkit: { [toolkit] in toolkit.show() })
+                                            openToolkit: { [toolkit] in toolkit.show() },
+                                            openNewSession: { [newSession] in newSession.show() })
         self.statusBar = statusBar
         island.contextMenu = statusBar.menu
         coordinator.start()

@@ -73,6 +73,21 @@ if let i = arguments.firstIndex(where: { ["--hooks-status", "--hooks-plan", "--i
     }
 }
 
+// Start a Claude Code session from the terminal the way the island does (also how it is tested):
+//   --new-session <dir> [--continue] [--prompt <text>] [--terminal ghostty|terminal]
+if let i = arguments.firstIndex(of: "--new-session"), i + 1 < arguments.count {
+    let directory = arguments[i + 1]
+    let prompt = arguments.firstIndex(of: "--prompt").flatMap { $0 + 1 < arguments.count ? arguments[$0 + 1] : nil }
+    let terminal = arguments.firstIndex(of: "--terminal").flatMap { $0 + 1 < arguments.count ? TerminalKind(rawValue: arguments[$0 + 1]) : nil }
+    MainActor.assumeIsolated {
+        SessionLauncher.launch(LaunchRequest(directory: directory, prompt: prompt, continueLast: arguments.contains("--continue"),
+                                             terminal: terminal ?? .automatic))
+    }
+    // The launcher runs osascript asynchronously; give it the same time budget as its watchdog.
+    RunLoop.main.run(until: Date(timeIntervalSinceNow: 6))
+    exit(0)
+}
+
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate

@@ -56,7 +56,7 @@ enum TerminalFocus {
 
     /// Runs the script; true when it printed "ok". Otherwise activates `fallbackBundle` when given.
     @discardableResult
-    private static func run(_ source: String, label: String, fallbackBundle: String?) async -> Bool {
+    static func run(_ source: String, label: String, fallbackBundle: String?) async -> Bool {
         let result = await Task.detached(priority: .userInitiated) { () -> (String, String) in
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
@@ -77,7 +77,7 @@ enum TerminalFocus {
         return ok
     }
 
-    private static func quote(_ s: String) -> String {
+    static func quote(_ s: String) -> String {
         "\"" + s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
     }
 

@@ -1,4 +1,5 @@
 import Testing
+import Foundation
 @testable import CubiKit
 
 @Test func looksDefaultToNothingAndDropDefaults() {
@@ -11,6 +12,7 @@ import Testing
     #expect(looks.look(for: "a") == BotLook(colorIndex: 3))
     looks.setColorIndex(nil, for: "a")
     #expect(looks.bySession.isEmpty)   // back to default: no entry kept
+    #expect(looks.recent.isEmpty)
 }
 
 @Test func colourIndexIsClampedToThePalette() {
@@ -21,12 +23,25 @@ import Testing
     #expect(looks.look(for: "a").colorIndex == 0)
 }
 
-@Test func pruneKeepsOnlyLiveSessions() {
+@Test func pruneOnlyEvictsOverTheLimitAndNeverLiveSessions() {
     var looks = BotLooks()
-    looks.setShape(.triangle, for: "a")
-    looks.setShape(.hexagon, for: "b")
-    looks.prune(keeping: ["b", "c"])
-    #expect(looks.bySession.keys.sorted() == ["b"])
-    looks.remove("b")
-    #expect(looks.bySession.isEmpty)
+    looks.setShape(.triangle, for: "old")
+    looks.setShape(.hexagon, for: "mid")
+    looks.setShape(.circle, for: "new")
+    looks.prune(keeping: [], limit: 3)
+    #expect(looks.bySession.count == 3)                    // under the limit: nothing goes
+    looks.prune(keeping: ["old"], limit: 2)
+    #expect(looks.bySession.keys.sorted() == ["new", "old"])  // "mid" was the oldest non-live choice
+    looks.prune(keeping: ["old", "new"], limit: 1)
+    #expect(looks.bySession.keys.sorted() == ["new", "old"])  // both live: kept even over the limit
+}
+
+@Test func looksRoundTripThroughJSON() throws {
+    var looks = BotLooks()
+    looks.setShape(.hexagon, for: "a")
+    looks.setColorIndex(2, for: "b")
+    let data = try JSONEncoder().encode(looks)
+    let back = try JSONDecoder().decode(BotLooks.self, from: data)
+    #expect(back == looks)
+    #expect(back.recent == ["b", "a"])
 }

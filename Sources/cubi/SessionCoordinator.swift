@@ -55,6 +55,10 @@ final class SessionCoordinator {
 
     private static let usageKey = "lastUsage"
 
+    /// What was last written to UserDefaults, so sync() only writes on change.
+    var persistedOrder: [String]?
+    var persistedLooks: BotLooks?
+
     /// Set by the app once the dialog exists.
     var newSessionWindow: NewSessionWindow?
     let recentProjects = RecentProjects()
@@ -95,9 +99,9 @@ final class SessionCoordinator {
         }
         store.dismissed = Self.loadSet(Self.dismissedKey)
         store.manuallyRested = Self.loadSet(Self.restedKey)
-        if !store.dismissed.isEmpty || !store.manuallyRested.isEmpty {
-            CubiLog.write("restored dismissed=\(store.dismissed.count) rested=\(store.manuallyRested.count)")
-        }
+        store.seedOrder(UserDefaults.standard.stringArray(forKey: Self.orderKey) ?? [])
+        island.state.seedLooks(Self.loadLooks())
+        CubiLog.write("restored dismissed=\(store.dismissed.count) rested=\(store.manuallyRested.count) order=\(store.preferredOrder.count) looks=\(island.state.looks.bySession.count)")
         let server = HookServer(
             handler: { [weak self] envelope, connection in self?.handle(envelope, connection) },
             onClientClosed: { [weak self] connection in self?.clientClosed(connection) })

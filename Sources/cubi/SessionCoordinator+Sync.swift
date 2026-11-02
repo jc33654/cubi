@@ -63,17 +63,36 @@ extension SessionCoordinator {
         }
     }
 
-    // MARK: - 放生 / 去睡覺 survive restarts
+    // MARK: - 放生 / 去睡覺, the arrangement and the looks survive restarts
 
     static let dismissedKey = "dismissedSessions"
     static let restedKey = "restedSessions"
+    static let orderKey = "sessionOrder"
+    static let looksKey = "sessionLooks"
     static func loadSet(_ key: String) -> Set<String> {
         Set(UserDefaults.standard.stringArray(forKey: key) ?? [])
+    }
+
+    static func loadLooks() -> BotLooks {
+        guard let data = UserDefaults.standard.data(forKey: looksKey) else { return BotLooks() }
+        do { return try JSONDecoder().decode(BotLooks.self, from: data) } catch {
+            CubiLog.write("saved looks unreadable, starting empty: \(error)")
+            return BotLooks()
+        }
     }
 
     func persistSets() {
         UserDefaults.standard.set(Array(store.dismissed), forKey: Self.dismissedKey)
         UserDefaults.standard.set(Array(store.manuallyRested), forKey: Self.restedKey)
+        if store.preferredOrder != persistedOrder {
+            persistedOrder = store.preferredOrder
+            UserDefaults.standard.set(store.preferredOrder, forKey: Self.orderKey)
+        }
+        let looks = island.state.looks
+        if looks != persistedLooks, let data = try? JSONEncoder().encode(looks) {
+            persistedLooks = looks
+            UserDefaults.standard.set(data, forKey: Self.looksKey)
+        }
     }
 
     func card(for request: PendingRequest) -> PendingCard {

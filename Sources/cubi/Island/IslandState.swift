@@ -107,10 +107,16 @@ final class IslandState {
         self.pinned = UserDefaults.standard.bool(forKey: Self.pinnedKey)
     }
 
-    // MARK: - Per-session looks (shape / colour the user picked). In memory only: a look lives
-    // exactly as long as Cubi shows the session.
+    // MARK: - Per-session looks (shape / colour the user picked). The coordinator persists them, so
+    // a session keeps its look when it comes back and across launches.
 
     private(set) var looks = BotLooks()
+
+    /// Looks saved by a previous run.
+    func seedLooks(_ saved: BotLooks) {
+        looks = saved
+        for bot in bots { bot.apply(looks.look(for: bot.id)) }
+    }
 
     func setShape(_ shape: BotShape?, for sessionID: String) {
         looks.setShape(shape, for: sessionID)
@@ -122,7 +128,7 @@ final class IslandState {
         looksChanged(sessionID)
     }
 
-    /// Sessions that are gone (with or without a SessionEnd) take their look with them.
+    /// Only over the cap: looks of sessions that are not live go, oldest choice first.
     func pruneLooks(keeping live: Set<String>) { looks.prune(keeping: live) }
 
     private func looksChanged(_ sessionID: String) {

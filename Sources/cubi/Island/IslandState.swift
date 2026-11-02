@@ -76,9 +76,9 @@ final class IslandState {
     @ObservationIgnored var onSessionAction: (SessionAction, String) -> Void = { _, _ in }
     /// Something inside the island (the 💤 pill) asks to open the full view; the controller owns mode changes.
     @ObservationIgnored var onExpand: () -> Void = {}
-    /// Start a new Claude Code session: open the dialog (prefilled from a session when given), or
-    /// launch straight away in that session's project and terminal.
-    enum NewSessionIntent { case dialog(fromSession: String?), launch(fromSession: String, continueLast: Bool) }
+    /// Start a Claude Code session: open the dialog (prefilled from a session when given), or
+    /// reopen that very session (`claude --resume <id>`) in its project and terminal.
+    enum NewSessionIntent { case dialog(fromSession: String?), resume(session: String) }
     @ObservationIgnored var onNewSession: (NewSessionIntent) -> Void = { _ in }
 
     /// 工作中: on the wing. 晚安: only in the list, counted on the wing.

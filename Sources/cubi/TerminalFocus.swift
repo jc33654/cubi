@@ -13,21 +13,30 @@ enum TerminalFocus {
     static let ghosttyBundle = "com.mitchellh.ghostty"
     static let terminalBundle = "com.apple.Terminal"
 
+    /// The scriptable terminal a session runs in, from the identity its hooks reported.
+    static func kind(for info: SessionInfo) -> TerminalKind? {
+        let program = (info.client.termProgram ?? "").lowercased()
+        let bundle = info.client.bundleID ?? ""
+        if program == "apple_terminal" || bundle == terminalBundle { return .terminal }
+        if program == "ghostty" || bundle == ghosttyBundle { return .ghostty }
+        return nil
+    }
+
     static func focus(_ info: SessionInfo) {
         let client = info.client
-        let program = (client.termProgram ?? "").lowercased()
         let bundle = client.bundleID ?? ""
         let name = info.explicitName ? info.name : ""
         let cwd = info.cwd ?? ""
 
-        if program == "apple_terminal" || bundle == terminalBundle {
+        switch kind(for: info) {
+        case .terminal:
             guard let tty = client.tty else { return activate(bundle: terminalBundle) }
             Task { await run(terminalScript(tty: tty), label: "Terminal \(tty)", fallbackBundle: terminalBundle) }
-        } else if program == "ghostty" || bundle == ghosttyBundle {
+        case .ghostty:
             Task { await run(ghosttyScript(name: name, cwd: cwd, anyClaude: true), label: "Ghostty \(info.name)", fallbackBundle: ghosttyBundle) }
-        } else if !bundle.isEmpty {
+        case nil where !bundle.isEmpty:
             activate(bundle: bundle)
-        } else {
+        case nil:
             CubiLog.write("focus: no terminal identity for session \(info.id.prefix(8)); guessing by name/cwd")
             Task { await guess(name: name, cwd: cwd, label: info.name) }
         }
@@ -36,9 +45,9 @@ enum TerminalFocus {
     /// Without an identity, ask each scriptable terminal that is running; stop at the first match.
     private static func guess(name: String, cwd: String, label: String) async {
         if isRunning(ghosttyBundle),
-           await run(ghosttyScript(name: name, cwd: cwd, anyClaude: false), label: "Ghostty? \(label)", fallbackBundle: nil) { return }
+           await run(ghosttyScript(name: name, cwd: cwd, anyClaude: false), label: "Ghostty? \(label)", fallbackBundle: nil).ok { return }
         if isRunning(terminalBundle), !name.isEmpty,
-           await run(terminalByTitleScript(name: name), label: "Terminal? \(label)", fallbackBundle: nil) { return }
+           await run(terminalByTitleScript(name: name), label: "Terminal? \(label)", fallbackBundle: nil).ok { return }
         CubiLog.write("focus: nothing matched for \(label)")
     }
 
@@ -54,9 +63,10 @@ enum TerminalFocus {
         NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration(), completionHandler: nil)
     }
 
-    /// Runs the script; true when it printed "ok". Otherwise activates `fallbackBundle` when given.
+    /// Runs the script; ok when it printed "ok", else `error` says what it printed instead (its
+    /// stderr when there is one). Not ok also activates `fallbackBundle` when given.
     @discardableResult
-    static func run(_ source: String, label: String, fallbackBundle: String?) async -> Bool {
+    static func run(_ source: String, label: String, fallbackBundle: String?) async -> (ok: Bool, error: String) {
         let result = await Task.detached(priority: .userInitiated) { () -> (String, String) in
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
@@ -74,7 +84,7 @@ enum TerminalFocus {
         CubiLog.write("focus \(label): \(result.0.isEmpty ? "(no output)" : result.0)\(result.1.isEmpty ? "" : " err=\(result.1)")")
         let ok = result.0 == "ok"
         if !ok, let fallbackBundle { activate(bundle: fallbackBundle) }
-        return ok
+        return (ok, result.1.isEmpty ? result.0 : result.1)
     }
 
     static func quote(_ s: String) -> String {

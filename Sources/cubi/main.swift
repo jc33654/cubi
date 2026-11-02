@@ -74,17 +74,38 @@ if let i = arguments.firstIndex(where: { ["--hooks-status", "--hooks-plan", "--i
 }
 
 // Start a Claude Code session from the terminal the way the island does (also how it is tested):
-//   --new-session <dir> [--continue] [--prompt <text>] [--terminal ghostty|terminal]
-if let i = arguments.firstIndex(of: "--new-session"), i + 1 < arguments.count {
-    let directory = arguments[i + 1]
-    let prompt = arguments.firstIndex(of: "--prompt").flatMap { $0 + 1 < arguments.count ? arguments[$0 + 1] : nil }
-    let terminal = arguments.firstIndex(of: "--terminal").flatMap { $0 + 1 < arguments.count ? TerminalKind(rawValue: arguments[$0 + 1]) : nil }
-    MainActor.assumeIsolated {
-        SessionLauncher.launch(LaunchRequest(directory: directory, prompt: prompt, continueLast: arguments.contains("--continue"),
-                                             terminal: terminal ?? .automatic))
+//   --new-session <dir> [--continue | --resume <id>] [--prompt <text>] [--terminal ghostty|terminal]
+if arguments.contains("--new-session") {
+    func value(after flag: String) -> String? {
+        arguments.firstIndex(of: flag).flatMap { $0 + 1 < arguments.count ? arguments[$0 + 1] : nil }
     }
-    // The launcher runs osascript asynchronously; give it the same time budget as its watchdog.
-    RunLoop.main.run(until: Date(timeIntervalSinceNow: 6))
+    func usage() -> Never {
+        FileHandle.standardError.write(Data("usage: cubi --new-session <dir> [--continue | --resume <id>] [--prompt <text>] [--terminal ghostty|terminal]\n".utf8))
+        exit(2)
+    }
+    guard let rawDirectory = value(after: "--new-session") else { usage() }
+    for flag in ["--prompt", "--resume", "--terminal"] where arguments.contains(flag) && value(after: flag) == nil { usage() }
+    let terminal: TerminalKind? = value(after: "--terminal").map { name in
+        guard let kind = TerminalKind(rawValue: name) else { usage() }
+        return kind
+    }
+    // Relative to where the command was typed; the new terminal starts in $HOME and needs the full path.
+    let directory = URL(fileURLWithPath: (rawDirectory as NSString).expandingTildeInPath).standardizedFileURL.path
+    var isDirectory: ObjCBool = false
+    guard FileManager.default.fileExists(atPath: directory, isDirectory: &isDirectory), isDirectory.boolValue else {
+        FileHandle.standardError.write(Data("cubi: not a directory: \(directory)\n".utf8))
+        exit(2)
+    }
+    let resume: SessionLaunch.Resume = value(after: "--resume").map { .session($0) } ?? (arguments.contains("--continue") ? .last : .none)
+    let request = LaunchRequest(directory: directory, prompt: value(after: "--prompt"), resume: resume,
+                                terminal: terminal ?? MainActor.assumeIsolated { TerminalKind.automatic })
+    var outcome: String?? = nil
+    Task { @MainActor in outcome = .some(await SessionLauncher.launch(request)) }
+    while outcome == nil { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05)) }
+    if let failure = outcome!, !failure.isEmpty {
+        FileHandle.standardError.write(Data("cubi: \(failure)\n".utf8))
+        exit(1)
+    }
     exit(0)
 }
 

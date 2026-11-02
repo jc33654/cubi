@@ -91,7 +91,7 @@ open ~/Applications/Cubi.app
 ~/Applications/Cubi.app/Contents/MacOS/cubi --install-hooks         # 印 diff 後寫入（含備份）
 ~/Applications/Cubi.app/Contents/MacOS/cubi --uninstall-hooks
 ~/Applications/Cubi.app/Contents/MacOS/cubi --settings              # 啟動 app 並直接開設定頁
-~/Applications/Cubi.app/Contents/MacOS/cubi --new-session ~/proj [--continue] [--prompt "第一句話"] [--terminal ghostty|terminal]
+~/Applications/Cubi.app/Contents/MacOS/cubi --new-session ~/proj [--continue | --resume <id>] [--prompt "第一句話"] [--terminal ghostty|terminal]
 ```
 
 `--hooks-plan` 與 `--install-hooks` 可加 `--retire-notify`：同時移除舊的 `notify-hook.sh` 桌面通知 hook（設定頁的同一個勾選）。
@@ -115,7 +115,7 @@ CLI 跟 app 一樣以 `$HOME` 為家目錄；要對假目錄測就 `HOME=/tmp/x 
 | 右鍵機器人 → 去睡覺／起床上班／放生 | **工作中**的 session 在瀏海旁那排；**晚安**的不排，只留一個「💤 N」膠囊，展開清單才分區。12 小時沒事件自動進晚安區（有動靜就回來）；手動「去睡覺」要等你再送訊息、或它要問你才回來。「放生」整個消失，同樣在你再送訊息、它要問你、或 session 重新開始時回來（自動壓縮觸發的重新開始不算）。兩者都記得住 Cubi 重啟 |
 | 右鍵 → 保持顯示 | 島不收回，休息時停在 compact |
 | 右鍵 → 開新 session…（⌘N）、清單上方「＋ 開新 session」 | 對話框：選專案目錄（Cubi 開過的 + Claude Code 記錄過的 `~/.claude.json` projects，或「瀏覽…」）、選填第一句話（一開就送出）、「接續上次對話」（`claude --continue`）、終端（自動＝Ghostty 有裝就 Ghostty，否則 Terminal.app）。⌘↩ 開始。Ghostty 開在最前面視窗的新分頁、Terminal.app 開新視窗，指令當第一行輸入打進去，所以 PATH、shell 都是你自己的 |
-| 右鍵機器人 → 在這個專案再開一個…／接續上次對話；資訊面板「再開一個」 | 用那個 session 的專案目錄與終端。「接續上次對話」不開對話框，直接 `claude --continue` |
+| 右鍵機器人 → 在這個專案再開一個…／在新分頁接續這個 session；資訊面板「再開一個」 | 用那個 session 的專案目錄與終端。「接續這個 session」不開對話框，直接 `claude --resume <這個 session 的 id>`（不是 `--continue`：同目錄有兩個 session 時才不會接錯）。終端開不了（Automation 沒允許、Ghostty 太舊）會跳一個警告；Ghostty 失敗會改試 Terminal.app |
 
 機器人狀態：idle、thinking（頭頂三點）、working、waiting（跳動 + ! 或 ?）、error（抖一下）、happy（完成後 1.5 秒）、sleeping（10 分鐘無事件，點一下叫醒）、tired（context ≥ 80%，≥ 90% 描邊紅色脈動）。
 

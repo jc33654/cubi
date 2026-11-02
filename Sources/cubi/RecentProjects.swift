@@ -12,7 +12,7 @@ final class RecentProjects {
     var paths: [String] {
         let noted = UserDefaults.standard.stringArray(forKey: Self.key) ?? []
         var seen = Set<String>()
-        return (noted + Self.claudeProjects().filter { !noted.contains($0) }.sorted()).filter { path in
+        return (noted + Self.claudeProjects().sorted()).filter { path in
             seen.insert(path).inserted && FileManager.default.fileExists(atPath: path)
         }
     }
@@ -30,7 +30,7 @@ final class RecentProjects {
         guard let data = try? Data(contentsOf: home.appendingPathComponent(".claude.json")),
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let projects = root["projects"] as? [String: Any] else { return [] }
-        let claudeDir = home.appendingPathComponent(".claude").path
+        let claudeDir = home.appendingPathComponent(".claude").path + "/"
         return projects.keys.filter { !$0.hasPrefix(claudeDir) }
     }
 }

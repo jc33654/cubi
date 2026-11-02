@@ -2,19 +2,9 @@ import AppKit
 import CubiKit
 
 /// Which terminal a new session opens in.
-enum TerminalKind: String, CaseIterable, Identifiable {
+enum TerminalKind: String, CaseIterable {
     case ghostty, terminal
-    var id: String { rawValue }
     var displayName: String { self == .ghostty ? "Ghostty" : "Terminal.app" }
-
-    /// The terminal a session runs in, from the identity its hooks reported (same test as TerminalFocus).
-    @MainActor static func forSession(_ info: SessionInfo) -> TerminalKind? {
-        let program = (info.client.termProgram ?? "").lowercased()
-        let bundle = info.client.bundleID ?? ""
-        if program == "apple_terminal" || bundle == TerminalFocus.terminalBundle { return .terminal }
-        if program == "ghostty" || bundle == TerminalFocus.ghosttyBundle { return .ghostty }
-        return nil
-    }
 
     /// Ghostty when it is installed, otherwise Terminal.app.
     @MainActor static var automatic: TerminalKind {
@@ -25,7 +15,7 @@ enum TerminalKind: String, CaseIterable, Identifiable {
 struct LaunchRequest {
     var directory: String
     var prompt: String?
-    var continueLast: Bool
+    var resume: SessionLaunch.Resume
     var terminal: TerminalKind
 }
 
@@ -33,14 +23,35 @@ struct LaunchRequest {
 /// the user had: their shell, their PATH, and the shell stays when claude exits.
 @MainActor
 enum SessionLauncher {
-    static func launch(_ request: LaunchRequest) {
-        let command = SessionLaunch.command(directory: request.directory, prompt: request.prompt, continueLast: request.continueLast)
-        CubiLog.write("launch \(request.terminal.rawValue): \(command)")
-        let script = switch request.terminal {
-        case .ghostty: ghosttyScript(directory: request.directory, command: command)
+    /// nil when a terminal opened; otherwise what went wrong, for the caller to show.
+    /// Ghostty refusing (not scriptable, Automation denied, hung) falls back to Terminal.app.
+    static func launch(_ request: LaunchRequest) async -> String? {
+        let command = SessionLaunch.command(directory: request.directory, prompt: request.prompt, resume: request.resume)
+        let promptNote = request.prompt.map { " prompt=\($0.count) chars" } ?? ""
+        CubiLog.write("launch \(request.terminal.rawValue) in \(request.directory) resume=\(request.resume)\(promptNote)")
+        var result = await TerminalFocus.run(script(for: request.terminal, directory: request.directory, command: command),
+                                             label: "launch \(request.terminal.rawValue)", fallbackBundle: nil)
+        if !result.ok, request.terminal == .ghostty {
+            CubiLog.write("launch: Ghostty failed (\(result.error)); trying Terminal.app")
+            result = await TerminalFocus.run(terminalScript(command: command), label: "launch terminal", fallbackBundle: nil)
+        }
+        return result.ok ? nil : result.error
+    }
+
+    static func alert(_ error: String) {
+        let alert = NSAlert()
+        alert.messageText = "開不了終端"
+        alert.informativeText = error + "\n\n第一次用會需要在「系統設定 → 隱私與安全性 → 自動化」允許 Cubi 控制終端。詳細在 ~/Library/Logs/cubi.log。"
+        alert.alertStyle = .warning
+        NSApp.activate(ignoringOtherApps: true)
+        alert.runModal()
+    }
+
+    private static func script(for terminal: TerminalKind, directory: String, command: String) -> String {
+        switch terminal {
+        case .ghostty: ghosttyScript(directory: directory, command: command)
         case .terminal: terminalScript(command: command)
         }
-        Task { await TerminalFocus.run(script, label: "launch \(request.terminal.rawValue)", fallbackBundle: nil) }
     }
 
     /// A new tab in the front window (a new window when there is none), started in the directory

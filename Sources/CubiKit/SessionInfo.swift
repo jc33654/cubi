@@ -29,6 +29,9 @@ public struct SessionInfo: Sendable, Equatable, Identifiable {
     public var toolCalls = 0
     /// What the status line reports about this session.
     public var stats = SessionStats()
+    /// Where a new session for the same project should start: the project root when the status
+    /// line told us, else the hooks' cwd.
+    public var projectDirectory: String? { stats.projectDir ?? cwd }
     public var costUSD: Double? = nil
     /// Parked in the "晚安" zone: automatically after half a day, or by hand.
     public var rest: Rest = .none

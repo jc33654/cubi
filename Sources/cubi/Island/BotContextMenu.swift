@@ -40,7 +40,7 @@ struct BotContextMenu: View {
         Button("放生") { state.onSessionAction(.dismiss, bot.id) }
         Divider()
         Button("在這個專案再開一個…") { state.onNewSession(.dialog(fromSession: bot.id)) }
-        Button("接續上次對話") { state.onNewSession(.launch(fromSession: bot.id, continueLast: true)) }
+        Button("在新分頁接續這個 session") { state.onNewSession(.resume(session: bot.id)) }
     }
 
     private static let swatches: [NSImage] = SessionPalette.colors.map { makeSwatch($0) }

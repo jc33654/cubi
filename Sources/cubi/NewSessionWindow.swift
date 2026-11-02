@@ -5,7 +5,7 @@ import CubiKit
 /// The "open a new session" dialog: project directory, optional first message, continue-last,
 /// terminal. One window, recreated each time so the prefill is fresh.
 @MainActor
-final class NewSessionWindow: NSObject, NSWindowDelegate {
+final class NewSessionWindow {
     private var window: NSWindow?
     private let recent: RecentProjects
 
@@ -19,8 +19,8 @@ final class NewSessionWindow: NSObject, NSWindowDelegate {
         let view = NewSessionView(recent: recentPaths, directory: directory ?? recentPaths.first ?? "", terminal: terminal,
                                   onStart: { [weak self] request in
                                       self?.recent.note(request.directory)
-                                      SessionLauncher.launch(request)
                                       self?.window?.close()
+                                      Task { if let error = await SessionLauncher.launch(request) { SessionLauncher.alert(error) } }
                                   },
                                   onCancel: { [weak self] in self?.window?.close() })
         let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 460, height: 320),
@@ -28,16 +28,12 @@ final class NewSessionWindow: NSObject, NSWindowDelegate {
         w.title = "開新 session"
         w.contentView = NSHostingView(rootView: view)
         w.isReleasedWhenClosed = false
-        w.delegate = self
         w.center()
         window = w
         w.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    func windowWillClose(_ notification: Notification) {
-        window = nil
-    }
 }
 
 struct NewSessionView: View {
@@ -73,7 +69,7 @@ struct NewSessionView: View {
             Toggle("接續這個專案上次的對話（claude --continue）", isOn: $continueLast)
             Picker("終端", selection: $terminal) {
                 Text("自動（\(TerminalKind.automatic.displayName)）").tag(TerminalKind?.none)
-                ForEach(TerminalKind.allCases) { Text($0.displayName).tag(Optional($0)) }
+                ForEach(TerminalKind.allCases, id: \.self) { Text($0.displayName).tag(Optional($0)) }
             }
             Spacer()
             HStack {
@@ -90,7 +86,7 @@ struct NewSessionView: View {
     }
 
     private func start() {
-        onStart(LaunchRequest(directory: directory, prompt: prompt, continueLast: continueLast, terminal: terminal ?? .automatic))
+        onStart(LaunchRequest(directory: directory, prompt: prompt, resume: continueLast ? .last : .none, terminal: terminal ?? .automatic))
     }
 
     private func browse() {

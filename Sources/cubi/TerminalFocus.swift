@@ -110,13 +110,14 @@ enum TerminalFocus {
         """
     }
 
-    /// Terminal.app without a tty to go by: the tab whose title carries the session name.
+    /// Terminal.app without a tty to go by: the tab whose title carries the session name. Titles are
+    /// "<status glyph> <name>", so match the whole name after a space: "小工具" must not match "小工具審查員".
     static func terminalByTitleScript(name: String) -> String {
         """
         tell application "Terminal"
           repeat with w in windows
             repeat with t in tabs of w
-              if (name of w) contains \(quote(name)) or (custom title of t) contains \(quote(name)) then
+              if (name of w) contains (" " & \(quote(name)) & " ") or (custom title of t) ends with (" " & \(quote(name))) then
                 set selected of t to true
                 set index of w to 1
                 activate
@@ -137,7 +138,7 @@ enum TerminalFocus {
           set target to missing value
           if \(quote(name)) is not "" then
             repeat with t in terminals
-              if (name of t) contains \(quote(name)) then
+              if (name of t) ends with (" " & \(quote(name))) then
                 set target to t
                 exit repeat
               end if

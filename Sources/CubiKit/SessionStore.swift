@@ -30,6 +30,11 @@ public struct SessionInfo: Sendable, Equatable, Identifiable {
     /// What the status line reports about this session.
     public var stats = SessionStats()
     public var costUSD: Double? = nil
+    /// Parked in the "晚安" zone: automatically after half a day, or by hand.
+    public var rest: Rest = .none
+
+    public enum Rest: Sendable, Equatable { case none, auto, manual }
+    public var resting: Bool { rest != .none }
 
     public enum Pending: Sendable, Equatable { case approval(tool: String), question }
 }
@@ -54,6 +59,19 @@ public struct SessionStore: Sendable {
     public static let happyDuration = 1.5
     public static let endedLinger = 3.0
     public static let sleepAfter = 600.0
+    /// Sleeping this long moves a session to the 晚安 zone on its own.
+    public static let restAfter = 12 * 3600.0
+
+    /// Sessions the user let go of ("放生"): their events are dropped until they need the user again.
+    public private(set) var dismissed: Set<String> = []
+    /// Sessions the user sent to sleep by hand; applied again when the session shows up after a restart.
+    public private(set) var manuallyRested: Set<String> = []
+
+    /// Restores both sets from a previous run.
+    public mutating func seed(dismissed: Set<String>, manuallyRested: Set<String>) {
+        self.dismissed = dismissed
+        self.manuallyRested = manuallyRested
+    }
 
     public init() {}
 
@@ -89,6 +107,15 @@ public struct SessionStore: Sendable {
     public mutating func apply(_ hook: DecodedHook, now: Double) -> [StoreEffect] {
         var effects: [StoreEffect] = []
         let id = hook.session.id
+        if dismissed.contains(id) {
+            if hook.event.needsTheUser {
+                dismissed.remove(id)
+            } else if case .statusline(let info) = hook.event {
+                return mergeUsage(info, from: id).map { [.usage($0)] } ?? []
+            } else {
+                return []
+            }
+        }
         if sessions[id] == nil {
             switch hook.event {
             case .sessionEnd:
@@ -105,7 +132,14 @@ public struct SessionStore: Sendable {
         var s = sessions[id]!
         s.lastEventAt = now
         // The status line keeps running for a short while after SessionEnd; it must not resurrect.
-        if case .statusline = hook.event {} else { s.ended = false }
+        if case .statusline = hook.event {} else {
+            s.ended = false
+            // Auto-rested: anything happening brings it back. Manually rested: only the user does.
+            if s.rest == .auto || (s.rest == .manual && hook.event.needsTheUser) {
+                s.rest = .none
+                manuallyRested.remove(id)
+            }
+        }
         if s.cwd == nil { s.cwd = hook.session.cwd }
         if s.client.tty == nil { s.client = hook.session.client }
         if let t = hook.session.transcriptPath { s.transcriptPath = t }
@@ -236,11 +270,30 @@ public struct SessionStore: Sendable {
 
     /// The user clicked the robot: a sleeping session wakes up (idle) and the inactivity clock restarts.
     public mutating func wake(_ id: String, now: Double) {
-        guard var s = sessions[id], s.botState == .sleeping else { return }
-        s.botState = s.contextPercent >= 80 ? .tired : .idle
+        guard var s = sessions[id], s.botState == .sleeping || s.resting else { return }
+        if s.botState == .sleeping { s.botState = s.contextPercent >= 80 ? .tired : .idle }
+        s.rest = .none
+        manuallyRested.remove(id)
         s.lastEventAt = now
         s.ticker = "醒了"
         sessions[id] = s
+    }
+
+    /// "去睡覺": into the 晚安 zone now, and it stays there until the user needs it again.
+    public mutating func rest(_ id: String) {
+        guard var s = sessions[id] else { return }
+        s.rest = .manual
+        if s.pending == nil { s.botState = .sleeping }
+        s.ticker = "晚安"
+        manuallyRested.insert(id)
+        sessions[id] = s
+    }
+
+    /// "放生": gone from the island; events are dropped until the session needs the user again.
+    public mutating func dismiss(_ id: String) {
+        remove(id)
+        manuallyRested.remove(id)
+        dismissed.insert(id)
     }
 
     /// Timer-driven transitions: happy → idle, sleeping after inactivity.
@@ -252,16 +305,29 @@ public struct SessionStore: Sendable {
 
     public mutating func tick(now: Double) {
         for (id, var s) in sessions where !s.ended && s.pending == nil {
+            var changed = false
             if now - s.lastEventAt >= Self.sleepAfter, s.botState == .idle || s.botState == .tired {
                 s.botState = .sleeping
-                sessions[id] = s
+                changed = true
             }
+            if now - s.lastEventAt >= Self.restAfter, s.rest == .none {
+                s.rest = .auto
+                changed = true
+            }
+            if changed { sessions[id] = s }
         }
     }
 
     public mutating func remove(_ id: String) {
         sessions.removeValue(forKey: id)
         order.removeAll { $0 == id }
+    }
+
+    /// SessionEnd: nothing left to remember about it.
+    public mutating func forget(_ id: String) {
+        remove(id)
+        dismissed.remove(id)
+        manuallyRested.remove(id)
     }
 
     // MARK: - Helpers
@@ -272,6 +338,7 @@ public struct SessionStore: Sendable {
                                client: ref.client, transcriptPath: ref.transcriptPath, agent: ref.agent,
                                colorIndex: SessionPalette.index(for: ref.id, taken: taken), lastEventAt: now)
         info.startedAt = now
+        if manuallyRested.contains(ref.id) { info.rest = .manual; info.botState = .sleeping }
         return info
     }
 

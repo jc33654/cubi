@@ -69,13 +69,23 @@ struct IslandContent: View {
         let botSize = state.botSize
         return HStack(spacing: 0) {
             HStack(spacing: 6) {
-                ForEach(state.bots) { bot in
+                ForEach(state.activeBots) { bot in
                     BotView(bot: bot, paused: state.mode == .hidden)
                         .frame(width: botSize, height: botSize)
                         .contentShape(Rectangle())
                         .onTapGesture { state.onFocus(bot.id) }
-                        .contextMenu { BotLookMenu(bot: bot, state: state) }
+                        .contextMenu { BotContextMenu(bot: bot, state: state) }
                         .help(bot.name)
+                }
+                if !state.restingBots.isEmpty {
+                    Text("💤 \(state.restingBots.count)")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .frame(width: IslandState.restingPillWidth, height: 18)
+                        .background(Capsule().fill(.white.opacity(0.12)))
+                        .contentShape(Capsule())
+                        .onTapGesture { if state.mode != .expanded { state.mode = .expanded } }
+                        .help("晚安區有 \(state.restingBots.count) 個 session")
                 }
             }
             .padding(.trailing, 8)

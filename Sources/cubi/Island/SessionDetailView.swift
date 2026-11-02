@@ -13,6 +13,8 @@ struct SessionDetailView: View {
                 Text(bot.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
                 Text(bot.stateLabel).font(.system(size: 10, weight: .medium, design: .monospaced)).foregroundStyle(.white.opacity(0.5))
                 Spacer()
+                CardButton(title: bot.resting ? "起床上班" : "去睡覺", role: .quiet) { bot.resting ? state.onWake(bot.id) : state.onRest(bot.id) }
+                CardButton(title: "放生", role: .quiet) { state.onDismiss(bot.id) }
                 CardButton(title: "跳到終端", role: .secondary) { state.onFocus(bot.id) }
                 Button { state.selectedSession = nil } label: {
                     Image(systemName: "xmark").font(.system(size: 10, weight: .bold)).foregroundStyle(.white.opacity(0.6))

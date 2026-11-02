@@ -24,6 +24,8 @@ final class BotRuntime: Identifiable {
     var modelName: String?
     var lastEdit: EditSummary?
     var agent = "claude-code"
+    /// In the 晚安 zone: off the wing, listed under its own heading.
+    var resting = false
     var cwd: String?
     var client = HookClient()
     var startedAt: Double = 0
@@ -69,6 +71,14 @@ final class IslandState {
     @ObservationIgnored var onDecision: (UUID, Decision) -> Void = { _, _ in }
     /// Tapping a robot or a list row: bring that session's terminal to the front.
     @ObservationIgnored var onFocus: (String) -> Void = { _ in }
+    /// 去睡覺 / 起床上班 / 放生, implemented by the coordinator.
+    @ObservationIgnored var onRest: (String) -> Void = { _ in }
+    @ObservationIgnored var onWake: (String) -> Void = { _ in }
+    @ObservationIgnored var onDismiss: (String) -> Void = { _ in }
+
+    /// 工作中: on the wing. 晚安: only in the list, counted on the wing.
+    var activeBots: [BotRuntime] { bots.filter { !$0.resting } }
+    var restingBots: [BotRuntime] { bots.filter { $0.resting } }
     /// A look changed: the coordinator rebuilds anything that carries the colour (open cards).
     @ObservationIgnored var onLooksChanged: () -> Void = {}
     /// Session whose last diff is open in the expanded view.
@@ -176,7 +186,11 @@ final class IslandState {
     var compactHeight: CGFloat { geometry.notchHeight + Self.compactExtraHeight }
     /// Robot size on the wings: 36 pt on a 32 pt notch.
     var botSize: CGFloat { max(16, compactHeight - 10) }
-    var leftWingWidth: CGFloat { max(Self.minLeftWingWidth, 16 + CGFloat(bots.count) * (botSize + 6)) }
+    static let restingPillWidth: CGFloat = 34
+    var leftWingWidth: CGFloat {
+        let pill = restingBots.isEmpty ? 0 : Self.restingPillWidth + 6
+        return max(Self.minLeftWingWidth, 16 + CGFloat(activeBots.count) * (botSize + 6) + pill)
+    }
     /// The wings differ in width but the notch must stay in the middle: shift the island (compact)
     /// or the wing row (expanded) by half the difference, otherwise the robots end up under the notch.
     var wingOffset: CGFloat { (Self.rightWingWidth - leftWingWidth) / 2 }

@@ -201,3 +201,60 @@ private func hook(_ id: String, _ event: CanonicalEvent, cwd: String? = "/Users/
     store.wake("s", now: 703)                          // awake already: nothing changes
     #expect(store.sessions["s"]?.ticker == "醒了")
 }
+
+// MARK: - 工作中 / 晚安 zones and 放生
+
+@Test func halfADayOfSilenceRestsASessionAndAnyEventWakesIt() {
+    var store = SessionStore()
+    _ = store.apply(hook("s", .sessionStart(source: nil)), now: 0)
+    store.tick(now: SessionStore.restAfter - 1)
+    #expect(store.sessions["s"]?.botState == .sleeping && store.sessions["s"]?.rest == SessionInfo.Rest.none)
+    store.tick(now: SessionStore.restAfter)
+    #expect(store.sessions["s"]?.rest == .auto && store.sessions["s"]?.resting == true)
+    _ = store.apply(hook("s", .toolStart(tool: "Bash", input: .null)), now: SessionStore.restAfter + 1)
+    #expect(store.sessions["s"]?.rest == SessionInfo.Rest.none)
+}
+
+@Test func manualRestOnlyEndsWhenTheUserIsNeeded() {
+    var store = SessionStore()
+    _ = store.apply(hook("s", .sessionStart(source: nil)), now: 0)
+    store.rest("s")
+    #expect(store.sessions["s"]?.rest == .manual && store.sessions["s"]?.botState == .sleeping)
+    _ = store.apply(hook("s", .toolStart(tool: "Bash", input: .null)), now: 1)
+    _ = store.apply(hook("s", .toolEnd(tool: "Bash", ok: true, input: .null, response: .null)), now: 2)
+    _ = store.apply(hook("s", .statusline(StatuslineInfo(contextPercent: 5))), now: 3)
+    #expect(store.sessions["s"]?.rest == .manual)                 // background work does not wake it
+    _ = store.apply(hook("s", .prompt("hi")), now: 4)
+    #expect(store.sessions["s"]?.rest == SessionInfo.Rest.none)   // the user typed
+    #expect(store.manuallyRested.isEmpty)
+    store.rest("s")
+    store.wake("s", now: 5)
+    #expect(store.sessions["s"]?.rest == SessionInfo.Rest.none && store.sessions["s"]?.botState == .idle)
+}
+
+@Test func dismissedSessionsOnlyComeBackWhenTheyNeedTheUser() {
+    var store = SessionStore()
+    _ = store.apply(hook("s", .sessionStart(source: nil)), now: 0)
+    _ = store.apply(hook("s", .permissionRequest(tool: "Bash", input: .null, suggestions: .null)), now: 1)
+    store.dismiss("s")
+    #expect(store.sessions["s"] == nil && store.dismissed == ["s"])
+    #expect(store.apply(hook("s", .toolStart(tool: "Bash", input: .null)), now: 2).isEmpty)
+    #expect(store.sessions["s"] == nil)
+    // Account-wide usage still flows while it is dismissed.
+    let fx = store.apply(hook("s", .statusline(StatuslineInfo(fiveHour: UsageWindow(usedPercent: 9, resetsAt: nil)))), now: 3)
+    #expect(fx.count == 1 && store.sessions["s"] == nil)
+    _ = store.apply(hook("s", .question(.object(["questions": .array([])]))), now: 4)
+    #expect(store.sessions["s"] != nil && store.dismissed.isEmpty)
+}
+
+@Test func seededSetsSurviveARestart() {
+    var store = SessionStore()
+    store.seed(dismissed: ["d"], manuallyRested: ["m"])
+    #expect(store.apply(hook("d", .toolStart(tool: "Bash", input: .null)), now: 1).isEmpty)
+    _ = store.apply(hook("m", .toolStart(tool: "Bash", input: .null)), now: 2)
+    #expect(store.sessions["m"]?.rest == .manual)
+    _ = store.apply(hook("m", .sessionEnd(reason: nil)), now: 3)
+    store.forget("m")
+    store.forget("d")
+    #expect(store.dismissed.isEmpty && store.manuallyRested.isEmpty && store.sessions.isEmpty)
+}

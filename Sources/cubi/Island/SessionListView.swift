@@ -17,13 +17,26 @@ struct SessionListView: View {
         } else {
             ScrollView(.vertical) {
                 VStack(spacing: 4) {
-                    ForEach(state.bots) { bot in row(bot) }
+                    if !state.restingBots.isEmpty { heading("工作中") }
+                    ForEach(state.activeBots) { bot in row(bot) }
+                    if !state.restingBots.isEmpty {
+                        heading("晚安 \(state.restingBots.count)").padding(.top, 4)
+                        ForEach(state.restingBots) { bot in row(bot).opacity(0.55) }
+                    }
                 }
                 .padding(.horizontal, 14)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
             }
             .frame(height: min(contentHeight, maxHeight))
         }
+    }
+
+    private func heading(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(.white.opacity(0.45))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, 8)
     }
 
     private func row(_ bot: BotRuntime) -> some View {
@@ -65,7 +78,7 @@ struct SessionListView: View {
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundStyle(UsageStripView.levelColor(bot.contextPercent).opacity(0.9))
             }
-            Text(bot.stateLabel)
+            Text(bot.resting ? "晚安" : bot.stateLabel)
                 .font(.system(size: 10, weight: .medium, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.5))
         }
@@ -74,6 +87,6 @@ struct SessionListView: View {
         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.white.opacity(state.selectedSession == bot.id ? 0.16 : 0.06)))
         .contentShape(Rectangle())
         .onTapGesture { state.selectedSession = state.selectedSession == bot.id ? nil : bot.id }
-        .contextMenu { BotLookMenu(bot: bot, state: state) }
+        .contextMenu { BotContextMenu(bot: bot, state: state) }
     }
 }

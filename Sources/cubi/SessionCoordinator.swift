@@ -27,6 +27,25 @@ final class SessionCoordinator {
         self.island = island
         island.state.onDecision = { [weak self] id, decision in self?.decide(id, decision) }
         island.state.onLooksChanged = { [weak self] in self?.sync() }
+        island.state.onRest = { [weak self] id in
+            guard let self else { return }
+            CubiLog.write("rest session=\(id.prefix(8))")
+            store.rest(id)
+            sync()
+        }
+        island.state.onWake = { [weak self] id in
+            guard let self else { return }
+            CubiLog.write("wake session=\(id.prefix(8))")
+            store.wake(id, now: Date().timeIntervalSinceReferenceDate)
+            sync()
+        }
+        island.state.onDismiss = { [weak self] id in
+            guard let self else { return }
+            CubiLog.write("dismiss session=\(id.prefix(8))")
+            withdraw(sessionID: id, outcome: .handledElsewhere)
+            store.dismiss(id)
+            sync()
+        }
         island.state.onFocus = { [weak self] id in
             guard let self, let info = self.store.sessions[id] else { return }
             store.wake(id, now: Date().timeIntervalSinceReferenceDate)
@@ -57,6 +76,10 @@ final class SessionCoordinator {
             }
         } else {
             CubiLog.write("no saved usage")
+        }
+        store.seed(dismissed: Self.loadSet(Self.dismissedKey), manuallyRested: Self.loadSet(Self.restedKey))
+        if !store.dismissed.isEmpty || !store.manuallyRested.isEmpty {
+            CubiLog.write("restored dismissed=\(store.dismissed.count) rested=\(store.manuallyRested.count)")
         }
         let server = HookServer(
             handler: { [weak self] envelope, connection in self?.handle(envelope, connection) },
@@ -292,7 +315,7 @@ final class SessionCoordinator {
                     MainActor.assumeIsolated {
                         guard let self, self.store.sessions[id]?.ended == true else { return }
                         self.withdraw(sessionID: id, outcome: .handledElsewhere)
-                        self.store.remove(id)
+                        self.store.forget(id)
                         self.sync()
                     }
                 }
@@ -335,6 +358,7 @@ final class SessionCoordinator {
             if bot.modelName != info.model { bot.modelName = info.model }
             if bot.lastEdit != info.lastEdit { bot.lastEdit = info.lastEdit }
             if bot.agent != info.agent { bot.agent = info.agent }
+            if bot.resting != info.resting { bot.resting = info.resting }
             if bot.cwd != info.cwd { bot.cwd = info.cwd }
             if bot.client != info.client { bot.client = info.client }
             if bot.startedAt != info.startedAt { bot.startedAt = info.startedAt }
@@ -358,6 +382,7 @@ final class SessionCoordinator {
         if let shown = state.showingDiffFor, !bots.contains(where: { $0.id == shown }) { state.showingDiffFor = nil }
         if let sel = state.selectedSession, !bots.contains(where: { $0.id == sel }) { state.selectedSession = nil }
         if state.usage != lastUsage { state.usage = lastUsage }
+        persistSets()
 
         let cards = pending.map { card(for: $0) }
         if cards != state.pendingCards { state.pendingCards = cards }
@@ -369,6 +394,24 @@ final class SessionCoordinator {
         } else if hold && state.mode != .expanded {
             island.present()
         }
+    }
+
+    // MARK: - 放生 / 去睡覺 survive restarts
+
+    private static let dismissedKey = "dismissedSessions"
+    private static let restedKey = "restedSessions"
+    private var savedSets: (Set<String>, Set<String>) = ([], [])
+
+    private static func loadSet(_ key: String) -> Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: key) ?? [])
+    }
+
+    private func persistSets() {
+        let now = (store.dismissed, store.manuallyRested)
+        guard now != savedSets else { return }
+        savedSets = now
+        UserDefaults.standard.set(Array(now.0.prefix(200)), forKey: Self.dismissedKey)
+        UserDefaults.standard.set(Array(now.1.prefix(200)), forKey: Self.restedKey)
     }
 
     private func card(for request: PendingRequest) -> PendingCard {

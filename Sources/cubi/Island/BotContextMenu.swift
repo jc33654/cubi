@@ -1,8 +1,9 @@
 import SwiftUI
 import CubiKit
 
-/// Right-click menu for one robot: shape and colour, remembered for this session only.
-struct BotLookMenu: View {
+/// Right-click menu for one robot: shape and colour (remembered for this session only), then
+/// 去睡覺 / 起床上班 and 放生.
+struct BotContextMenu: View {
     let bot: BotRuntime
     let state: IslandState
 
@@ -30,6 +31,13 @@ struct BotLookMenu: View {
                 }
             }
         }
+        Divider()
+        if bot.resting {
+            Button("起床上班") { state.onWake(bot.id) }
+        } else {
+            Button("去睡覺") { state.onRest(bot.id) }
+        }
+        Button("放生") { state.onDismiss(bot.id) }
     }
 
     private static let swatches: [NSImage] = SessionPalette.colors.map { makeSwatch($0) }

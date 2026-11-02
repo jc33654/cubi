@@ -158,6 +158,16 @@ public enum CanonicalEvent: Sendable, Equatable {
         }
     }
 
+    /// Events that mean the user is (or must be) at the keyboard for this session: the user typed,
+    /// the agent asks something, or a session (re)started. These pull a dismissed or manually
+    /// rested session back; background tool traffic and status lines do not.
+    public var needsTheUser: Bool {
+        switch self {
+        case .sessionStart, .prompt, .permissionRequest, .question: return true
+        default: return false
+        }
+    }
+
     /// True when the relay holds its connection open for a reply.
     public var isBlocking: Bool {
         switch self {

@@ -1,7 +1,7 @@
 .PHONY: build release test clean bundle dist icon install run cert hook-test
 
 APP_DEST := $(HOME)/Applications/Cubi.app
-IDENTITY ?= cubi-dev
+IDENTITY ?= $(or $(CUBI_SIGN_IDENTITY),cubi-dev)
 
 build:
 	swift build

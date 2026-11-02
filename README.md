@@ -148,9 +148,16 @@ Claude Code 是內建 plugin。其他 agent 可以用一份 manifest 接進來�
 2. 每次：`git tag v0.2.0 && git push origin v0.2.0`。`.github/workflows/release.yml` 會在 macOS runner 跑測試、用這張憑證簽、把 `Cubi.zip` 與 `Cubi.zip.sha256` 掛到 Release，release notes 由 commit 自動生成。版本號來自 tag（`bundle.sh` 只在剛好在 tag 上時覆寫 `CFBundleShortVersionString`）；打 tag 前先把 `Packaging/Info.plist` 與 `CubiInfo.version` 改成同一個號碼，`make bundle` 會檢查兩者一致。只接受 `vX.Y.Z`，`-rc` 之類的 tag 不會觸發。
 3. 備援：本機 `make dist`，把 `build/Cubi.zip` 與 `.sha256` 手動上傳到 Release。
 
-**把私鑰放 GitHub secrets 的風險**：有 repo 寫入權或能跑 Actions 的人可能拿到它；拿到只能簽出「在已裝 Cubi 的機器上繼承 Automation 授權」的假 app，Gatekeeper 仍不信任那張憑證。fork 來的 PR 讀不到 secrets，`ci.yml` 也不引用 secrets。懷疑外洩或換憑證的順序：`make cert` 重建憑證、換 secrets、改 `scripts/install.sh` 裡的 `REQUIREMENT`（`release.yml` 從這行讀，只有這一處）、**先打 tag 把新版發成功，再 push 改了 hash 的 `install.sh`**。反過來會有一段空窗：`main` 上的腳本要求新憑證，Releases 上的 zip 還是舊憑證簽的，所有安裝都會「簽章不符」。使用者更新後要重新授權一次 Automation。
+**把私鑰放 GitHub secrets 的風險**：有 repo 寫入權或能跑 Actions 的人可能拿到它；拿到只能簽出「在已裝 Cubi 的機器上繼承 Automation 授權」的假 app，Gatekeeper 仍不信任那張憑證。fork 來的 PR 讀不到 secrets，`ci.yml` 也不引用 secrets。懷疑外洩或換憑證的順序（`release.yml` 讀的是**被 tag 的那個 commit** 裡的 `scripts/install.sh`，所以新 hash 必須已經在那個 commit 裡）：
 
-`ci.yml` 在 push `main` 與 PR 時跑 `swift build`、`swift test`、`make bundle`（沒憑證走 ad-hoc，仍會跑本機路徑守門）。
+1. `make cert` 重建憑證，換 secrets。
+2. 本機改 `scripts/install.sh` 的 `REQUIREMENT`（只有這一處），commit。
+3. 在同一個 commit 上打 tag，**只 push tag**：`git push origin v0.2.0`，先不 push `main`。
+4. Actions 綠了、Release 掛上新 zip 之後，再 `git push origin main`。
+
+順序反過來會有空窗：`main` 上的腳本要求新憑證，Releases 上的 zip 還是舊憑證簽的，所有 `curl | bash` 都會「簽章不符」；tag 打在舊 hash 的 commit 上則 verify 步驟一定失敗。使用者更新後要重新授權一次 Automation。
+
+`ci.yml` 在 push `main` 與 PR 時跑 `swift test`、`make bundle`（沒憑證走 ad-hoc，仍會跑本機路徑守門）。
 
 ## 開發
 

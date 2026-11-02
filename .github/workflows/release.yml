@@ -1,0 +1,54 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: macos-26
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - run: swift --version
+      - run: swift test
+
+      # The self-signed cubi-dev certificate, exported from Keychain Access as .p12 and stored
+      # base64-encoded. A fresh keychain on this throwaway runner; no trust settings needed,
+      # codesign signs with an untrusted identity just fine.
+      - name: Import signing certificate
+        env:
+          CUBI_CERT_P12: ${{ secrets.CUBI_CERT_P12 }}
+          CUBI_CERT_PASSWORD: ${{ secrets.CUBI_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/cubi.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          echo "$CUBI_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cubi-dev.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cubi-dev.p12" -k "$KEYCHAIN" -P "$CUBI_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | sed "s/\"//g")
+          rm "$RUNNER_TEMP/cubi-dev.p12"
+          security find-identity -p codesigning "$KEYCHAIN"
+
+      - run: make icon
+      - run: CUBI_SIGN_IDENTITY=cubi-dev make dist
+      - name: Verify the artefact the way install.sh will
+        run: |
+          set -euo pipefail
+          cd build && shasum -a 256 -c Cubi.zip.sha256
+          codesign --verify --strict -R='identifier "cc.dotdot.cubi" and certificate leaf = H"902124bf301876614e89d5ea26b874c6d0487189"' Cubi.app
+
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          files: |
+            build/Cubi.zip
+            build/Cubi.zip.sha256
+          generate_release_notes: true

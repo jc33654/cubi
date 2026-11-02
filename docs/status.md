@@ -42,6 +42,7 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 - 離線渲染（`--render-island`）畫不出 `ScrollView` 內容，清單只能真機看。
 - 從瀏海拖出的瞬間島直接出現在滑鼠下方，沒有飛出動畫。
 - 沒有 Apple 公證：下載的 app 會被 Gatekeeper 擋，install.sh 驗過簽章後拿掉 quarantine；手動裝的人要右鍵開啟或「隱私與安全性 → 強制打開」。憑證 hash 寫死在 install.sh，換憑證要同步改。
+- 開 session：Ghostty 慢到被 5 秒 watchdog 殺掉但分頁其實有開時，退路會在 Terminal.app 再開一個（推論，沒觸發過）。
 - 沒有 `git push`（紅線），本機領先 GitHub 的 commit 由 Jade 推；Coucou 還沒 `brew uninstall --cask coucou`。
 
 ## 接下來：額外插件

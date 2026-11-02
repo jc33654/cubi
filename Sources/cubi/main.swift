@@ -102,7 +102,7 @@ if arguments.contains("--new-session") {
     var outcome: String?? = nil
     Task { @MainActor in outcome = .some(await SessionLauncher.launch(request)) }
     while outcome == nil { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05)) }
-    if let failure = outcome!, !failure.isEmpty {
+    if let failure = outcome! {
         FileHandle.standardError.write(Data("cubi: \(failure)\n".utf8))
         exit(1)
     }

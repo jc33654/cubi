@@ -84,7 +84,8 @@ enum TerminalFocus {
         CubiLog.write("focus \(label): \(result.0.isEmpty ? "(no output)" : result.0)\(result.1.isEmpty ? "" : " err=\(result.1)")")
         let ok = result.0 == "ok"
         if !ok, let fallbackBundle { activate(bundle: fallbackBundle) }
-        return (ok, result.1.isEmpty ? result.0 : result.1)
+        let error = result.1.isEmpty ? result.0 : result.1
+        return (ok, ok || !error.isEmpty ? error : "osascript 沒有回應（5 秒逾時）")
     }
 
     static func quote(_ s: String) -> String {

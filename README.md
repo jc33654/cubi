@@ -4,14 +4,33 @@
 
 一個 app 加一個 hook relay，沒有雲端、沒有遙測。資料只在這台機器的 unix socket 上走。
 
-## 需求
+## 安裝（現成的 app）
+
+```
+curl -fsSL https://raw.githubusercontent.com/jc33654/cubi/main/scripts/install.sh | bash
+```
+
+不用 Xcode、不用憑證。腳本會從 GitHub Releases 抓最新的 `Cubi.zip`，做完整性校驗（sha256）與來源驗證（簽章必須是 Cubi 的 `cubi-dev` 憑證，憑證 hash 寫在腳本裡），裝到 `~/Applications/Cubi.app`，拿掉 quarantine 後打開。`CUBI_VERSION=v0.2.0` 可以指定版本。
+
+**你在信任什麼**：Cubi 沒有 Apple 公證（不買 Developer ID 的代價），所以 macOS 的 Gatekeeper 會擋它。腳本替你做的事是：先用 `codesign -R` 確認這個包真的是用 Cubi 的憑證簽的，確認過才拿掉 quarantine。不想跑 `curl | bash` 的話，自己來：
+
+1. 到 [Releases](https://github.com/jc33654/cubi/releases) 下載 `Cubi.zip`，解開拖到 `~/Applications`。
+2. 第一次打開會被擋：對 app 按右鍵 → 打開，或到「系統設定 → 隱私與安全性」按「強制打開」。
+
+每一版都用同一張自簽憑證簽，更新後 Automation 授權不用重做（推論，依 TCC 以 designated requirement 認 app 的規則）。
+
+裝好之後看[第一次執行](#第一次執行)。
+
+## 從原始碼建置
+
+### 需求
 
 - macOS 15 以上（開發機是 macOS 26，有瀏海的螢幕；沒瀏海的螢幕會在頂端置中浮一條小 pill）
 - Xcode Command Line Tools（`xcode-select --install`）。**不需要 Xcode.app**
 - Swift 6（CLT 內附）
 - Claude Code 2.1.312 以上（hook payload 以這個版本實錄為準，見 `docs/protocol.md`）
 
-## 建置與安裝
+### 建置
 
 ```
 git clone https://github.com/jc33654/cubi.git
@@ -22,7 +41,7 @@ make install   # 建置、打包、簽章、安裝到 ~/Applications/Cubi.app
 open ~/Applications/Cubi.app
 ```
 
-### 第一次：建自簽憑證 `cubi-dev`
+#### 第一次：建自簽憑證 `cubi-dev`
 
 沒有 Developer ID 也能用，但要有一張**穩定的**憑證：macOS 的 TCC（Automation、通知授權）認的是「bundle id + 憑證」，ad-hoc 簽章每次重編都會變，授權就會靜默失效。所以一次性在 Keychain Access 建一張：
 
@@ -32,13 +51,14 @@ open ~/Applications/Cubi.app
 
 沒有這張憑證時 `make install` 會退回 ad-hoc 簽章並印警告，app 仍可用，但每次重編後要重新授權 Automation。
 
-### 其他 make 目標
+#### 其他 make 目標
 
 | 目標 | 做什麼 |
 |---|---|
 | `make build` / `make release` | debug / release 建置到 `.build/` |
 | `make test` | 跑 CubiKit 單元測試（CLT 的 swift-testing 需要額外 rpath，Makefile 已處理） |
-| `make bundle` | 只打包簽章到 `build/Cubi.app`，不安裝 |
+| `make bundle` | 只打包簽章到 `build/Cubi.app`，不安裝；會 strip 掉 debug 符號，並檢查兩個執行檔裡沒有任何 `/Users/…` 本機路徑，有就失敗 |
+| `make dist` | `make bundle` 再壓成 `build/Cubi.zip` + `Cubi.zip.sha256`（release 用的固定檔名） |
 | `make run` | 安裝並重啟 app |
 | `make hook-test` | app 沒開時餵 relay 一筆假資料，必須 exit 0 且無輸出 |
 
@@ -122,6 +142,16 @@ Claude Code 是內建 plugin。其他 agent 可以用一份 manifest 接進來�
 5. 有存過 plugin 的 API key 的話，Keychain Access 搜尋 service `cc.dotdot.cubi` 刪掉。
 6. `~/.claude/backups/cubi/` 是 settings.json 的歷史備份，可留。
 
+## 發版
+
+1. 一次性：把 `cubi-dev` 憑證放進 GitHub secrets。Keychain Access → 我的憑證 → `cubi-dev` → 右鍵「輸出」存成 `.p12`（設一個密碼），然後 `base64 -i cubi-dev.p12 | pbcopy`。到 repo Settings → Secrets and variables → Actions 新增 `CUBI_CERT_P12`（貼上）與 `CUBI_CERT_PASSWORD`。匯出後把 `.p12` 刪掉。
+2. 每次：`git tag v0.2.0 && git push origin v0.2.0`。`.github/workflows/release.yml` 會在 macOS runner 跑測試、用這張憑證簽、把 `Cubi.zip` 與 `Cubi.zip.sha256` 掛到 Release，release notes 由 commit 自動生成。版本號來自 tag（`bundle.sh` 只在剛好在 tag 上時覆寫 `CFBundleShortVersionString`）。
+3. 備援：本機 `make dist`，把 `build/Cubi.zip` 與 `.sha256` 手動上傳到 Release。
+
+**把私鑰放 GitHub secrets 的風險**：有 repo 寫入權或能跑 Actions 的人可能拿到它；拿到只能簽出「在已裝 Cubi 的機器上繼承 Automation 授權」的假 app，Gatekeeper 仍不信任那張憑證。fork 來的 PR 讀不到 secrets，`ci.yml` 也不引用 secrets。懷疑外洩：`make cert` 重建憑證、改 `scripts/install.sh` 裡的憑證 hash、換 secrets、發新版；使用者更新後要重新授權一次 Automation。
+
+`ci.yml` 在 push `main` 與 PR 時跑 `swift build`、`swift test`、`make bundle`（沒憑證走 ad-hoc，仍會跑本機路徑守門）。
+
 ## 開發
 
 ```
@@ -129,7 +159,9 @@ Sources/CubiKit/     純邏輯：事件模型、解碼、session 狀態機、回
 Sources/cubi/        AppKit + SwiftUI app
 Sources/cubi-hook/   relay，只 import Darwin，冷啟動個位數 ms
 Tests/CubiKitTests/  單元測試；Fixtures/claude-2.1.312/ 是實錄的 hook payload
-docs/                plan.md（設計與決策）、protocol.md（relay 協定、欄位、manifest 格式）
+scripts/             bundle.sh（打包、strip、簽章、路徑守門）、install.sh（使用者安裝）、make-icns.sh、import-fixtures.py
+.github/workflows/   ci.yml、release.yml
+docs/                plan.md（設計與決策）、protocol.md（relay 協定、欄位、manifest 格式）、status.md（進度）
 ```
 
 常用的驗證方式：

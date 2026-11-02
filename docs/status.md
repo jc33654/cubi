@@ -1,4 +1,4 @@
-# cubi 狀態與進度（2026-10-30）
+# cubi 狀態與進度（2026-11-02）
 
 commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字。Sources 約 6,000 多行 Swift。
 
@@ -18,6 +18,7 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 | 聚焦終端 | Terminal.app（tty）、Ghostty（標題／cwd）、其他 app 只切 app；沒有終端身分時用名稱／cwd 猜 Ghostty 再 Terminal.app；點沉睡的機器人會叫醒 | 有身分路徑真機驗證；猜測路徑只有腳本語法驗證 |
 | 安裝器 UI | 設定頁：Claude Code hooks 安裝／解除（看 diff 再寫）、退役舊 notify hook、Agents 開關與 API key、顯示、範圍、工具箱面板 | 真機驗證 |
 | Plugin 架構 | `AgentPlugin` 協定；`ClaudeCodePlugin` 內建；`ManifestPlugin` 以 JSON 接新 agent（只能監看） | 單元測試＋假 manifest 真機 |
+| 發佈 | `make bundle` strip debug 符號並守門（執行檔裡不得有 `/Users/…`）；`make dist` 產固定檔名 `Cubi.zip`；`scripts/install.sh` 下載、sha256 完整性校驗、`codesign -R` 比對 cubi-dev 憑證 hash 後才裝並拿掉 quarantine；`ci.yml`／`release.yml`（tag 觸發，從 secrets 匯入 .p12 簽） | strip、守門、install.sh 正負向本機驗證；workflow 未跑過（要 Jade push、建 secrets、打 tag） |
 | 文件 | README（建置、憑證、安裝、用法、解除）、`docs/protocol.md`（relay 協定、欄位、manifest 格式）、`docs/plan.md` | 經審查員對帳 |
 
 舊工具退役：`cctl menubar` 已停並取消登入啟動、`cctl notify off`、`notify-hook.sh` 從 settings.json 移除；保留 `statusline.sh`、`cctl`、`zh-reply-guard.py`。
@@ -28,6 +29,7 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 2. 拖島離開瀏海成浮動視窗、拖回頂端 dock。
 3. 點清單列開資訊面板、「跳到終端」、✕ 關閉；看面板哪些列有出現（判斷 2.1.312 實際送了哪些 `cost.*` 欄位）。
 4. 右鍵「去睡覺」→ 翼上消失、出現「💤 1」、清單在晚安區；「放生」→ 消失；在那個 session 送一句話 → 回來。
+5. 發版：push 本機 commit、把 `cubi-dev` 匯成 .p12 放進 secrets `CUBI_CERT_P12`／`CUBI_CERT_PASSWORD`、打 `v0.1.0` tag 推上去，看 Actions 有沒有過；過了用 `curl … install.sh | bash` 在另一台機器裝一次。
 
 ## 已知限制
 
@@ -37,7 +39,9 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 - hooks 環境沒有 `TERM_PROGRAM`／tty 的 session（來源不明，log 曾出現）只能用名稱／cwd 猜終端，猜不到就不動。
 - 離線渲染（`--render-island`）畫不出 `ScrollView` 內容，清單只能真機看。
 - 從瀏海拖出的瞬間島直接出現在滑鼠下方，沒有飛出動畫。
-- 沒有 `git push`（紅線），GitHub 上的 repo 還是空的；Coucou 還沒 `brew uninstall --cask coucou`。
+- 沒有 Apple 公證：下載的 app 會被 Gatekeeper 擋，install.sh 驗過簽章後拿掉 quarantine；手動裝的人要右鍵開啟或「隱私與安全性 → 強制打開」。憑證 hash 寫死在 install.sh，換憑證要同步改。
+- `macos-26` runner 的 Xcode／Swift 版本沒驗過能不能編（本機 6.3.2）；第一次 workflow 失敗先看 `no such module 'Testing'`，必要時退 `macos-15`。
+- 沒有 `git push`（紅線），本機領先 GitHub 的 commit 由 Jade 推；Coucou 還沒 `brew uninstall --cask coucou`。
 
 ## 接下來：額外插件
 

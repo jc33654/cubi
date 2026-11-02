@@ -44,6 +44,11 @@ extension SessionCoordinator {
             bots.append(bot)
         }
         if let demo = existing["demo"] { bots.append(demo) }
+        if state.draggingBot != nil {
+            // Mid-drag the island's order is the truth; the store catches up when the robot is dropped.
+            let rank = Dictionary(state.bots.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { a, _ in a })
+            bots.sort { (rank[$0.id] ?? Int.max) < (rank[$1.id] ?? Int.max) }
+        }
         if bots.map(\.id) != state.bots.map(\.id) { state.bots = bots }
         state.pruneLooks(keeping: Set(bots.map(\.id)))
         if let shown = state.showingDiffFor, !bots.contains(where: { $0.id == shown }) { state.showingDiffFor = nil }

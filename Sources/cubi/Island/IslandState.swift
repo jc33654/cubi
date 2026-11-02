@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Observation
 import CubiKit
 
@@ -84,6 +85,39 @@ final class IslandState {
     /// 工作中: on the wing. 晚安: only in the list, counted on the wing.
     var activeBots: [BotRuntime] { bots.filter { !$0.resting } }
     var restingBots: [BotRuntime] { bots.filter { $0.resting } }
+
+    // MARK: - Dragging a robot along the wing to rearrange
+
+    /// The robot being dragged and the pointer's x in the wing's coordinate space.
+    var draggingBot: String?
+    var dragX: CGFloat = 0
+    /// The user dropped a robot: the new order of every session (resting ones included, demo excluded).
+    @ObservationIgnored var onReorder: ([String]) -> Void = { _ in }
+
+    /// One robot plus the gap after it.
+    var wingSlot: CGFloat { botSize + 6 }
+    func slotCenter(_ index: Int) -> CGFloat { CGFloat(index) * wingSlot + botSize / 2 }
+
+    /// Moves the dragged robot to the slot under the pointer, live; resting robots keep their places.
+    func dragBot(_ id: String, x: CGFloat) {
+        draggingBot = id
+        dragX = x
+        let active = activeBots
+        guard let from = active.firstIndex(where: { $0.id == id }) else { return }
+        let to = max(0, min(active.count - 1, Int(x / wingSlot)))
+        guard to != from else { return }
+        var reordered = active
+        reordered.insert(reordered.remove(at: from), at: to)
+        var next = reordered.makeIterator()
+        let bots = self.bots.map { $0.resting ? $0 : next.next()! }
+        withAnimation(.spring(duration: 0.2)) { self.bots = bots }
+    }
+
+    func endDrag() {
+        guard draggingBot != nil else { return }
+        draggingBot = nil
+        onReorder(bots.map(\.id).filter { $0 != "demo" })
+    }
     /// A look changed: the coordinator rebuilds anything that carries the colour (open cards).
     @ObservationIgnored var onLooksChanged: () -> Void = {}
     /// Session whose last diff is open in the expanded view.

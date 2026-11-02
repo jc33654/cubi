@@ -69,13 +69,21 @@ struct IslandContent: View {
         let botSize = state.botSize
         return HStack(spacing: 0) {
             HStack(spacing: 6) {
-                ForEach(state.activeBots) { bot in
+                ForEach(Array(state.activeBots.enumerated()), id: \.element.id) { index, bot in
+                    let dragging = state.draggingBot == bot.id
                     BotView(bot: bot, paused: state.mode == .hidden)
                         .frame(width: botSize, height: botSize)
                         .contentShape(Rectangle())
                         .onTapGesture { state.onFocus(bot.id) }
                         .contextMenu { BotContextMenu(bot: bot, state: state) }
                         .help(bot.name)
+                        // Rearranging: the robot follows the pointer, the others make room live.
+                        // A drag that starts on a robot never moves the island (child gesture wins).
+                        .offset(x: dragging ? state.dragX - state.slotCenter(index) : 0)
+                        .zIndex(dragging ? 1 : 0)
+                        .gesture(DragGesture(minimumDistance: 4, coordinateSpace: .named("wing"))
+                            .onChanged { state.dragBot(bot.id, x: $0.location.x) }
+                            .onEnded { _ in state.endDrag() })
                 }
                 if !state.restingBots.isEmpty {
                     Text("💤 \(state.restingBots.count)")
@@ -88,6 +96,7 @@ struct IslandContent: View {
                         .help("晚安區有 \(state.restingBots.count) 個 session")
                 }
             }
+            .coordinateSpace(name: "wing")
             .padding(.trailing, 8)
             .frame(width: state.leftWingWidth, height: height, alignment: .trailing)
             Spacer().frame(width: anchored ? state.geometry.notchWidth : IslandState.floatingGap)

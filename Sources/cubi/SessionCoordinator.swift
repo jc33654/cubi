@@ -40,6 +40,12 @@ final class SessionCoordinator {
             sync()
         }
         island.state.onNewSession = { [weak self] intent in self?.newSession(intent) }
+        island.state.onReorder = { [weak self] ids in
+            guard let self else { return }
+            store.reorder(ids)
+            CubiLog.write("reorder \(ids.map { $0.prefix(8) }.joined(separator: " "))")
+            sync()
+        }
         island.state.onFocus = { [weak self] id in
             guard let self, let info = self.store.sessions[id] else { return }
             // A look at the terminal opens the robot's eyes but does not pull it out of the 晚安 zone.

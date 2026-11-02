@@ -128,7 +128,8 @@ final class IslandState {
         onReorder(bots.map(\.id).filter { $0 != "demo" })
     }
 
-    /// The drag can end without a drop (the robot vanished, the island hid): keep what was arranged.
+    /// The island hid mid-drag: no drop is coming, keep what was arranged. (A robot vanishing
+    /// mid-drag is handled by the coordinator's sync, which must not come back through onReorder.)
     func cancelDrag() { endDrag() }
     /// A look changed: the coordinator rebuilds anything that carries the colour (open cards).
     @ObservationIgnored var onLooksChanged: () -> Void = {}

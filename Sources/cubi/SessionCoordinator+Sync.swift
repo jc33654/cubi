@@ -8,6 +8,12 @@ extension SessionCoordinator {
 
     func sync() {
         let state = island.state
+        // The robot being dragged went away (SessionEnd, 放生): onEnded never fires. Keep what the
+        // user had arranged, and do it here rather than through onReorder, which would re-enter sync().
+        if let dragging = state.draggingBot, store.sessions[dragging] == nil {
+            state.draggingBot = nil
+            store.reorder(state.bots.map(\.id).filter { $0 != "demo" && $0 != dragging })
+        }
         var existing = Dictionary(uniqueKeysWithValues: state.bots.map { ($0.id, $0) })
         var bots: [BotRuntime] = []
         for info in store.ordered {
@@ -44,14 +50,10 @@ extension SessionCoordinator {
             bots.append(bot)
         }
         if let demo = existing["demo"] { bots.append(demo) }
-        if let dragging = state.draggingBot {
-            if bots.contains(where: { $0.id == dragging }) {
-                // Mid-drag the island's order is the truth; the store catches up when the robot is dropped.
-                let shown = state.bots.map(\.id)
-                bots = SessionStore.sorted(bots.map(\.id), by: shown).compactMap { id in bots.first { $0.id == id } }
-            } else {
-                state.cancelDrag()   // the robot went away under the pointer; onEnded never fires
-            }
+        if state.draggingBot != nil {
+            // Mid-drag the island's order is the truth; the store catches up when the robot is dropped.
+            let shown = state.bots.map(\.id)
+            bots = SessionStore.sorted(bots.map(\.id), by: shown).compactMap { id in bots.first { $0.id == id } }
         }
         if bots.map(\.id) != state.bots.map(\.id) { state.bots = bots }
         state.pruneLooks(keeping: Set(bots.map(\.id)))

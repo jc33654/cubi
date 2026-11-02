@@ -163,7 +163,9 @@ public enum CanonicalEvent: Sendable, Equatable {
     /// rested session back; background tool traffic and status lines do not.
     public var needsTheUser: Bool {
         switch self {
-        case .sessionStart, .prompt, .permissionRequest, .question: return true
+        // Auto-compaction restarts the session on its own; that is not the user coming back.
+        case .sessionStart(let source): return source != "compact"
+        case .prompt, .permissionRequest, .question: return true
         default: return false
         }
     }

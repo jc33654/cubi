@@ -193,12 +193,12 @@ private func hook(_ id: String, _ event: CanonicalEvent, cwd: String? = "/Users/
     _ = store.apply(hook("s", .sessionStart(source: nil)), now: 0)
     store.tick(now: 700)
     #expect(store.sessions["s"]?.botState == .sleeping)
-    store.wake("s", now: 701)
+    store.wake("s", now: 701, leavingRest: false)
     #expect(store.sessions["s"]?.botState == .idle)
     #expect(store.sessions["s"]?.lastEventAt == 701)
     store.tick(now: 702)
     #expect(store.sessions["s"]?.botState == .idle)   // the clock restarted
-    store.wake("s", now: 703)                          // awake already: nothing changes
+    store.wake("s", now: 703, leavingRest: false)      // awake already: nothing changes
     #expect(store.sessions["s"]?.ticker == "醒了")
 }
 
@@ -228,8 +228,13 @@ private func hook(_ id: String, _ event: CanonicalEvent, cwd: String? = "/Users/
     #expect(store.sessions["s"]?.rest == SessionInfo.Rest.none)   // the user typed
     #expect(store.manuallyRested.isEmpty)
     store.rest("s")
-    store.wake("s", now: 5)
-    #expect(store.sessions["s"]?.rest == SessionInfo.Rest.none && store.sessions["s"]?.botState == .idle)
+    store.wake("s", now: 5, leavingRest: false)                 // a click: eyes open, still 晚安
+    #expect(store.sessions["s"]?.rest == .manual && store.sessions["s"]?.botState == .idle)
+    store.wake("s", now: 6, leavingRest: true)                  // 起床上班
+    #expect(store.sessions["s"]?.rest == SessionInfo.Rest.none)
+    store.rest("s")
+    _ = store.apply(hook("s", .sessionStart(source: "compact")), now: 7)
+    #expect(store.sessions["s"]?.rest == .manual)                 // auto-compaction is not the user
 }
 
 @Test func dismissedSessionsOnlyComeBackWhenTheyNeedTheUser() {
@@ -247,9 +252,21 @@ private func hook(_ id: String, _ event: CanonicalEvent, cwd: String? = "/Users/
     #expect(store.sessions["s"] != nil && store.dismissed.isEmpty)
 }
 
+@Test func dismissedSessionThatEndsIsForgotten() {
+    var store = SessionStore()
+    _ = store.apply(hook("s", .sessionStart(source: nil)), now: 0)
+    store.dismiss("s")
+    _ = store.apply(hook("s", .sessionEnd(reason: nil)), now: 1)
+    #expect(store.dismissed.isEmpty && store.sessions["s"] == nil)
+    store.manuallyRested = ["m"]
+    _ = store.apply(hook("m", .sessionEnd(reason: nil)), now: 2)   // ended before Cubi ever saw it
+    #expect(store.manuallyRested.isEmpty)
+}
+
 @Test func seededSetsSurviveARestart() {
     var store = SessionStore()
-    store.seed(dismissed: ["d"], manuallyRested: ["m"])
+    store.dismissed = ["d"]
+    store.manuallyRested = ["m"]
     #expect(store.apply(hook("d", .toolStart(tool: "Bash", input: .null)), now: 1).isEmpty)
     _ = store.apply(hook("m", .toolStart(tool: "Bash", input: .null)), now: 2)
     #expect(store.sessions["m"]?.rest == .manual)

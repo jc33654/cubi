@@ -42,7 +42,7 @@ struct IslandRootView: View {
             .onChanged { _ in onDrag(.moved) }
             .onEnded { _ in onDrag(.ended) })
         .offset(x: xOffset)
-        .onChange(of: state.bots.count) { _, _ in apply(animated: true) }
+        .onChange(of: state.leftWingWidth) { _, _ in apply(animated: true) }
         .onAppear { apply(animated: false) }
         .onChange(of: state.mode) { _, _ in apply(animated: true) }
         .onChange(of: state.placement) { _, _ in apply(animated: true) }

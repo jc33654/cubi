@@ -72,9 +72,10 @@ final class IslandState {
     /// Tapping a robot or a list row: bring that session's terminal to the front.
     @ObservationIgnored var onFocus: (String) -> Void = { _ in }
     /// 去睡覺 / 起床上班 / 放生, implemented by the coordinator.
-    @ObservationIgnored var onRest: (String) -> Void = { _ in }
-    @ObservationIgnored var onWake: (String) -> Void = { _ in }
-    @ObservationIgnored var onDismiss: (String) -> Void = { _ in }
+    enum SessionAction { case rest, wake, dismiss }
+    @ObservationIgnored var onSessionAction: (SessionAction, String) -> Void = { _, _ in }
+    /// Something inside the island (the 💤 pill) asks to open the full view; the controller owns mode changes.
+    @ObservationIgnored var onExpand: () -> Void = {}
 
     /// 工作中: on the wing. 晚安: only in the list, counted on the wing.
     var activeBots: [BotRuntime] { bots.filter { !$0.resting } }

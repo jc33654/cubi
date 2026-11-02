@@ -27,28 +27,22 @@ final class SessionCoordinator {
         self.island = island
         island.state.onDecision = { [weak self] id, decision in self?.decide(id, decision) }
         island.state.onLooksChanged = { [weak self] in self?.sync() }
-        island.state.onRest = { [weak self] id in
+        island.state.onSessionAction = { [weak self] action, id in
             guard let self else { return }
-            CubiLog.write("rest session=\(id.prefix(8))")
-            store.rest(id)
-            sync()
-        }
-        island.state.onWake = { [weak self] id in
-            guard let self else { return }
-            CubiLog.write("wake session=\(id.prefix(8))")
-            store.wake(id, now: Date().timeIntervalSinceReferenceDate)
-            sync()
-        }
-        island.state.onDismiss = { [weak self] id in
-            guard let self else { return }
-            CubiLog.write("dismiss session=\(id.prefix(8))")
-            withdraw(sessionID: id, outcome: .handledElsewhere)
-            store.dismiss(id)
+            CubiLog.write("\(action) session=\(id.prefix(8))")
+            switch action {
+            case .rest: store.rest(id)
+            case .wake: store.wake(id, now: Date().timeIntervalSinceReferenceDate, leavingRest: true)
+            case .dismiss:
+                withdraw(sessionID: id, outcome: .handledElsewhere)
+                store.dismiss(id)
+            }
             sync()
         }
         island.state.onFocus = { [weak self] id in
             guard let self, let info = self.store.sessions[id] else { return }
-            store.wake(id, now: Date().timeIntervalSinceReferenceDate)
+            // A look at the terminal opens the robot's eyes but does not pull it out of the 晚安 zone.
+            store.wake(id, now: Date().timeIntervalSinceReferenceDate, leavingRest: false)
             sync()
             TerminalFocus.focus(info)
         }
@@ -77,7 +71,8 @@ final class SessionCoordinator {
         } else {
             CubiLog.write("no saved usage")
         }
-        store.seed(dismissed: Self.loadSet(Self.dismissedKey), manuallyRested: Self.loadSet(Self.restedKey))
+        store.dismissed = Self.loadSet(Self.dismissedKey)
+        store.manuallyRested = Self.loadSet(Self.restedKey)
         if !store.dismissed.isEmpty || !store.manuallyRested.isEmpty {
             CubiLog.write("restored dismissed=\(store.dismissed.count) rested=\(store.manuallyRested.count)")
         }
@@ -140,6 +135,8 @@ final class SessionCoordinator {
 
         // A prompt the plugin cannot answer from the island (no reply template) goes back to the
         // agent's own UI at once: no card, no sound, the robot just shows the tool as running.
+        // Known gap: this runs before the store sees the event, so for such plugins the prompt does
+        // not count as "needs the user" and will not pull a dismissed session back.
         if let needed = decoded.event.requiredCapability, !plugin.capabilities.contains(needed) {
             CubiLog.write("\(plugin.id) cannot answer \(decoded.event.name) here; left to the agent")
             connection.close()
@@ -400,18 +397,13 @@ final class SessionCoordinator {
 
     private static let dismissedKey = "dismissedSessions"
     private static let restedKey = "restedSessions"
-    private var savedSets: (Set<String>, Set<String>) = ([], [])
-
     private static func loadSet(_ key: String) -> Set<String> {
         Set(UserDefaults.standard.stringArray(forKey: key) ?? [])
     }
 
     private func persistSets() {
-        let now = (store.dismissed, store.manuallyRested)
-        guard now != savedSets else { return }
-        savedSets = now
-        UserDefaults.standard.set(Array(now.0.prefix(200)), forKey: Self.dismissedKey)
-        UserDefaults.standard.set(Array(now.1.prefix(200)), forKey: Self.restedKey)
+        UserDefaults.standard.set(Array(store.dismissed), forKey: Self.dismissedKey)
+        UserDefaults.standard.set(Array(store.manuallyRested), forKey: Self.restedKey)
     }
 
     private func card(for request: PendingRequest) -> PendingCard {

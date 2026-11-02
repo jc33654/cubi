@@ -20,6 +20,7 @@ final class IslandController {
             screenFrame: CGRect(x: 0, y: 0, width: 1440, height: 900), hasNotch: false,
             notchWidth: NotchGeometry.barWidth, notchHeight: NotchGeometry.barHeight)
         state = IslandState(geometry: geometry)
+        state.onExpand = { [weak self] in self?.present() }
         floating = FloatingController(state: state, onTap: { [weak self] in self?.tapped() },
                                       onDrag: { [weak self] phase in self?.drag(phase) })
 

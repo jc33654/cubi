@@ -37,7 +37,7 @@ struct FloatingRootView: View {
             .onChanged { _ in onDrag(.moved) }
             .onEnded { _ in onDrag(.ended) })
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .onChange(of: state.bots.count) { _, _ in apply(animated: true) }
+        .onChange(of: state.leftWingWidth) { _, _ in apply(animated: true) }
         .onAppear { apply(animated: false) }
         .onChange(of: state.mode) { _, _ in apply(animated: true) }
         .onChange(of: state.expandedHeight) { _, _ in if state.mode == .expanded { apply(animated: true) } }

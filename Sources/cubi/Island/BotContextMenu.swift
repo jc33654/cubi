@@ -33,11 +33,11 @@ struct BotContextMenu: View {
         }
         Divider()
         if bot.resting {
-            Button("起床上班") { state.onWake(bot.id) }
+            Button("起床上班") { state.onSessionAction(.wake, bot.id) }
         } else {
-            Button("去睡覺") { state.onRest(bot.id) }
+            Button("去睡覺") { state.onSessionAction(.rest, bot.id) }
         }
-        Button("放生") { state.onDismiss(bot.id) }
+        Button("放生") { state.onSessionAction(.dismiss, bot.id) }
     }
 
     private static let swatches: [NSImage] = SessionPalette.colors.map { makeSwatch($0) }

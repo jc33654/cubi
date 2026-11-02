@@ -63,15 +63,10 @@ public struct SessionStore: Sendable {
     public static let restAfter = 12 * 3600.0
 
     /// Sessions the user let go of ("放生"): their events are dropped until they need the user again.
-    public private(set) var dismissed: Set<String> = []
+    /// Set on launch from the previous run's saved set.
+    public var dismissed: Set<String> = []
     /// Sessions the user sent to sleep by hand; applied again when the session shows up after a restart.
-    public private(set) var manuallyRested: Set<String> = []
-
-    /// Restores both sets from a previous run.
-    public mutating func seed(dismissed: Set<String>, manuallyRested: Set<String>) {
-        self.dismissed = dismissed
-        self.manuallyRested = manuallyRested
-    }
+    public var manuallyRested: Set<String> = []
 
     public init() {}
 
@@ -108,17 +103,22 @@ public struct SessionStore: Sendable {
         var effects: [StoreEffect] = []
         let id = hook.session.id
         if dismissed.contains(id) {
-            if hook.event.needsTheUser {
+            switch hook.event {
+            case _ where hook.event.needsTheUser:
                 dismissed.remove(id)
-            } else if case .statusline(let info) = hook.event {
+            case .statusline(let info):
                 return mergeUsage(info, from: id).map { [.usage($0)] } ?? []
-            } else {
+            case .sessionEnd:
+                forget(id)
+                return []
+            default:
                 return []
             }
         }
         if sessions[id] == nil {
             switch hook.event {
             case .sessionEnd:
+                forget(id)
                 return []
             case .statusline(let info):
                 // The status line runs for every session, hooks or not; only hooked sessions get a
@@ -269,11 +269,14 @@ public struct SessionStore: Sendable {
     }
 
     /// The user clicked the robot: a sleeping session wakes up (idle) and the inactivity clock restarts.
-    public mutating func wake(_ id: String, now: Double) {
-        guard var s = sessions[id], s.botState == .sleeping || s.resting else { return }
+    /// `leavingRest`: 起床上班 also leaves the 晚安 zone; a plain click on the robot only opens its eyes.
+    public mutating func wake(_ id: String, now: Double, leavingRest: Bool) {
+        guard var s = sessions[id], s.botState == .sleeping || (leavingRest && s.resting) else { return }
         if s.botState == .sleeping { s.botState = s.contextPercent >= 80 ? .tired : .idle }
-        s.rest = .none
-        manuallyRested.remove(id)
+        if leavingRest {
+            s.rest = .none
+            manuallyRested.remove(id)
+        }
         s.lastEventAt = now
         s.ticker = "醒了"
         sessions[id] = s
@@ -305,16 +308,9 @@ public struct SessionStore: Sendable {
 
     public mutating func tick(now: Double) {
         for (id, var s) in sessions where !s.ended && s.pending == nil {
-            var changed = false
-            if now - s.lastEventAt >= Self.sleepAfter, s.botState == .idle || s.botState == .tired {
-                s.botState = .sleeping
-                changed = true
-            }
-            if now - s.lastEventAt >= Self.restAfter, s.rest == .none {
-                s.rest = .auto
-                changed = true
-            }
-            if changed { sessions[id] = s }
+            if now - s.lastEventAt >= Self.sleepAfter, s.botState == .idle || s.botState == .tired { s.botState = .sleeping }
+            if now - s.lastEventAt >= Self.restAfter, s.rest == .none { s.rest = .auto }
+            sessions[id] = s
         }
     }
 

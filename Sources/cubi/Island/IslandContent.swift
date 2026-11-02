@@ -84,7 +84,7 @@ struct IslandContent: View {
                         .frame(width: IslandState.restingPillWidth, height: 18)
                         .background(Capsule().fill(.white.opacity(0.12)))
                         .contentShape(Capsule())
-                        .onTapGesture { if state.mode != .expanded { state.mode = .expanded } }
+                        .onTapGesture { state.onExpand() }
                         .help("晚安區有 \(state.restingBots.count) 個 session")
                 }
             }

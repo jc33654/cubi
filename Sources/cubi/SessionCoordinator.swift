@@ -88,6 +88,12 @@ final class SessionCoordinator {
 
     func start() {
         RelayInstaller.ensureInstalled()
+        // Before the first sync(): it persists these sets, and would write them back empty.
+        store.dismissed = Self.loadSet(Self.dismissedKey)
+        store.manuallyRested = Self.loadSet(Self.restedKey)
+        store.seedOrder(UserDefaults.standard.stringArray(forKey: Self.orderKey) ?? [])
+        island.state.seedLooks(Self.loadLooks())
+        CubiLog.write("restored dismissed=\(store.dismissed.count) rested=\(store.manuallyRested.count) order=\(store.preferredOrder.count) looks=\(island.state.looks.bySession.count)")
         // The status line only fires when a session changes; restore the last reading so the
         // readout is not blank until then.
         if let data = UserDefaults.standard.data(forKey: Self.usageKey) {
@@ -103,11 +109,6 @@ final class SessionCoordinator {
         } else {
             CubiLog.write("no saved usage")
         }
-        store.dismissed = Self.loadSet(Self.dismissedKey)
-        store.manuallyRested = Self.loadSet(Self.restedKey)
-        store.seedOrder(UserDefaults.standard.stringArray(forKey: Self.orderKey) ?? [])
-        island.state.seedLooks(Self.loadLooks())
-        CubiLog.write("restored dismissed=\(store.dismissed.count) rested=\(store.manuallyRested.count) order=\(store.preferredOrder.count) looks=\(island.state.looks.bySession.count)")
         let server = HookServer(
             handler: { [weak self] envelope, connection in self?.handle(envelope, connection) },
             onClientClosed: { [weak self] connection in self?.clientClosed(connection) })

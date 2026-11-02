@@ -10,17 +10,13 @@ struct SessionListView: View {
 
     var body: some View {
         if state.bots.isEmpty {
-            VStack(spacing: 6) {
-                Text("沒有 Claude Code session")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.6))
-                newSessionButton
-            }
-            .frame(maxWidth: .infinity, minHeight: 60)
+            Text("沒有 Claude Code session（右邊 ＋ 開一個）")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.white.opacity(0.6))
+                .frame(maxWidth: .infinity, minHeight: 60)
         } else {
             ScrollView(.vertical) {
                 VStack(spacing: 4) {
-                    newSessionButton
                     if !state.restingBots.isEmpty { heading("工作中") }
                     ForEach(state.activeBots) { bot in row(bot) }
                     if !state.restingBots.isEmpty {
@@ -33,17 +29,6 @@ struct SessionListView: View {
             }
             .frame(height: min(contentHeight, maxHeight))
         }
-    }
-
-    private var newSessionButton: some View {
-        Button { state.onNewSession(.dialog(fromSession: nil)) } label: {
-            Label("開新 session", systemImage: "plus")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.white.opacity(0.7))
-        }
-        .buttonStyle(.plain)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.leading, 8)
     }
 
     private func heading(_ text: String) -> some View {

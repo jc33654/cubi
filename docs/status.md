@@ -14,7 +14,7 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 | 審批／問題卡片 | 拒絕／在終端處理／總是允許／允許；AskUserQuestion 選項卡；終端先答或 Esc 自動撤卡；只認同一 tool call 的事件 | 真機驗證 |
 | Session 資訊面板 | 專案、模型／effort／版本、開始時間（transcript 建立時間）、使用時間、回合與工具呼叫數、花費、變更行數、context、終端、跳到終端 | 離線渲染驗證；點列待 Jade 親手試 |
 | 工作中／晚安／放生 | 12 小時沒事件自動進晚安區；右鍵「去睡覺」「起床上班」「放生」；放生後只有送訊息、被問、SessionStart 會回來；兩個集合存 UserDefaults | 放生與拉回真機以 fixture 重播驗證；右鍵待 Jade 親手試 |
-| 開新 session | 右鍵「開新 session…」對話框（最近專案／瀏覽、第一句話、接續、終端）、機器人右鍵「再開一個」「在新分頁接續這個 session」（`--resume <id>`）、清單「＋」；Ghostty 走 AppleScript `new surface configuration` + `input text`（不用 `initial input`，見已知限制），Terminal.app 走 `do script`；`cubi --new-session` CLI 同一條路 | CLI 真機驗證（Ghostty 帶第一句話 → 4 秒內 SessionStart + prompt；Terminal.app `--continue` → 接到同一個 session；`--resume <id>` 真機驗證；終端開不了時的警告路徑沒驗）；對話框與右鍵待 Jade 親手試 |
+| 開新 session | 右鍵「開新 session…」對話框（最近專案／瀏覽、第一句話、接續、終端）、機器人右鍵「再開一個」「在新分頁接續這個 session」（`--resume <id>`）、右翼用量旁的 ＋（compact 就能按）；Ghostty 走 AppleScript `new surface configuration` + `input text`（不用 `initial input`，見已知限制），Terminal.app 走 `do script`；`cubi --new-session` CLI 同一條路 | CLI 真機驗證（Ghostty 帶第一句話 → 4 秒內 SessionStart + prompt；Terminal.app `--continue` → 接到同一個 session；`--resume <id>` 真機驗證；終端開不了時的警告路徑沒驗）；對話框與右鍵待 Jade 親手試 |
 | 用量 | 5h / 7d / cost 跨 session 合併，最近活動的 session 才能覆寫 | 真機驗證 |
 | 聚焦終端 | Terminal.app（tty）、Ghostty（標題／cwd）、其他 app 只切 app；沒有終端身分時用名稱／cwd 猜 Ghostty 再 Terminal.app；點沉睡的機器人會叫醒 | 有身分路徑真機驗證；猜測路徑只有腳本語法驗證 |
 | 安裝器 UI | 設定頁：Claude Code hooks 安裝／解除（看 diff 再寫）、退役舊 notify hook、Agents 開關與 API key、顯示、範圍、工具箱面板 | 真機驗證 |

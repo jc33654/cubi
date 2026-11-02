@@ -101,7 +101,18 @@ struct IslandContent: View {
             .padding(.trailing, 8)
             .frame(width: state.leftWingWidth, height: height, alignment: .trailing)
             Spacer().frame(width: anchored ? state.geometry.notchWidth : IslandState.floatingGap)
-            Group {
+            HStack(spacing: 8) {
+                // New session, reachable the moment the island slides in (no need to expand it).
+                Button { state.onNewSession(.dialog(fromSession: nil)) } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.75))
+                        .frame(width: 20, height: 20)
+                        .background(Circle().fill(.white.opacity(0.12)))
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help("開新 session")
                 if let u = state.usage, u.fiveHour != nil || u.sevenDay != nil {
                     VStack(alignment: .trailing, spacing: 1) {
                         if let w = u.fiveHour { usageLine("5h", w) }

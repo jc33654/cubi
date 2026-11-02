@@ -236,7 +236,8 @@ final class IslandState {
         CGSize(width: min(expandedWidth, maxExpandedSize.width), height: min(expandedHeight, maxExpandedSize.height))
     }
     /// Right wing: the usage readout. Left wing: the robots, growing with their number.
-    static let rightWingWidth: CGFloat = 90
+    /// Usage readout plus the ＋ button.
+    static let rightWingWidth: CGFloat = 118
     static let minLeftWingWidth: CGFloat = 90
     /// The compact island hangs a little below the notch so the robots can be larger than it.
     static let compactExtraHeight: CGFloat = 14

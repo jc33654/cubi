@@ -179,7 +179,7 @@ docs/                plan.md（設計與決策）、protocol.md（relay 協定�
 常用的驗證方式：
 
 - `make test`
-- 離線渲染島：`.build/release/cubi --render-island <hidden|compact|expanded|detail|approval|question|usage|usage-compact|diff|floating|floating-approval> <botState> out.png`
+- 離線渲染島：`.build/release/cubi --render-island <hidden|compact|expanded|detail|approval|question|usage|usage-compact|diff|floating|floating-approval> <botState> out.png`；環境變數 `CUBI_RENDER_BOTS=n` 畫 n 隻（預設 4，第三隻在晚安區）、`CUBI_RENDER_BOT_SIZE=small|large` 換機器人大小（預設 regular，不吃這台機器的設定）
 - 重播實錄 payload：`python3 -c 'import json;print(json.dumps(json.load(open("Tests/CubiKitTests/Fixtures/claude-2.1.312/SessionStart-1.json"))["payload"]))' | ~/.cubi/bin/cubi-hook --agent claude-code --event SessionStart`
 - 錄新版 Claude Code 的 payload：先 `make release`（capture 用的是 `.build/release/cubi-hook`），repo 要在 `$HOME/Documents/cubi`（`docs/capture.settings.local.json` 寫死這個路徑，放別處就改它）。把那份 hooks 放進某個專案的 `.claude/settings.local.json`，跑一輪後用 `scripts/import-fixtures.py <版本>` 匯入（會把路徑洗掉）。錄完要把那些 hooks 拿掉，不然該專案的事件會重複觸發：在 `~/Documents/cubi` 錄的可以在設定頁按「移除」（預設只看這個目錄），在別的專案錄的要自己手動刪。
 

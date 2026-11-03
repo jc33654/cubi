@@ -216,6 +216,13 @@ private func hook(_ id: String, _ event: CanonicalEvent, cwd: String? = "/Users/
     store.restAfter = 120
     store.tick(now: 120)
     #expect(store.sessions["s"]?.rest == .auto)
+    store.restAfter = .infinity                                   // lengthened: an automatic rest is undone
+    store.tick(now: 121)
+    #expect(store.sessions["s"]?.rest == SessionInfo.Rest.none)
+    #expect(store.sessions["s"]?.botState == .sleeping)           // still asleep: only an event wakes it
+    store.rest("s")
+    store.tick(now: 122)
+    #expect(store.sessions["s"]?.rest == .manual)                 // a manual rest is the user's, untouched
 }
 
 // MARK: - 工作中 / 晚安 zones and 放生

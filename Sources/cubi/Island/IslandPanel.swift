@@ -1,8 +1,11 @@
 import AppKit
 
 /// The notch panel, pinned to the top of the screen; the island grows inside it, the window never moves.
+/// Wide, because the island shifts sideways as robots arrive (`IslandState.wingOffset`): the
+/// 860 pt info panel still fits with a dozen robots on the wing. Transparent, so hanging past
+/// the edge of a narrower screen does no harm.
 final class IslandPanel: OverlayPanel {
-    static let size = CGSize(width: 1000, height: 700)
+    static let size = CGSize(width: 1400, height: 700)
 
     init() {
         // Above the menu bar so the island can overlap the notch.

@@ -27,10 +27,12 @@ extension IslandState {
         return max(base, wingRowWidth + 16)
     }
     /// Never wider than its screen, taller than most of it, or bigger than the panel it is drawn in.
+    /// In the notch the island sits off-centre by `wingOffset`, so that much is kept on both sides.
     var maxExpandedSize: CGSize {
         let screen = placement == .floating ? (floatingScreenFrame ?? geometry.screenFrame) : geometry.screenFrame
         let panel = placement == .floating ? FloatingPanel.size : IslandPanel.size
-        return CGSize(width: min(screen.width - 80, panel.width - 20),
+        let shift = placement == .notch ? 2 * abs(wingOffset) : 0
+        return CGSize(width: min(screen.width - 80, panel.width - 20) - shift,
                       height: min((screen.height * 0.7).rounded(), panel.height - 20))
     }
     var expandedSize: CGSize {

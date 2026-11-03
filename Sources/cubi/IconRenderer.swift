@@ -36,10 +36,9 @@ enum IconRenderer {
         let state = IslandState(geometry: geometry)
         state.persists = false
         state.placement = .notch
-        // CUBI_RENDER_BOT_SIZE=small|large draws the robots at that setting.
-        if let choice = IslandState.BotSizeChoice(rawValue: ProcessInfo.processInfo.environment["CUBI_RENDER_BOT_SIZE"] ?? "") {
-            state.botSizeChoice = choice
-        }
+        // CUBI_RENDER_BOT_SIZE=small|large draws the robots at that setting; otherwise the regular
+        // size, whatever this machine's own setting is (`persists = false` only stops writes).
+        state.botSizeChoice = IslandState.BotSizeChoice(rawValue: ProcessInfo.processInfo.environment["CUBI_RENDER_BOT_SIZE"] ?? "") ?? .regular
         var floatingShell = false
         switch mode {
         case "floating", "floating-approval":
@@ -88,7 +87,10 @@ enum IconRenderer {
             return false
         }
         // CUBI_RENDER_BOTS=n draws n robots (default 4; the third one rests), to check crowded wings.
-        let count = Int(ProcessInfo.processInfo.environment["CUBI_RENDER_BOTS"] ?? "") ?? 4
+        guard let count = Int(ProcessInfo.processInfo.environment["CUBI_RENDER_BOTS"] ?? "4"), count >= 1 else {
+            FileHandle.standardError.write(Data("cubi: CUBI_RENDER_BOTS must be a whole number ≥ 1\n".utf8))
+            return false
+        }
         let stock = ["alpha", "beta", "gamma", "delta", "eps", "zeta", "eta", "theta"]
         let names = (0..<count).map { stock[$0 % stock.count] + ($0 < stock.count ? "" : String($0)) }
         for (i, name) in names.enumerated() {

@@ -244,6 +244,9 @@ public struct SessionStore: Sendable {
         for (id, var s) in sessions where !s.ended && s.pending == nil {
             if now - s.lastEventAt >= sleepAfter, s.botState == .idle || s.botState == .tired { s.botState = .sleeping }
             if now - s.lastEventAt >= restAfter, s.rest == .none { s.rest = .auto }
+            // The clock was lengthened (or turned off): a session that rested on its own comes back.
+            // Sleeping is not undone the same way: a manual rest is sleeping too.
+            if now - s.lastEventAt < restAfter, s.rest == .auto { s.rest = .none }
             sessions[id] = s
         }
     }

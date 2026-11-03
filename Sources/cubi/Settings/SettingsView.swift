@@ -133,7 +133,7 @@ struct SettingsView: View {
             Picker("沉睡多久自動進晚安區", selection: $timing.restHours) {
                 ForEach(SleepTiming.restChoices, id: \.self) { Text(SleepTiming.restLabel($0)).tag($0) }
             }
-            Text("手動「去睡覺」的不受這裡影響；狀態列持續回報不算動靜。").font(.system(size: 11)).foregroundStyle(.secondary)
+            Text("調短立刻生效；調長不會叫醒已經沉睡的，但自動進晚安區的會回來。手動「去睡覺」的不受這裡影響；狀態列持續回報不算動靜。").font(.system(size: 11)).foregroundStyle(.secondary)
         }
         .font(.system(size: 12))
         .frame(maxWidth: 420, alignment: .leading)

@@ -41,7 +41,7 @@
   <tr>
     <td align="center"><img src="docs/images/bot-happy.png" width="65"><br><b>happy</b><br><sub>做完了，開心 1.5 秒</sub></td>
     <td align="center"><img src="docs/images/bot-error.png" width="65"><br><b>error</b><br><sub>抖一下</sub></td>
-    <td align="center"><img src="docs/images/bot-sleeping.png" width="65"><br><b>sleeping</b><br><sub>10 分鐘沒動靜，點一下叫醒</sub></td>
+    <td align="center"><img src="docs/images/bot-sleeping.png" width="65"><br><b>sleeping</b><br><sub>10 分鐘沒動靜（可調），點一下叫醒</sub></td>
     <td align="center"><img src="docs/images/bot-tired.png" width="65"><br><b>tired</b><br><sub>context ≥ 80%，≥ 90% 紅邊脈動</sub></td>
   </tr>
 </table>
@@ -90,7 +90,7 @@
 curl -fsSL https://raw.githubusercontent.com/jc33654/cubi/main/scripts/install.sh | bash
 ```
 
-不用 Xcode、不用憑證。腳本會從 GitHub Releases 抓最新的 `Cubi.zip`，做完整性校驗（sha256）與來源驗證（簽章必須是 Cubi 的 `cubi-dev` 憑證，憑證 hash 寫在腳本裡），裝到 `~/Applications/Cubi.app`，拿掉 quarantine 後打開。`CUBI_VERSION=v0.2.0` 可以指定版本。
+不用 Xcode、不用憑證。腳本會從 GitHub Releases 抓最新的 `Cubi.zip`，做完整性校驗（sha256）與來源驗證（簽章必須是 Cubi 的 `cubi-dev` 憑證，憑證 hash 寫在腳本裡），裝到 `~/Applications/Cubi.app`，拿掉 quarantine 後打開。`CUBI_VERSION=v0.1.0` 可以指定版本。
 
 **你在信任什麼**：Cubi 沒有 Apple 公證（不買 Developer ID 的代價），所以 macOS 的 Gatekeeper 會擋它。腳本替你做的事是：先用 `codesign -R` 確認這個包真的是用 Cubi 的憑證簽的，確認過才拿掉 quarantine。不想跑 `curl | bash` 的話，自己來：
 
@@ -101,7 +101,7 @@ curl -fsSL https://raw.githubusercontent.com/jc33654/cubi/main/scripts/install.s
 
 ### 從原始碼建置
 
-需要 macOS 15 以上、Xcode Command Line Tools（`xcode-select --install`，**不需要 Xcode.app**）、Claude Code 2.1.312 以上。
+需要 macOS 15 以上（沒瀏海的螢幕也行，會在頂端置中浮一條小 pill）、Xcode Command Line Tools（`xcode-select --install`，**不需要 Xcode.app**）、Claude Code 2.1.312 以上。
 
 ```
 git clone https://github.com/jc33654/cubi.git
@@ -128,7 +128,7 @@ open ~/Applications/Cubi.app
 |---|---|
 | 滑鼠靠近瀏海 | 島滑出來成 compact（機器人一排 + 用量） |
 | 點島 | expanded：session 清單（名稱、context %、最近一次編輯的 +N −M）、用量列。高度隨內容長，最多到螢幕七成 |
-| 點清單的一列 | 右邊打開這個 session 的資訊：專案、模型／effort／版本、開始時間、使用時間（每秒走）、回合與工具呼叫數、花費、變更行數、context、終端。按「跳到終端」切到它的分頁，✕ 關閉 |
+| 點清單的一列 | 右邊打開這個 session 的資訊：專案、模型／effort／版本、開始時間、使用時間（Claude Code 回報的時長加上之後經過的時間，每秒走）、回合與工具呼叫數、花費、變更行數、context、終端。按「跳到終端」切到它的分頁，✕ 關閉 |
 | 點機器人 | 跳到那個 session 的終端分頁（Terminal.app 用 tty、Ghostty 用標題／cwd、其他 app 只切到 app）；hooks 環境沒有 `TERM_PROGRAM`／tty 的 session 只能用名稱／cwd 猜：先問 Ghostty 再問 Terminal.app，都沒中就不動。沉睡中的機器人點一下會醒 |
 | 有審批 | 島自動打開卡片：**拒絕 / 在終端處理 / 總是允許 / 允許**。「總是允許」會把 Claude Code 自己建議的規則寫進 session 與 `settings.local.json` |
 | 有 AskUserQuestion | 每題一組選項按鈕；多選用勾選；也可「在終端回答」 |
@@ -170,7 +170,7 @@ open ~/Applications/Cubi.app
 
 - **relay** `cubi-hook` 是 Claude Code 每個 hook 事件跑的小程式：stdin 讀 payload，送進 unix socket，等 app 回覆再寫回 stdout。只 import Darwin，冷啟動個位數毫秒。
 - **app** 收事件、更新每個 session 的狀態機、畫機器人。審批這類 blocking 事件最多等 115 秒；app 沒開或當掉，Claude Code 自動退回終端自己問，什麼都不會卡住。
-- 島的狀態：`hidden → compact → expanded`。瀏海是物理的，所以島永遠以瀏海為中心留白，機器人在左翼、用量在右翼。
+- 島的狀態：`hidden → compact → expanded`。瀏海是物理的，所以島永遠以瀏海為中心留白，機器人在左翼、用量在右翼。沒瀏海的螢幕會在頂端置中浮一條小 pill 當瀏海用。
 - 零第三方依賴：AppKit + SwiftUI，SwiftPM，不用 Xcode.app。
 - 設計與決策寫在 [docs/plan.md](docs/plan.md)，relay 協定與欄位在 [docs/protocol.md](docs/protocol.md)，進度在 [docs/status.md](docs/status.md)。
 

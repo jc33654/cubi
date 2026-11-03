@@ -72,12 +72,18 @@ relay 端：`cubi-hook --agent <id> --event <native>`，信封 `{v, agent, event
 5. **設定頁**：Agents 區已會列出 plugin 的開關、安裝按鈕、secrets 輸入；程式碼 plugin 只要 `installMode` 對，就能用同一套安裝器（jsonHooks）或顯示手動說明（manual）。
 6. **驗證**：fixture 單元測試（decode 逐一對照、reply 形狀）、真機重播、真的開那個 agent 跑一輪。
 
-### 候選 agent 的已知事實（2026-10-30，未查證最新版）
+### 候選 agent 的已知事實（2026-11-03 查官方文件，兩個都沒裝在開發機上）
 
-| Agent | hook | 備註 |
+| | OpenAI Codex CLI | Gemini CLI |
 |---|---|---|
-| OpenAI Codex CLI | `~/.codex/config.toml` 有 `notify` 指令（事件：`agent-turn-complete` 等），沒有審批 hook | 只能監看；TOML 安裝器需要程式碼 plugin 或 `manual` |
-| Gemini CLI | 有 hooks 設定（`~/.gemini/settings.json`，事件名與 Claude Code 類似：BeforeTool / AfterTool…） | 形狀接近 json-hooks；審批回覆格式要查 |
-| Cursor / Copilot CLI | 不確定 | 要先查 |
+| 文件 | https://learn.chatgpt.com/docs/hooks（developers.openai.com/codex/hooks 轉過去） | https://geminicli.com/docs/hooks/reference |
+| 設定檔 | `~/.codex/hooks.json`（或 `config.toml` 的 `[[hooks.X]]`）、專案 `.codex/` 同名 | `~/.gemini/settings.json` 的 `hooks` 物件（專案 `.gemini/settings.json` 優先） |
+| 條目形狀 | `"PreToolUse": [{ "matcher": "Bash", "hooks": [{ "type": "command", "command": "…", "timeout": 30 }] }]`，timeout 秒 | 同形狀，多 `name`／`description`／`sequential`，timeout 毫秒 |
+| 事件 | SessionStart／SessionEnd／PreToolUse／**PermissionRequest**／PostToolUse／PreModelRequest／PostModelRequest／PreCompact／PostCompact／UserPromptSubmit／SubagentStart／SubagentStop／Stop／Interrupt | SessionStart／SessionEnd／BeforeTool／AfterTool／BeforeAgent／AfterAgent／BeforeModel／AfterModel／BeforeToolSelection／Notification／PreCompress |
+| stdin 共同欄位 | `session_id`、`transcript_path`、`cwd`、`hook_event_name`、`model`；PreToolUse 多 `turn_id`、`tool_name`、`tool_use_id`、`tool_input`、`permission_mode` | `session_id`、`transcript_path`、`cwd`、`hook_event_name`、`timestamp`；工具事件多 `tool_name`、`tool_input` |
+| 審批回覆 | `PermissionRequest` → `{"hookSpecificOutput":{"decision":{"behavior":"allow"|"deny","message":…}}}`，不回就走原本提示；PreToolUse 的 `permissionDecision` 支援 allow／deny，`ask` 「parsed but not supported」 | BeforeTool 只能 `decision: allow|deny`（policy，不是回應使用者的審批提示）；沒有 PermissionRequest；`Notification` 純觀測 |
+| 問題卡（AskUserQuestion 類） | 文件沒有 | 文件沒有 |
+| 旗標 | 預設開；非 managed 的 hook **要在 `/hooks` 審核信任（依 hash）才會跑**，裝完要使用者去按一次 | 文件沒標實驗；舊第三方資料說要開旗標，未查證 |
+| 風險 | — | 文件註明 2026-06-18 起免費與 Google One 用戶被換成 Antigravity CLI，Gemini CLI 走向不明 |
 
-要接哪一個先告訴我，第一步是我去查它目前版本的 hook 文件並錄 payload。
+結論：Codex 的事件與回覆幾乎是 Claude Code 的鏡像（PermissionRequest、PreToolUse、Stop、SessionStart/End、UserPromptSubmit），用現有 json-hooks 安裝器加一個 timeout 單位與 `PermissionRequest` 回覆模板就能做審批卡；Gemini 只能監看與 policy 擋，做不出「要不要允許」那張卡。

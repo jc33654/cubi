@@ -12,21 +12,27 @@ final class SleepTiming {
     static let sleepKey = "sleepAfterMinutes"
     static let restKey = "restAfterHours"
 
-    var sleepMinutes: Int {
+    // Initialised in the declarations, not in `init`: an optional stored property starts as nil,
+    // so assigning it in `init` counts as a change and would write the defaults back at launch.
+    var sleepMinutes: Int = SleepTiming.savedSleepMinutes() {
         didSet { UserDefaults.standard.set(sleepMinutes, forKey: Self.sleepKey); onChange() }
     }
     /// nil: never. Saved as 0.
-    var restHours: Int? {
+    var restHours: Int? = SleepTiming.savedRestHours() {
         didSet { UserDefaults.standard.set(restHours ?? 0, forKey: Self.restKey); onChange() }
     }
     @ObservationIgnored var onChange: () -> Void = {}
 
-    init() {
+    private static func savedSleepMinutes() -> Int {
+        let sleep = UserDefaults.standard.integer(forKey: sleepKey)
+        return sleepChoices.contains(sleep) ? sleep : 10
+    }
+
+    private static func savedRestHours() -> Int? {
         let defaults = UserDefaults.standard
-        let sleep = defaults.integer(forKey: Self.sleepKey)
-        sleepMinutes = Self.sleepChoices.contains(sleep) ? sleep : 10
-        let rest = defaults.object(forKey: Self.restKey) == nil ? 12 : defaults.integer(forKey: Self.restKey)
-        restHours = rest == 0 ? nil : (Self.restChoices.contains(rest) ? rest : 12)
+        guard defaults.object(forKey: restKey) != nil else { return 12 }
+        let rest = defaults.integer(forKey: restKey)
+        return rest == 0 ? nil : (restChoices.contains(rest) ? rest : 12)
     }
 
     var sleepAfter: Double { Double(sleepMinutes) * 60 }

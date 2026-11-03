@@ -118,7 +118,7 @@ CLI 跟 app 一樣以 `$HOME` 為家目錄；要對假目錄測就 `HOME=/tmp/x 
 | 用量旁的 ＋（島一滑入就能按，不用展開）、右鍵 → 開新 session…（⌘N） | 對話框：選專案目錄（Cubi 開過的 + Claude Code 記錄過的 `~/.claude.json` projects，或「瀏覽…」）、選填第一句話（一開就送出）、「接續上次對話」（`claude --continue`）、終端（自動＝Ghostty 有裝就 Ghostty，否則 Terminal.app）。⌘↩ 開始。Ghostty 開在最前面視窗的新分頁、Terminal.app 開新視窗，指令當第一行輸入打進去，所以 PATH、shell 都是你自己的 |
 | 右鍵機器人 → 在這個專案再開一個…／在新分頁接續這個 session；資訊面板「再開一個」 | 用那個 session 的專案目錄與終端。「接續這個 session」不開對話框，直接 `claude --resume <這個 session 的 id>`（不是 `--continue`：同目錄有兩個 session 時才不會接錯）。終端開不了（Automation 沒允許、Ghostty 太舊）會跳一個警告；Ghostty 失敗會改試 Terminal.app |
 
-機器人狀態：idle、thinking（頭頂三點）、working、waiting（跳動 + ! 或 ?）、error（抖一下）、happy（完成後 1.5 秒）、sleeping（10 分鐘無事件，點一下叫醒）、tired（context ≥ 80%，≥ 90% 描邊紅色脈動）。
+機器人狀態：idle、thinking（頭頂三點）、working、waiting（跳動 + ! 或 ?）、error（抖一下）、happy（完成後 1.5 秒）、sleeping（預設 10 分鐘無事件，設定頁可調，點一下叫醒）、tired（context ≥ 80%，≥ 90% 描邊紅色脈動）。
 
 音效用 macOS 內建系統音，設定頁可關。
 

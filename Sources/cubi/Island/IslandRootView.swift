@@ -43,6 +43,7 @@ struct IslandRootView: View {
             .onEnded { _ in onDrag(.ended) })
         .offset(x: xOffset)
         .onChange(of: state.leftWingWidth) { _, _ in apply(animated: true) }
+        .onChange(of: state.botSizeChoice) { _, _ in apply(animated: true) }
         .onAppear { apply(animated: false) }
         .onChange(of: state.mode) { _, _ in apply(animated: true) }
         .onChange(of: state.placement) { _, _ in apply(animated: true) }

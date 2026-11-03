@@ -145,13 +145,47 @@ final class IslandState {
     var pinned: Bool {
         didSet { if persists { UserDefaults.standard.set(pinned, forKey: Self.pinnedKey) } }
     }
+    /// User setting: with the island resting compact (pinned, or floating), hovering opens the full
+    /// view. Off: hovering leaves it compact and a click opens it.
+    var expandOnHover: Bool {
+        didSet { if persists { UserDefaults.standard.set(expandOnHover, forKey: Self.expandOnHoverKey) } }
+    }
+    /// User setting: how big the robots are drawn; the compact island's height follows.
+    var botSizeChoice: BotSizeChoice {
+        didSet { if persists { UserDefaults.standard.set(botSizeChoice.rawValue, forKey: Self.botSizeKey) } }
+    }
     /// Off for offline renders (`--render-island`), which must not leave settings behind.
     @ObservationIgnored var persists = true
     static let pinnedKey = "islandPinned"
+    static let expandOnHoverKey = "islandExpandOnHover"
+    static let botSizeKey = "botSize"
+
+    enum BotSizeChoice: String, CaseIterable {
+        case small, regular, large
+
+        var displayName: String {
+            switch self {
+            case .small: return "小"
+            case .regular: return "預設"
+            case .large: return "大"
+            }
+        }
+        /// Relative to the regular size (36 pt on a 32 pt notch): 28 / 36 / 44.
+        var factor: CGFloat {
+            switch self {
+            case .small: return 0.78
+            case .regular: return 1
+            case .large: return 1.22
+            }
+        }
+    }
 
     init(geometry: NotchGeometry) {
         self.geometry = geometry
-        self.pinned = UserDefaults.standard.bool(forKey: Self.pinnedKey)
+        let defaults = UserDefaults.standard
+        self.pinned = defaults.bool(forKey: Self.pinnedKey)
+        self.expandOnHover = defaults.object(forKey: Self.expandOnHoverKey) as? Bool ?? true
+        self.botSizeChoice = BotSizeChoice(rawValue: defaults.string(forKey: Self.botSizeKey) ?? "") ?? .regular
     }
 
     // MARK: - Per-session looks (shape / colour the user picked). The coordinator persists them, so
@@ -207,74 +241,4 @@ final class IslandState {
 
     /// What the notch panel draws: nothing while the island is floating.
     var notchMode: IslandMode { placement == .notch ? mode : .hidden }
-
-    /// Gap between the robot row and the usage readout in the floating window (no notch to skip).
-    static let floatingGap: CGFloat = 14
-    static let floatingRadius: CGFloat = 18
-
-    func floatingSize(for mode: IslandMode) -> CGSize {
-        switch mode {
-        case .hidden, .compact: return CGSize(width: leftWingWidth + Self.floatingGap + Self.rightWingWidth, height: compactHeight)
-        case .expanded: return expandedSize
-        }
-    }
-
-    static let expandedBaseWidth: CGFloat = 640
-    static let detailWidth: CGFloat = 860
-    /// The robot row with the notch gap (or the floating gap) and the usage wing: the expanded
-    /// island is never narrower than this, or robots would hang out of its left edge.
-    var wingRowWidth: CGFloat {
-        leftWingWidth + (placement == .notch ? geometry.notchWidth : Self.floatingGap) + Self.rightWingWidth
-    }
-    /// Wider with the info panel open; the height follows whatever is shown (cards, diff, list).
-    var expandedWidth: CGFloat {
-        let base = pendingCards.isEmpty && showingDiffFor == nil && selectedSession != nil ? Self.detailWidth : Self.expandedBaseWidth
-        return max(base, wingRowWidth + 16)
-    }
-    /// Never wider than its screen, taller than most of it, or bigger than the panel it is drawn in.
-    var maxExpandedSize: CGSize {
-        let screen = placement == .floating ? (floatingScreenFrame ?? geometry.screenFrame) : geometry.screenFrame
-        let panel = placement == .floating ? FloatingPanel.size : IslandPanel.size
-        return CGSize(width: min(screen.width - 80, panel.width - 20),
-                      height: min((screen.height * 0.7).rounded(), panel.height - 20))
-    }
-    var expandedSize: CGSize {
-        CGSize(width: min(expandedWidth, maxExpandedSize.width), height: min(expandedHeight, maxExpandedSize.height))
-    }
-    /// Right wing: the usage readout. Left wing: the robots, growing with their number.
-    /// Usage readout plus the ＋ button.
-    static let rightWingWidth: CGFloat = 118
-    static let minLeftWingWidth: CGFloat = 90
-    /// The compact island hangs a little below the notch so the robots can be larger than it.
-    static let compactExtraHeight: CGFloat = 14
-
-    var compactHeight: CGFloat { geometry.notchHeight + Self.compactExtraHeight }
-    /// Robot size on the wings: 36 pt on a 32 pt notch.
-    var botSize: CGFloat { max(16, compactHeight - 10) }
-    static let restingPillWidth: CGFloat = 34
-    var leftWingWidth: CGFloat {
-        let pill = restingBots.isEmpty ? 0 : Self.restingPillWidth + 6
-        return max(Self.minLeftWingWidth, 16 + CGFloat(activeBots.count) * wingSlot + pill)
-    }
-    /// The wings differ in width but the notch must stay in the middle: shift the whole island by
-    /// half the difference (compact and expanded alike), otherwise the robots end up under the
-    /// notch, or, with many of them, outside the island's left edge.
-    var wingOffset: CGFloat { (Self.rightWingWidth - leftWingWidth) / 2 }
-    func xOffset(for mode: IslandMode) -> CGFloat { mode == .hidden ? 0 : wingOffset }
-
-    func size(for mode: IslandMode) -> CGSize {
-        switch mode {
-        case .hidden:   return CGSize(width: geometry.notchWidth, height: geometry.notchHeight)
-        case .compact:  return CGSize(width: geometry.notchWidth + leftWingWidth + Self.rightWingWidth, height: compactHeight)
-        case .expanded: return expandedSize
-        }
-    }
-
-    func cornerRadius(for mode: IslandMode) -> CGFloat {
-        switch mode {
-        case .hidden:   return geometry.hasNotch ? 10 : 8
-        case .compact:  return 14
-        case .expanded: return 22
-        }
-    }
 }

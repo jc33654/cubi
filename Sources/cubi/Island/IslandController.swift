@@ -127,8 +127,9 @@ final class IslandController {
         closeWork = nil
         switch state.mode {
         case .hidden: setMode(.compact)
-        // Pinned or floating: compact is the resting state, so hovering goes straight to the full view.
-        case .compact where state.pinned || state.placement == .floating: setMode(.expanded)
+        // Pinned or floating: compact is the resting state, so hovering goes straight to the full
+        // view, unless the user turned that off (then a click opens it).
+        case .compact where (state.pinned || state.placement == .floating) && state.expandOnHover: setMode(.expanded)
         default: break
         }
     }

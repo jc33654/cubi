@@ -100,6 +100,14 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("顯示").font(.headline)
             Toggle("保持顯示（島不收回，休息時停在 compact）", isOn: $island.pinned)
+            Toggle("滑入就展開（關掉則滑入只停在 compact，點一下才展開）", isOn: $island.expandOnHover)
+                .disabled(!island.pinned && island.placement != .floating)
+                .padding(.leading, 20)
+            Picker("機器人大小", selection: $island.botSizeChoice) {
+                ForEach(IslandState.BotSizeChoice.allCases, id: \.self) { Text($0.displayName).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 260)
             Toggle("音效", isOn: $soundsOn).onChange(of: soundsOn) { _, v in Sounds.enabled = v }
             Toggle("系統通知（需要權限、預設關）", isOn: $notificationsOn).onChange(of: notificationsOn) { _, v in notifier.enabled = v }
             Toggle("登入時啟動", isOn: $loginOn).onChange(of: loginOn) { _, v in

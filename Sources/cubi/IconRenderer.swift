@@ -36,6 +36,10 @@ enum IconRenderer {
         let state = IslandState(geometry: geometry)
         state.persists = false
         state.placement = .notch
+        // CUBI_RENDER_BOT_SIZE=small|large draws the robots at that setting.
+        if let choice = IslandState.BotSizeChoice(rawValue: ProcessInfo.processInfo.environment["CUBI_RENDER_BOT_SIZE"] ?? "") {
+            state.botSizeChoice = choice
+        }
         var floatingShell = false
         switch mode {
         case "floating", "floating-approval":

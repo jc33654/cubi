@@ -41,7 +41,7 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 - 回合數、工具呼叫數只算 Cubi 看到的；Cubi 重啟歸零。
 - hooks 環境沒有 `TERM_PROGRAM`／tty 的 session（來源不明，log 曾出現）只能用名稱／cwd 猜終端，猜不到就不動。
 - 離線渲染（`--render-island`）畫不出 `ScrollView` 內容，清單只能真機看。
-- 瀏海面板 1400 pt：翼上 14 隻（加晚安膠囊）起 compact 的島左緣出面板被切；860 寬的資訊面板從同樣隻數起被壓窄到 854（渲染 13／14／15 隻驗證：13 隻左緣 45 pt，14 隻 3 pt，15 隻被切）。浮動視窗沒有偏移，不受影響。
+- 瀏海面板 1400 pt：翼上 15 隻（含晚安膠囊）起 compact 的島左緣出面板被切；860 寬的資訊面板從同樣隻數起被壓窄到 854，此時機器人那排又會掛出島左緣（渲染 13／14／15 隻驗證：13 隻左緣 45 pt，14 隻 3 pt，15 隻被切）。浮動視窗沒有偏移，不受影響。
 - 從瀏海拖出的瞬間島直接出現在滑鼠下方，沒有飛出動畫。
 - 沒有 Apple 公證：下載的 app 會被 Gatekeeper 擋，install.sh 驗過簽章後拿掉 quarantine；手動裝的人要右鍵開啟或「隱私與安全性 → 強制打開」。憑證 hash 寫死在 install.sh，換憑證要同步改。
 - 開 session：Ghostty 1.3.1 的 AppleScript `initial input` 會把非 ASCII 雙重編碼（繁中變成 `ç¥èåº«` 這種亂碼），所以指令改用 `input text` 打進新分頁（驗證過繁中原樣到達）；`input text` 靠 pty 緩衝，shell 啟動特別慢的機器理論上可能吃掉一截（沒遇過）。

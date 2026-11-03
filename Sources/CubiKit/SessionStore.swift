@@ -275,6 +275,15 @@ public struct SessionStore: Sendable {
         return info
     }
 
+    /// A name learned outside the hooks (Claude Code's own session registry): explicit, like a
+    /// renamed session, so a later status line without a name does not undo it.
+    public mutating func setName(_ name: String, for id: String) {
+        guard !name.isEmpty, var s = sessions[id], !(s.explicitName && s.name == name) else { return }
+        s.name = name
+        s.explicitName = true
+        sessions[id] = s
+    }
+
     /// Same fallback chain as notify-hook.sh: session name, else cwd basename, else id prefix.
     public static func defaultName(id: String, cwd: String?) -> String {
         if let cwd, let last = cwd.split(separator: "/").last, !last.isEmpty { return String(last) }

@@ -33,13 +33,15 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 4. 右鍵「去睡覺」→ 翼上消失、出現「💤 1」、清單在晚安區；「放生」→ 消失；在那個 session 送一句話 → 回來。
 5. 翼上拖一隻機器人換順序 → 清單同序；重啟 Cubi 順序還在；拖機器人時島不會變浮動；右鍵改形狀／顏色後重啟還在。
 6. 右鍵「開新 session…」：對話框選專案、填第一句話（含繁中）、開始 → 終端開新分頁、島上出現新機器人；機器人右鍵「在新分頁接續這個 session」。（Jade 已驗：對話框與繁中第一句話 OK）
-7. 右鍵選單開私用面板走一輪（status、開關、編輯寫入、reveal、pick），行為應與之前一樣。
-8. 在另一台沒裝過的機器跑 `curl -fsSL https://raw.githubusercontent.com/jc33654/cubi/main/scripts/install.sh | bash`，看 Automation 授權與機器人是否出現（v0.1.0 已發，secrets 已設）。
+7. 點改過名的那隻（同目錄還有別的 session 時）→ 跳到它自己的分頁；改名後一分鐘內機器人名字跟著變。
+8. 右鍵選單開私用面板走一輪（status、開關、編輯寫入、reveal、pick），行為應與之前一樣。
+9. 在另一台沒裝過的機器跑 `curl -fsSL https://raw.githubusercontent.com/jc33654/cubi/main/scripts/install.sh | bash`，看 Automation 授權與機器人是否出現（v0.1.0 已發，secrets 已設）。
 
 ## 已知限制
 
 - `cost.total_duration_ms`、`total_api_duration_ms`、`total_lines_*`、`version` 依官方文件解，實錄沒有 statusline 樣本。
 - 回合數、工具呼叫數只算 Cubi 看到的；Cubi 重啟歸零。
+- Ghostty 的 AppleScript 沒有 tty／pid 可比對（sdef 查過：terminal 只有 id、name、working directory），所以只能靠分頁標題；名字取自 Claude Code 的 `~/.claude/sessions/<pid>.json`（改名立刻有），標題比不到時 cwd 只在唯一時採用。同一目錄多個 session 且都沒名字的話，點了只會把 Ghostty 帶到前面、不切分頁。
 - hooks 環境沒有 `TERM_PROGRAM`／tty 的 session（來源不明，log 曾出現）只能用名稱／cwd 猜終端，猜不到就不動。
 - 離線渲染（`--render-island`）畫不出 `ScrollView` 內容，清單只能真機看。
 - 瀏海面板 1400 pt：翼上 15 隻（含晚安膠囊）起 compact 的島左緣出面板被切；860 寬的資訊面板從同樣隻數起被壓窄到 854，此時機器人那排又會掛出島左緣（渲染 13／14／15 隻驗證：13 隻左緣 45 pt，14 隻 3 pt，15 隻被切）。浮動視窗沒有偏移，不受影響。

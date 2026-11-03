@@ -221,7 +221,9 @@ final class SessionCoordinator {
             connection.close()
         }
 
+        let isNew = store.sessions[sessionID] == nil
         let effects = store.apply(decoded, now: Date().timeIntervalSinceReferenceDate)
+        if isNew { applyRegistryNames(only: sessionID) }
         CubiLog.write("event \(decoded.event.name) session=\(sessionID.prefix(8)) pending=\(pending.count)")
         run(effects)
         sync()
@@ -370,7 +372,22 @@ final class SessionCoordinator {
 
     private func tick() {
         store.tick(now: Date().timeIntervalSinceReferenceDate)
+        applyRegistryNames()
         sync()
+    }
+
+    /// Names from Claude Code's own session registry: a rename only reaches the hooks with the
+    /// next status line, the registry has it at once. When a session first shows up, then once a
+    /// minute, for every Claude Code session (other agents have no entry there).
+    func applyRegistryNames(only sessionID: String? = nil) {
+        let candidates = store.sessions.values.filter { $0.agent == ClaudeCodePlugin.agentID && (sessionID == nil || $0.id == sessionID) }
+        guard !candidates.isEmpty else { return }
+        let registry = ClaudeSessionRegistry.entries(in: ClaudeSessionRegistry.directory(home: CubiPaths.home.path))
+        for info in candidates {
+            guard let name = ClaudeSessionRegistry.entry(for: info.id, in: registry)?.name, name != info.name else { continue }
+            store.setName(name, for: info.id)
+            CubiLog.write("name session=\(info.id.prefix(8)) \(info.name) → \(name) (registry)")
+        }
     }
 
     private func applyTiming() {

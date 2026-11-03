@@ -3,7 +3,10 @@ import CubiKit
 
 /// Brings the terminal tab a session runs in to the front. Strategy by terminal:
 ///   Terminal.app  → the tab whose tty matches (same trick as focus-terminal-tab.sh)
-///   Ghostty       → the terminal whose title contains the session name, else whose cwd matches
+///   Ghostty       → the terminal whose title ends with the session name (Claude Code's own
+///                   registry has the freshest one), else the one terminal whose cwd matches:
+///                   several tabs in the same project are ambiguous, and a wrong jump is worse
+///                   than none
 ///   anything else → activate the app by bundle id (tab-level focus is not scriptable)
 ///   no identity   → the hooks ran without TERM_PROGRAM/tty: try Ghostty then Terminal.app by
 ///                   name and cwd, and only switch to what actually matched
@@ -25,7 +28,12 @@ enum TerminalFocus {
     static func focus(_ info: SessionInfo) {
         let client = info.client
         let bundle = client.bundleID ?? ""
-        let name = info.explicitName ? info.name : ""
+        // A rename reaches Claude Code's registry (and the tab title) before the next status line.
+        // Only the title-matching branches need it; Terminal.app goes by tty.
+        var name: String {
+            let fromRegistry = ClaudeSessionRegistry.entry(for: info.id, in: ClaudeSessionRegistry.directory(home: CubiPaths.home.path))?.name ?? ""
+            return !fromRegistry.isEmpty ? fromRegistry : (info.explicitName ? info.name : "")
+        }
         let cwd = info.cwd ?? ""
 
         switch kind(for: info) {
@@ -130,35 +138,41 @@ enum TerminalFocus {
         """
     }
 
-    /// `anyClaude`: with nothing better, take any tab titled "Claude Code" (only when we know the
-    /// session lives in Ghostty).
+    /// Every step only accepts exactly one terminal: the title (two tabs can carry the same name,
+    /// e.g. a resumed session next to the original; then the cwd narrows them), else the cwd, else
+    /// with `anyClaude` the "Claude Code" title. With several sessions in one project directory
+    /// "the first match" is usually the wrong tab, and no jump beats a wrong one.
     static func ghosttyScript(name: String, cwd: String, anyClaude: Bool) -> String {
         """
         tell application "Ghostty"
           set target to missing value
           if \(quote(name)) is not "" then
+            set hits to {}
             repeat with t in terminals
-              if (name of t) ends with (" " & \(quote(name))) then
-                set target to t
-                exit repeat
-              end if
+              if (name of t) ends with (" " & \(quote(name))) then set end of hits to t
             end repeat
+            if (count of hits) > 1 and \(quote(cwd)) is not "" then
+              set narrowed to {}
+              repeat with t in hits
+                if (working directory of t) is \(quote(cwd)) then set end of narrowed to t
+              end repeat
+              set hits to narrowed
+            end if
+            if (count of hits) is 1 then set target to item 1 of hits
           end if
           if target is missing value and \(quote(cwd)) is not "" then
+            set hits to {}
             repeat with t in terminals
-              if (working directory of t) is \(quote(cwd)) then
-                set target to t
-                exit repeat
-              end if
+              if (working directory of t) is \(quote(cwd)) then set end of hits to t
             end repeat
+            if (count of hits) is 1 then set target to item 1 of hits
           end if
           if target is missing value and \(anyClaude) then
+            set hits to {}
             repeat with t in terminals
-              if (name of t) contains "Claude Code" then
-                set target to t
-                exit repeat
-              end if
+              if (name of t) contains "Claude Code" then set end of hits to t
             end repeat
+            if (count of hits) is 1 then set target to item 1 of hits
           end if
           if target is missing value then return "none"
           focus target

@@ -11,6 +11,7 @@
   <img src="https://img.shields.io/badge/macOS-15%2B-black" alt="macOS 15+">
   <img src="https://img.shields.io/badge/Swift-6-orange" alt="Swift 6">
   <img src="https://img.shields.io/badge/%E7%AC%AC%E4%B8%89%E6%96%B9%E4%BE%9D%E8%B3%B4-0-brightgreen" alt="零第三方依賴">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT"></a>
 </p>
 
 <p align="center">
@@ -197,3 +198,7 @@ Claude Code 是內建 plugin。其他 agent 可以用一份 manifest 接進來�
 ## 致謝
 
 協定與做法借自 [Coucou](https://github.com/louis-cfm/coucou)（MIT）。Cubi 的程式碼、機器人與圖示都是自己畫的。
+
+## 授權
+
+MIT，見 [LICENSE](LICENSE)。

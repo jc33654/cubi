@@ -1,0 +1,28 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Example Tool</title>
+<style>
+  body { font: 13px -apple-system, sans-serif; padding: 1.2rem; color: #222; }
+  button { margin-right: .5rem; }
+  pre { background: #f3f3f3; padding: .6rem; min-height: 3em; white-space: pre-wrap; }
+</style>
+<h2>Example Tool</h2>
+<p>每個按鈕對應 manifest 裡的一條指令；面板只能呼叫表裡有的。</p>
+<input id="name" value="世界" size="12">
+<button onclick="call('hello', [document.getElementById('name').value])">hello</button>
+<button onclick="call('date', [])">date</button>
+<button onclick="call('rm', [])">rm（不在表裡，會被拒）</button>
+<pre id="out"></pre>
+<script>
+  const bridge = window.webkit?.messageHandlers?.cubi;
+  async function call(action, args) {
+    const out = document.getElementById("out");
+    if (!bridge) { out.textContent = "不是在 Cubi 裡開的，沒有 bridge"; return; }
+    try {
+      const r = await bridge.postMessage({ action, args });   // {ok, out, err}
+      out.textContent = (r.ok ? "" : "失敗：") + (r.out || r.err);
+    } catch (e) {
+      out.textContent = "拒絕：" + e;                          // action 不在表裡、參數不合法
+    }
+  }
+</script>

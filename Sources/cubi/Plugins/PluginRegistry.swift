@@ -3,7 +3,9 @@ import Observation
 import CubiKit
 
 /// Built-in plugins plus manifests from ~/Library/Application Support/cubi/plugins/<id>/manifest.json.
-/// Every plugin is off by default except Claude Code; a disabled plugin's events are dropped.
+/// A manifest with `"kind": "tool"` is a tool plugin (an HTML panel); anything else is an agent.
+/// Agents are off by default except Claude Code (a disabled agent's events are dropped); tools are
+/// on by default, since they only run when the user opens them.
 @MainActor
 @Observable
 final class PluginRegistry {
@@ -13,12 +15,14 @@ final class PluginRegistry {
     }
 
     private(set) var plugins: [any AgentPlugin] = []
+    private(set) var tools: [ToolPlugin] = []
     private(set) var loadErrors: [String: String] = [:]
 
     init() { reload() }
 
     func reload() {
         var list: [any AgentPlugin] = [ClaudeCodePlugin()]
+        var toolList: [ToolPlugin] = []
         var errors: [String: String] = [:]
         let fm = FileManager.default
         try? fm.createDirectory(at: Self.pluginsDirectory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
@@ -27,19 +31,25 @@ final class PluginRegistry {
             let manifest = dir.appendingPathComponent("manifest.json")
             guard fm.fileExists(atPath: manifest.path) else { continue }
             do {
-                let plugin = try ManifestPlugin.load(url: manifest)
-                if list.contains(where: { $0.id == plugin.id }) {
-                    errors[dir.lastPathComponent] = "id「\(plugin.id)」已存在"
+                let value = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: manifest))
+                // One namespace for both kinds: the id is also what the menu, the defaults and the relay key off.
+                func taken(_ id: String) -> Bool { list.contains { $0.id == id } || toolList.contains { $0.id == id } }
+                if value["kind"]?.string == "tool" {
+                    let tool = try ToolPlugin.parse(value, baseDirectory: dir.path, home: CubiPaths.home.path)
+                    if taken(tool.id) { errors[dir.lastPathComponent] = "id「\(tool.id)」已存在" } else { toolList.append(tool) }
                 } else {
-                    list.append(plugin)
+                    let agent = try ManifestPlugin.parse(value)
+                    if taken(agent.id) { errors[dir.lastPathComponent] = "id「\(agent.id)」已存在" } else { list.append(agent) }
                 }
             } catch {
-                errors[dir.lastPathComponent] = "\(error)"
+                errors[dir.lastPathComponent] = (error as? LocalizedError)?.errorDescription ?? "\(error)"
             }
         }
         plugins = list
+        tools = toolList
         loadErrors = errors
-        CubiLog.write("plugins: \(list.map { "\($0.id)\(isEnabled($0.id) ? "" : "(off)")" }.joined(separator: ", "))")
+        let names = list.map { "\($0.id)\(isEnabled($0.id) ? "" : "(off)")" } + toolList.map { "\($0.id)(tool\(isEnabled($0.id) ? "" : ", off"))" }
+        CubiLog.write("plugins: \(names.joined(separator: ", "))")
     }
 
     func plugin(for agent: String) -> (any AgentPlugin)? {
@@ -48,7 +58,7 @@ final class PluginRegistry {
 
     func isEnabled(_ id: String) -> Bool {
         let map = UserDefaults.standard.dictionary(forKey: Self.enabledKey) as? [String: Bool] ?? [:]
-        return map[id] ?? (id == ClaudeCodePlugin.agentID)
+        return map[id] ?? (id == ClaudeCodePlugin.agentID || tools.contains { $0.id == id })
     }
 
     func setEnabled(_ id: String, _ on: Bool) {

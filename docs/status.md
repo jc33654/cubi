@@ -17,12 +17,13 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 | 開新 session | 右鍵「開新 session…」對話框（最近專案／瀏覽、第一句話、接續、終端）、機器人右鍵「再開一個」「在新分頁接續這個 session」（`--resume <id>`）、右翼用量旁的 ＋（compact 就能按）；Ghostty 走 AppleScript `new surface configuration` + `input text`（不用 `initial input`，見已知限制），Terminal.app 走 `do script`；`cubi --new-session` CLI 同一條路 | CLI 真機驗證（Ghostty 帶第一句話 → 4 秒內 SessionStart + prompt；Terminal.app `--continue` → 接到同一個 session；`--resume <id>` 真機驗證；終端開不了時的警告路徑沒驗）；對話框與右鍵待 Jade 親手試 |
 | 用量 | 5h / 7d / cost 跨 session 合併，最近活動的 session 才能覆寫 | 真機驗證 |
 | 聚焦終端 | Terminal.app（tty）、Ghostty（標題／cwd）、其他 app 只切 app；沒有終端身分時用名稱／cwd 猜 Ghostty 再 Terminal.app；點沉睡的機器人會叫醒 | 有身分路徑真機驗證；猜測路徑只有腳本語法驗證 |
-| 安裝器 UI | 設定頁：Claude Code hooks 安裝／解除（看 diff 再寫）、退役舊 notify hook、Agents 開關與 API key、顯示（保持顯示、滑入就展開、機器人大小 28／36／44）、睡眠（沉睡 5–60 分鐘、晚安 1–24 小時或從不；改了立刻 tick：調短立刻生效，調長只有自動進晚安區的會回來、已沉睡的不叫醒）、範圍、工具箱面板 | 真機驗證；三個新設定 Jade 真機驗證（2026-11-03：關滑入展開、切大小後拖曳、沉睡 5 分鐘） |
+| 安裝器 UI | 設定頁：Claude Code hooks 安裝／解除（看 diff 再寫）、退役舊 notify hook、Agents 開關與 API key、顯示（保持顯示、滑入就展開、機器人大小 28／36／44）、睡眠（沉睡 5–60 分鐘、晚安 1–24 小時或從不；改了立刻 tick：調短立刻生效，調長只有自動進晚安區的會回來、已沉睡的不叫醒）、範圍、插件（Agents／工具） | 真機驗證；三個新設定 Jade 真機驗證（2026-11-03：關滑入展開、切大小後拖曳、沉睡 5 分鐘） |
 | Plugin 架構 | `AgentPlugin` 協定；`ClaudeCodePlugin` 內建；`ManifestPlugin` 以 JSON 接新 agent（只能監看） | 單元測試＋假 manifest 真機 |
+| 工具插件 | `kind: tool` manifest：HTML 面板 + 白名單指令表（`ToolPlugin` 解析／型別驗證、`ToolPanel` 執行不經 shell、bridge 名可設）；選單與設定頁入口；`cubi --tool-run`；原本寫死在 app 裡的那個管理面板改成 Jade 本機的私用插件（manifest 放 plugins/，不進 repo） | 6 個單元測試；真機 `--tool-run`：私用插件的 status／asset.read 走通、`../x` 與未宣告 action 被擋；面板點擊待 Jade 親手試 |
 | 發佈 | `make bundle` strip debug 符號並守門（執行檔裡不得有 `/Users/…`）；`make dist` 產固定檔名 `Cubi.zip`；`scripts/install.sh` 下載、sha256 完整性校驗、`codesign -R` 比對 cubi-dev 憑證 hash 後才裝並拿掉 quarantine；`ci.yml`／`release.yml`（tag 觸發，從 secrets 匯入 .p12 簽） | 真機驗證：v0.1.0 由 release.yml 在 macos-26 建、簽、掛上 Release（1.5 分鐘）；從 `releases/latest/download/` 抓回來 sha256 與 `codesign -R` 都過、OSO 0、版本 0.1.0 |
 | 文件 | README（介紹、機器人表情與島的截圖 `docs/images/`、安裝、操作一覽、解除）、`docs/development.md`（make 目標、CLI、憑證、發版、設計上刻意的事）、`docs/protocol.md`（relay 協定、欄位、manifest 格式）、`docs/plan.md` | 經審查員對帳；圖是 `--render-island` 渲染後裁的 |
 
-舊工具退役：`cctl menubar` 已停並取消登入啟動、`cctl notify off`、`notify-hook.sh` 從 settings.json 移除；保留 `statusline.sh`、`cctl`、`zh-reply-guard.py`。
+舊工具退役：`私用 CLI menubar` 已停並取消登入啟動、`私用 CLI notify off`、`notify-hook.sh` 從 settings.json 移除；保留 `statusline.sh`、`私用 CLI`、`zh-reply-guard.py`。
 
 ## 待 Jade 親手驗證
 
@@ -32,7 +33,8 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 4. 右鍵「去睡覺」→ 翼上消失、出現「💤 1」、清單在晚安區；「放生」→ 消失；在那個 session 送一句話 → 回來。
 5. 翼上拖一隻機器人換順序 → 清單同序；重啟 Cubi 順序還在；拖機器人時島不會變浮動；右鍵改形狀／顏色後重啟還在。
 6. 右鍵「開新 session…」：對話框選專案、填第一句話（含繁中）、開始 → 終端開新分頁、島上出現新機器人；機器人右鍵「在新分頁接續這個 session」。（Jade 已驗：對話框與繁中第一句話 OK）
-7. 在另一台沒裝過的機器跑 `curl -fsSL https://raw.githubusercontent.com/jc33654/cubi/main/scripts/install.sh | bash`，看 Automation 授權與機器人是否出現（v0.1.0 已發，secrets 已設）。
+7. 右鍵選單開私用面板走一輪（status、開關、編輯寫入、reveal、pick），行為應與之前一樣。
+8. 在另一台沒裝過的機器跑 `curl -fsSL https://raw.githubusercontent.com/jc33654/cubi/main/scripts/install.sh | bash`，看 Automation 授權與機器人是否出現（v0.1.0 已發，secrets 已設）。
 
 ## 已知限制
 
@@ -47,7 +49,11 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 - 開 session：Ghostty 慢到被 5 秒 watchdog 殺掉但分頁其實有開時，退路會在 Terminal.app 再開一個（推論，沒觸發過）。
 - 沒有 `git push`（紅線），commit 由 Jade 推（2026-11-03 已推到 117341c，CI 綠）；Coucou 還沒 `brew uninstall --cask coucou`。
 
-## 接下來：額外插件
+## 接下來
+
+工具插件系統 2026-11-03 做完（第一個實例是 Jade 的私用面板，不在 repo）。再來要接其他 agent 的話，下面是現況與查到的事實。
+
+### 額外 agent 插件
 
 ### 現在的 plugin 介面能做什麼
 

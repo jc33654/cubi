@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "kind": "tool",
+  "id": "example-tool",
+  "name": "Example Tool",
+  "panel": { "file": "index.html", "width": 520, "height": 360 },
+  "commands": {
+    "hello": { "run": ["/bin/echo", "hello,", "$1"], "args": ["value"] },
+    "date":  { "run": ["/bin/date"] }
+  }
+}

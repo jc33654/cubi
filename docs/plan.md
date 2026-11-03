@@ -13,7 +13,7 @@ Jade 想要一個住在 MacBook 瀏海的 Claude Code 伴侶：每個 session �
 | 3 | AskUserQuestion 選項卡片 | Claude Code 2.1.312，支援 |
 | 4 | Plan 用量 5h / 7d，取代現有 menubar 用量 | 來源：statusLine 串接 |
 | 5 | 桌面通知點擊聚焦 terminal 分頁 | Apple Terminal（tty）、Ghostty（cwd / 標題）、VS Code（app 層級）；可新增 |
-| 6 | cctl 管理面板併入同一個 app | 現有 `~/.claude-toolkit/panel/`（Panel.swift 456 行 + index.html） |
+| 6 | 私用 CLI 管理面板併入同一個 app | 現有 `<私用工具目錄>/panel/`（Panel.swift 456 行 + index.html） |
 | 7 | 檔案 diff 檢視 | PostToolUse 的 Edit / Write |
 | 8 | 多 agent 做成 plugin，預設全關，手動開 + 綁憑證 | 第一版只做 Claude Code 內建 plugin，把介面做對 |
 | 9 | 角色 | 導角小方塊，程式碼畫，每 session 一色；狀態：idle / thinking / working / waiting / error / sleeping / happy / **tired（context 快滿）** |
@@ -24,11 +24,11 @@ Jade 想要一個住在 MacBook 瀏海的 Claude Code 伴侶：每個 session �
 
 - macOS 26.6，M1 Pro，Command Line Tools only，`swift build` 可建 AppKit + SwiftUI 可執行檔（已實測）。
 - 內建螢幕 1512×982 有瀏海（`safeAreaInsets.top` 32pt）且為主螢幕；外接 SA272U 2560×1440 無瀏海。
-- Claude Code 2.1.312；現有 hooks：Notification → `~/.claude/notify-hook.sh`、Stop → `~/.claude/hooks/zh-reply-guard.py`；statusLine → `~/.claude/statusline.sh`（寫 `/tmp/claude-sessions/<session_id>`（名稱、tty）與 `~/.claude-toolkit/usage.json`）。
+- Claude Code 2.1.312；現有 hooks：Notification → `~/.claude/notify-hook.sh`、Stop → `~/.claude/hooks/zh-reply-guard.py`；statusLine → `~/.claude/statusline.sh`（寫 `/tmp/claude-sessions/<session_id>`（名稱、tty）與 `<私用工具目錄>/usage.json`）。
 - Ghostty 1.3.1 有 AppleScript 字典：window → tab → terminal；terminal 有 `working directory`、`name`；指令 `select tab`、`activate window`、`focus`；**無 tty 屬性**。
 - Apple Terminal：現有 `~/.claude/focus-terminal-tab.sh` 以 tty 比對分頁。
 - `iconutil`、`sips` 在 `/usr/bin`，icon 可由程式碼渲染 PNG 再組 `.icns`。
-- Coucou 已裝在 `/Applications/Coucou.app`（0.5.3），未裝 hooks，`settings.json` 未被動過（備份 `~/.claude-toolkit/backups/settings.json.1793168972.pre-coucou`）。
+- Coucou 已裝在 `/Applications/Coucou.app`（0.5.3），未裝 hooks，`settings.json` 未被動過（備份 `<私用工具目錄>/backups/settings.json.1793168972.pre-coucou`）。
 
 ## 可借用的既有資產
 
@@ -36,8 +36,8 @@ Jade 想要一個住在 MacBook 瀏海的 Claude Code 伴侶：每個 session �
 |---|---|---|
 | `~/.claude/statusline.sh` | 解析 statusLine JSON、寫 session 對應表與 usage.json | 保留不動；cubi 的 statusline relay 先轉發 JSON 給 app，再 exec 它（同 Coucou 串接法） |
 | `~/.claude/focus-terminal-tab.sh`、`claude-notify.sh` | Apple Terminal 分頁聚焦（tty）、terminal-notifier | 邏輯搬進 Swift（NSAppleScript），腳本留著當 fallback |
-| `~/.claude-toolkit/panel/Panel.swift`、`index.html` | WKWebView 面板 + cctl 橋接白名單 | 整段搬進 cubi 的 Panel module |
-| `~/.claude-toolkit/bin/cctl --json` | 面板資料來源 | 不動 |
+| `<私用工具目錄>/panel/Panel.swift`、`index.html` | WKWebView 面板 + 私用 CLI 橋接白名單 | 整段搬進 cubi 的 Panel module |
+| `<私用工具目錄>/bin/私用 CLI --json` | 面板資料來源 | 不動 |
 | Coucou `ClaudeSettingsFile.swift`（MIT） | settings.json 備份 / diff / stale 檢查 / 原子寫入 | 重寫成自己的，邏輯照抄並註明出處 |
 | Coucou `nb-hook.py`（MIT） | hook relay 協定：stdin → unix socket → 等回覆 → stdout `hookSpecificOutput` | 協定照抄，程式自己寫 |
 
@@ -66,7 +66,7 @@ Claude Code ──hook stdin──▶ cubi-hook (relay) ──unix socket──�
                                                                 ├─ Cards（Approval / Question / Diff / Usage）
                                                                 ├─ Plugins（AgentPlugin 協定；內建 ClaudeCodePlugin）
                                                                 ├─ Focus（Terminal.app tty / Ghostty cwd / VS Code）
-                                                                └─ Panel（WKWebView 載現有 index.html，橋接 cctl）
+                                                                └─ Panel（WKWebView 載現有 index.html，橋接 私用 CLI）
 ```
 
 **SwiftPM 三個 target**（細節依 Plan agent 結論，見「打包與 relay 決策」）：
@@ -130,7 +130,7 @@ Claude Code ──hook stdin──▶ cubi-hook (relay) ──unix socket──�
 
 | 決策 | 做法 | 為什麼 |
 |---|---|---|
-| **簽章用自簽憑證，不用 ad-hoc** | 一次性在 Keychain Access 建 Code Signing 憑證 `cubi-dev`（Certificate Assistant → Create a Certificate → 類型 Code Signing）；`make cert` 用 `security find-identity -p codesigning`（不帶 `-v`）偵測；`codesign --force --sign cubi-dev --identifier cc.dotdot.cubi`，先簽 `cubi-hook` 再簽 app，不用 `--deep` | 實測：這台 0 個簽章身分，現有 `ClaudeToolkit.app` 的 designated requirement 是 `cdhash`，重編就變，TCC 存的 Automation 授權對不上會**靜默失敗 -1719**（設定裡還顯示開）。自簽後 DR 變成 `identifier + certificate leaf`，重編不掉授權。Keychain ACL 同理 |
+| **簽章用自簽憑證，不用 ad-hoc** | 一次性在 Keychain Access 建 Code Signing 憑證 `cubi-dev`（Certificate Assistant → Create a Certificate → 類型 Code Signing）；`make cert` 用 `security find-identity -p codesigning`（不帶 `-v`）偵測；`codesign --force --sign cubi-dev --identifier cc.dotdot.cubi`，先簽 `cubi-hook` 再簽 app，不用 `--deep` | 實測：這台 0 個簽章身分，現有 `私用管理 app` 的 designated requirement 是 `cdhash`，重編就變，TCC 存的 Automation 授權對不上會**靜默失敗 -1719**（設定裡還顯示開）。自簽後 DR 變成 `identifier + certificate leaf`，重編不掉授權。Keychain ACL 同理 |
 | 進入點 | `Sources/cubi/main.swift` AppKit top-level（`NSApplication.shared` + `AppDelegate` + `.accessory`），SwiftUI 只經 `NSHostingView` 進 `NSPanel`，**不用** SwiftUI `App`/Scene | 避開 `@main` 與 main.swift 衝突、無 Scene 的 adaptor 怪異、`WindowGroup` 偷開空窗 |
 | Info.plist | 手寫 `Packaging/Info.plist`：`LSUIElement`、`CFBundleIdentifier`、`NSAppleEventsUsageDescription`、`LSMinimumSystemVersion`、`NSHighResolutionCapable`；`bundle.sh` 用 `PlistBuddy` 塞 `CFBundleVersion=$(git rev-list --count HEAD)` | TCC 只看 usage string、bundle id、csreq，沒 Xcode 沒差 |
 | 資源 | `Sources/cubi/Resources/`（index.html、fixtures）以 `resources: [.copy("Resources")]` 宣告；`bundle.sh` 把 `.build/release/cubi_cubi.bundle` 複製進 `Contents/Resources/` | `Bundle.module` 先查 `Bundle.main.resourceURL`，`swift run` 與 .app 兩邊都能用 |
@@ -209,7 +209,7 @@ Manifest 草案（`plugins/<id>/manifest.json`，目錄 0700）：`id / name / c
 | 3 審批 | PermissionRequest 卡片 Allow/Deny/Always、AskUserQuestion 卡片、pending 時不收合、音效 | 終端的詢問改在瀏海按，Always 寫進 Claude Code 規則，hook 逾時與 app 關閉時終端自己問 |
 | 4 用量與疲憊 | statusline relay 串接現有 `statusline.sh`、Usage 卡片、menubar 用量、tired 狀態 | `statusline.sh` 輸出不變；用量數字與 `usage.json` 一致；context ≥ 80 時表情變 |
 | 5 聚焦與 diff | Terminal.app / Ghostty / VS Code 聚焦、自訂 terminal 設定、Diff 卡片 | 點 Ghostty session 的機器人會跳到正確分頁 |
-| 6 面板與安裝器 | WKWebView 面板搬入、settings.json 安裝器（備份/diff/確認）、設定頁、`cctl menubar` 退役 | 安裝 hooks 後原有 Notification／Stop hook 與 statusLine 仍在，diff 只多 cubi 條目 |
+| 6 面板與安裝器 | WKWebView 面板搬入、settings.json 安裝器（備份/diff/確認）、設定頁、`私用 CLI menubar` 退役 | 安裝 hooks 後原有 Notification／Stop hook 與 statusLine 仍在，diff 只多 cubi 條目 |
 | 7 Plugin 化 | `AgentPlugin` 協定定稿、`ClaudeCodePlugin` 收斂到協定後、設定頁 plugin 開關 + Keychain secrets、manifest schema 文件與 `json-hooks` 模式載入器（不含 adapter 執行） | 關掉 Claude Code plugin → 不裝 hooks、不顯示；用一份假 manifest 能載入並顯示第二顆 pill（不接真 agent） |
 | 8 發佈 | README（建置步驟、權限說明）、`make install`、GitHub push | 同事照 README 從原始碼建得起來 |
 
@@ -220,11 +220,11 @@ Manifest 草案（`plugins/<id>/manifest.json`，目錄 0700）：`id / name / c
 | 舊工具 | 由誰取代 | 退役時機 |
 |---|---|---|
 | `~/.claude/notify-hook.sh` + `claude-notify.sh` + `focus-terminal-tab.sh`（Notification hook 桌面通知、點擊聚焦分頁） | Cubi 系統通知（右鍵「系統通知」）+ Phase 5 聚焦 | Phase 6 安裝器可選「移除舊 Notification hook」 |
-| `ClaudeToolkit.app` menubar 用量（`cctl menubar`） | 島的右翼用量與 expanded 用量列 | Phase 6（面板併入後 `cctl menubar stop`） |
+| `私用管理 app` menubar 用量（`私用 CLI menubar`） | 島的右翼用量與 expanded 用量列 | Phase 6（面板併入後 `私用 CLI menubar stop`） |
 | `statusline.sh` 裡的 context / 5h / 7d 門檻通知 | tired 表情、用量列顏色 | Phase 6，改 statusline.sh 時只留顯示與 usage.json |
-| `~/.claude-toolkit/panel/`（WKWebView 管理面板） | 併入 Cubi（Phase 6） | Phase 6 |
+| `<私用工具目錄>/panel/`（WKWebView 管理面板） | 併入 Cubi（Phase 6） | Phase 6 |
 
-保留：`statusline.sh` 的狀態列顯示本身、`cctl` CLI、`zh-reply-guard.py`。
+保留：`statusline.sh` 的狀態列顯示本身、`私用 CLI` CLI、`zh-reply-guard.py`。
 
 ## 驗證
 

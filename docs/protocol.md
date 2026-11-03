@@ -65,6 +65,10 @@
 
 ## Plugin manifest（`~/Library/Application Support/cubi/plugins/<id>/manifest.json`）
 
+兩種：沒有 `kind`（或 `"kind": "agent"`）是 agent plugin，`"kind": "tool"` 是工具插件（下一節）。兩種共用一個 id 命名空間，重複的那個目錄會被拒載。
+
+### Agent plugin
+
 範例：`docs/plugins/example-agent/manifest.json`。載入規則在 `Sources/CubiKit/ManifestPlugin.swift`。
 
 | 欄位 | 必填 | 說明 |
@@ -101,3 +105,36 @@
 - 未知 `agent` 的信封直接丟棄；plugin 關閉時不裝 hooks、不顯示、不解碼。
 - 解除安裝只刪 `command` 含自己 tag 的 group，其他 plugin 與使用者自己的 hooks 不動。
 - blocking 事件（`permissionRequest`、`question`）decode 出來後，plugin 沒有對應的 `approvals` / `questions` 能力時 app 不開卡片、不出聲，直接關連線讓 agent 用自己的提示；機器人當成 `toolStart` 顯示 working。manifest plugin 一律如此。
+
+### 工具插件（`"kind": "tool"`）
+
+一個 HTML 面板加一張它的 JavaScript 可以執行的指令表。範例：`docs/plugins/example-tool/`（manifest 加一頁 HTML）。載入與驗證在 `Sources/CubiKit/ToolPlugin.swift`，執行在 `Sources/cubi/Plugins/ToolPanel.swift`。工具插件預設開啟（只有使用者打開面板、按了東西才會執行）；選單與設定頁「插件 → 工具」各有一個入口。
+
+| 欄位 | 必填 | 說明 |
+|---|---|---|
+| `kind` | ✔ | `tool` |
+| `id`、`name` | ✔ | 同 agent：`[a-z0-9-]`，最多 24 字元；`name` 是視窗標題與選單文字 |
+| `panel.file` | ✔ | HTML 檔：相對插件目錄，或 `~`／絕對路徑。每次開窗重讀。`baseURL` 為 nil：沒有 file:// 基底、origin 是 null；外部資源（script、img、fetch）**不擋**，面板 HTML 跟 manifest 一樣是使用者自己放的、一樣信任 |
+| `panel.width`、`panel.height` | | 視窗大小，預設 900×640 |
+| `panel.bridge` | | JS 用的 handler 名，預設 `cubi`；既有面板寫死別的名字就在這裡宣告，不用改面板 |
+| `commands.<action>.run` | ✔ | argv。第一個是執行檔，必須是絕對路徑（可用 `~`）；**不經 shell**。`$1`…`$n` 代入呼叫端的第 n 個參數 |
+| `commands.<action>.args[]` | | 每個參數的型別，數量必須跟呼叫端送的一樣：`"name"`（`[A-Za-z0-9._-]{1,64}`，不能是 `.`／`..`：檔名／資產名，走不出目錄）、`"value"`（可印字元 ≤512，不能以 `-` 開頭，所以變不成選項）、`{"enum": […]}`、`"text"`（≤256 KB，只能走 stdin） |
+| `commands.<action>.stdin` | | 1-based：第 n 個參數餵 stdin 而不是 argv（長內容用） |
+| `commands.<action>.reveal` | | `true`：把 stdout（去頭尾空白）當路徑在 Finder 選取，回 `{ok, out: 路徑}` |
+
+JS 端：
+
+```js
+const bridge = window.webkit?.messageHandlers?.cubi;          // 或 manifest 的 panel.bridge
+const r = await bridge.postMessage({ action: "skill.on", args: ["my-skill"] });   // {ok, out, err}
+await bridge.postMessage({ action: "config.set", name: "k", value: "v" });        // 舊形狀：name/value → args
+const picked = await bridge.postMessage({ action: "pick.file", args: [] });      // 內建：{ok, path, cancelled?}
+```
+
+規則：
+
+- action 不在表裡、參數數量或型別不符 → 不執行，JS 收到 reject（錯誤訊息是中文的原因）；每次執行與拒絕都寫 `~/Library/Logs/cubi.log`。
+- `pick.file`／`pick.dir` 是內建的原生選擇器，不用宣告，也是保留字（manifest 裡定義會被拒載）。
+- 設定頁關掉工具後，已開著的面板送來的請求也會被拒。
+- manifest 是使用者自己放進 `plugins/` 的，跟 agent manifest 一樣信任它；安全邊界在「面板的 JS 只能叫到表裡的指令、參數過型別檢查、不經 shell」。
+- 測試用：`cubi --tool-run <id> <action> [args…]` 用同一條路徑執行並印 `{ok, out, err}`。

@@ -9,7 +9,7 @@ struct SettingsView: View {
     let notifier: Notifier
     let ignored: IgnoredDirectories
     @Bindable var timing: SleepTiming
-    let openToolkit: () -> Void
+    let openTool: (String) -> Void
 
     @State private var soundsOn = Sounds.enabled
     @State private var notificationsOn = false
@@ -21,17 +21,13 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 18) {
                 claudeSection
                 Divider()
-                PluginsSection(registry: registry, hooks: hooks)
+                PluginsSection(registry: registry, hooks: hooks, openTool: openTool)
                 Divider()
                 displaySection
                 Divider()
                 sleepSection
                 Divider()
                 scopeSection
-                if FileManager.default.fileExists(atPath: ToolkitPanel.htmlPath) {
-                    Divider()
-                    toolkitSection
-                }
             }
             .padding(20)
         }
@@ -153,17 +149,6 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: Toolkit
-
-    private var toolkitSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("工具箱").font(.headline)
-            HStack {
-                Button("開啟 Claude Toolkit 面板") { openToolkit() }
-                Text("原本 ClaudeToolkit.app 的管理面板，直接搬進來。").font(.system(size: 12)).foregroundStyle(.secondary)
-            }
-        }
-    }
 }
 
 private struct PreviewBox: Identifiable {

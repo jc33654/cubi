@@ -2,31 +2,64 @@ import SwiftUI
 import AppKit
 import CubiKit
 
-/// Settings → Agents: one row per plugin. Claude Code is built in; others come from manifests.
+/// Settings → 插件: agents (one row per plugin; Claude Code is built in, others come from
+/// manifests) and tools (HTML panels with a command whitelist).
 struct PluginsSection: View {
     @Bindable var registry: PluginRegistry
     @Bindable var hooks: HookSetupModel
+    let openTool: (String) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Agents").font(.headline)
+                Text("插件").font(.headline)
                 Spacer()
                 Button("重新載入") { registry.reload() }
                 Button("開啟 plugins 目錄") {
                     NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: PluginRegistry.pluginsDirectory.path)
                 }
             }
-            Text("每個 agent 一個 plugin，預設關閉。放一份 manifest.json 到 plugins/<id>/ 就能新增（範例在 repo 的 docs/plugins/）。")
+            Text("放一份 manifest.json 到 plugins/<id>/ 就能新增（範例在 repo 的 docs/plugins/）。Agents 預設關閉；工具預設開啟。")
                 .font(.system(size: 11)).foregroundStyle(.secondary)
+            Text("Agents").font(.system(size: 12, weight: .semibold))
             ForEach(registry.plugins, id: \.id) { plugin in
                 PluginRow(plugin: plugin, registry: registry, hooks: hooks)
+            }
+            Text("工具").font(.system(size: 12, weight: .semibold)).padding(.top, 4)
+            if registry.tools.isEmpty {
+                Text("沒有工具插件。").font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+            ForEach(registry.tools, id: \.id) { tool in
+                ToolRow(tool: tool, registry: registry, openTool: openTool)
             }
             ForEach(Array(registry.loadErrors.keys.sorted()), id: \.self) { dir in
                 Label("\(dir)：\(registry.loadErrors[dir] ?? "")", systemImage: "xmark.octagon")
                     .font(.system(size: 11)).foregroundStyle(.red)
             }
         }
+    }
+}
+
+private struct ToolRow: View {
+    let tool: ToolPlugin
+    @Bindable var registry: PluginRegistry
+    let openTool: (String) -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Toggle(isOn: Binding(get: { registry.isEnabled(tool.id) }, set: { registry.setEnabled(tool.id, $0) })) {
+                HStack(spacing: 6) {
+                    Text(tool.displayName).font(.system(size: 12, weight: .semibold))
+                    Text(tool.id).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            Text(tool.panel.file).font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+                .lineLimit(1).truncationMode(.middle).frame(maxWidth: 220)
+            Button("開啟") { openTool(tool.id) }.disabled(!registry.isEnabled(tool.id))
+        }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.08)))
     }
 }
 

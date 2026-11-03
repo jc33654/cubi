@@ -13,19 +13,24 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     private let pinItem = NSMenuItem(title: "保持顯示", action: #selector(togglePinned), keyEquivalent: "")
     private let floatItem = NSMenuItem(title: "浮動視窗（可拖到任何螢幕）", action: #selector(toggleFloating), keyEquivalent: "")
     private let soundItem = NSMenuItem(title: "音效", action: #selector(toggleSounds), keyEquivalent: "")
+    private let settingsItem = NSMenuItem(title: "設定…", action: #selector(showSettings), keyEquivalent: ",")
+    /// One per enabled tool plugin, after 設定…; rebuilt whenever the menu opens.
+    private var toolItems: [NSMenuItem] = []
+    private let registry: PluginRegistry
     /// Shared with the island's right-click menu.
     let menu: NSMenu
 
     private let openSettings: () -> Void
-    private let openToolkit: () -> Void
+    private let openTool: (String) -> Void
     private let openNewSession: () -> Void
 
-    init(island: IslandController, notifier: Notifier, openSettings: @escaping () -> Void, openToolkit: @escaping () -> Void,
-         openNewSession: @escaping () -> Void) {
+    init(island: IslandController, notifier: Notifier, registry: PluginRegistry, openSettings: @escaping () -> Void,
+         openTool: @escaping (String) -> Void, openNewSession: @escaping () -> Void) {
         self.island = island
         self.notifier = notifier
+        self.registry = registry
         self.openSettings = openSettings
-        self.openToolkit = openToolkit
+        self.openTool = openTool
         self.openNewSession = openNewSession
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         menu = NSMenu()
@@ -81,14 +86,9 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         menu.addItem(loginItem)
 
         menu.addItem(.separator())
-        let settings = NSMenuItem(title: "設定…", action: #selector(showSettings), keyEquivalent: ",")
-        settings.target = self
-        menu.addItem(settings)
-        if FileManager.default.fileExists(atPath: ToolkitPanel.htmlPath) {
-            let toolkit = NSMenuItem(title: "Claude Toolkit 面板", action: #selector(showToolkit), keyEquivalent: "")
-            toolkit.target = self
-            menu.addItem(toolkit)
-        }
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+        refreshToolItems(in: menu)
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "結束 Cubi", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quit)
@@ -97,6 +97,23 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         floatItem.state = island.isFloating ? .on : .off
         pinItem.state = island.state.pinned ? .on : .off
+        refreshToolItems(in: menu)
+    }
+
+    private func refreshToolItems(in menu: NSMenu) {
+        toolItems.forEach { menu.removeItem($0) }
+        toolItems = registry.tools.filter { registry.isEnabled($0.id) }.map { tool in
+            let item = NSMenuItem(title: tool.displayName, action: #selector(openToolItem(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = tool.id
+            return item
+        }
+        let at = menu.index(of: settingsItem) + 1
+        for (i, item) in toolItems.enumerated() { menu.insertItem(item, at: at + i) }
+    }
+
+    @objc private func openToolItem(_ sender: NSMenuItem) {
+        if let id = sender.representedObject as? String { openTool(id) }
     }
 
     @objc private func toggleIsland() {
@@ -110,7 +127,6 @@ final class StatusBarController: NSObject, NSMenuDelegate {
 
     @objc private func showSettings() { openSettings() }
     @objc private func showNewSession() { openNewSession() }
-    @objc private func showToolkit() { openToolkit() }
 
     @objc private func toggleSounds() {
         Sounds.enabled.toggle()

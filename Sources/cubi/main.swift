@@ -109,6 +109,37 @@ if arguments.contains("--new-session") {
     exit(0)
 }
 
+// Run one of a tool plugin's commands the way its panel would (checks and all), for testing:
+//   --tool-run <plugin id> <action> [args…]   prints {ok, out, err}; exit 1 when rejected or failed
+if let i = arguments.firstIndex(of: "--tool-run") {
+    guard i + 2 < arguments.count else {
+        FileHandle.standardError.write(Data("usage: cubi --tool-run <plugin id> <action> [args…]\n".utf8))
+        exit(2)
+    }
+    let id = arguments[i + 1], action = arguments[i + 2], args = Array(arguments[(i + 3)...])
+    let code: Int32 = MainActor.assumeIsolated {
+        let registry = PluginRegistry()
+        guard let tool = registry.tools.first(where: { $0.id == id }) else {
+            FileHandle.standardError.write(Data("cubi: no tool plugin「\(id)」(loaded: \(registry.tools.map(\.id).joined(separator: ", ")))\n".utf8))
+            return 1
+        }
+        guard registry.isEnabled(id) else {
+            FileHandle.standardError.write(Data("cubi: tool plugin「\(id)」is disabled in the settings\n".utf8))
+            return 1
+        }
+        do {
+            let r = ToolRunner.run(try tool.invocation(action: action, args: args))
+            let json = try JSONSerialization.data(withJSONObject: ["ok": r.code == 0, "out": r.out, "err": r.err], options: [.sortedKeys, .withoutEscapingSlashes])
+            print(String(decoding: json, as: UTF8.self))
+            return r.code == 0 ? 0 : 1
+        } catch {
+            FileHandle.standardError.write(Data("cubi: \(error.localizedDescription)\n".utf8))
+            return 1
+        }
+    }
+    exit(code)
+}
+
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate

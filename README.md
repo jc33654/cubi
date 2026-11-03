@@ -62,6 +62,7 @@
 - 🎨 **換形狀、換顏色、拖著排順序** — 全部記得住，Cubi 重啟、session 回來都還在。
 - 🪟 **拖出來變浮動視窗** — 沒瀏海的螢幕、外接螢幕都能用，拖回頂端就回去。
 - 🔌 **其他 agent 也能接** — 一份 manifest 就能讓別的 agent 的 session 出現在島上（目前只能監看）。
+- 🧰 **工具插件** — 一個 HTML 面板加一張白名單指令表就是一個插件，從選單打開。
 
 <p align="center">
   <img src="docs/images/approval.png" width="640" alt="審批卡片：alpha 想要執行指令，拒絕／在終端處理／總是允許／允許"><br>
@@ -148,11 +149,10 @@ open ~/Applications/Cubi.app
 ## 設定頁
 
 - **Claude Code**：hooks 與 status line 狀態、安裝／解除、舊 hook 退役選項
-- **Agents**：各 agent plugin 開關、安裝按鈕、API key（存登入鑰匙圈）。預設只開 Claude Code
 - **顯示**：保持顯示、滑入就展開、機器人大小（小／預設／大）、音效、系統通知、登入時啟動
 - **睡眠**：多久沒動靜進入沉睡（5–60 分鐘，預設 10）、沉睡多久自動進晚安區（1–24 小時或從不，預設 12）
 - **範圍**：忽略哪些目錄開頭的 session（一行一個，可用 `~`）
-- **工具箱**：有 `~/.claude-toolkit/panel/index.html` 時才出現，載入原本 ClaudeToolkit 的管理面板
+- **插件**：Agents（各 agent plugin 開關、安裝、API key）與工具（開關、開啟面板）；「重新載入」掃 plugins 目錄
 
 ## 它動了哪些東西
 
@@ -175,12 +175,13 @@ open ~/Applications/Cubi.app
 - 零第三方依賴：AppKit + SwiftUI，SwiftPM，不用 Xcode.app。
 - 設計與決策寫在 [docs/plan.md](docs/plan.md)，relay 協定與欄位在 [docs/protocol.md](docs/protocol.md)，進度在 [docs/status.md](docs/status.md)。
 
-## 多 agent plugin
+## 插件
 
-Claude Code 是內建 plugin。其他 agent 可以用一份 manifest 接進來，放在
-`~/Library/Application Support/cubi/plugins/<id>/manifest.json`，在設定頁 Agents 開啟。範例在 `docs/plugins/example-agent/`，欄位說明在 `docs/protocol.md`。
+都放在 `~/Library/Application Support/cubi/plugins/<id>/manifest.json`，欄位說明在 [docs/protocol.md](docs/protocol.md)。
 
-目前 manifest plugin **只能監看**（session、工具開始／結束、結束），它的審批不會出現在島上，會落回那個 agent 自己的提示。要做審批得寫程式碼 plugin（實作 `AgentPlugin` 協定）。
+**Agent plugin**：Claude Code 是內建的。其他 agent 可以用一份 manifest 接進來，在設定頁開啟；範例在 `docs/plugins/example-agent/`。目前 manifest plugin **只能監看**（session、工具開始／結束、結束），它的審批不會出現在島上，會落回那個 agent 自己的提示。要做審批得寫程式碼 plugin（實作 `AgentPlugin` 協定）。
+
+**工具插件**（`"kind": "tool"`）：一個 HTML 面板加一張指令表。面板的 JavaScript 只能呼叫表裡的指令，每個參數都有型別（名稱／值／選項／長文走 stdin），不經 shell。選單與設定頁各有入口。範例在 `docs/plugins/example-tool/`。
 
 ## 解除安裝
 

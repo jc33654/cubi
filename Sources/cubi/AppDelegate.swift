@@ -7,7 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusBar: StatusBarController?
     private var coordinator: SessionCoordinator?
     private var settings: SettingsWindow?
-    private let toolkit = ToolkitPanel()
+    private var toolPanels: ToolPanels?
     private var showObserver: NSObjectProtocol?
 
     /// Posted by a second launch so the running copy reveals the island (there is no window to show).
@@ -31,14 +31,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.island = island
         let coordinator = SessionCoordinator(island: island)
         self.coordinator = coordinator
+        let toolPanels = ToolPanels(registry: coordinator.registry)
+        self.toolPanels = toolPanels
         let settings = SettingsWindow(island: island.state, notifier: coordinator.notifier, ignored: coordinator.ignored,
-                                      timing: coordinator.timing, registry: coordinator.registry, toolkit: toolkit)
+                                      timing: coordinator.timing, registry: coordinator.registry,
+                                      openTool: { [toolPanels] in toolPanels.show($0) })
         self.settings = settings
         let newSession = NewSessionWindow(recent: coordinator.recentProjects)
         coordinator.newSessionWindow = newSession
-        let statusBar = StatusBarController(island: island, notifier: coordinator.notifier,
+        let statusBar = StatusBarController(island: island, notifier: coordinator.notifier, registry: coordinator.registry,
                                             openSettings: { [settings] in settings.show() },
-                                            openToolkit: { [toolkit] in toolkit.show() },
+                                            openTool: { [toolPanels] in toolPanels.show($0) },
                                             openNewSession: { [newSession] in newSession.show() })
         self.statusBar = statusBar
         island.contextMenu = statusBar.menu

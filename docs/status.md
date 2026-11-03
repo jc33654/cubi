@@ -20,7 +20,7 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 | 安裝器 UI | 設定頁：Claude Code hooks 安裝／解除（看 diff 再寫）、退役舊 notify hook、Agents 開關與 API key、顯示（保持顯示、滑入就展開、機器人大小 28／36／44）、睡眠（沉睡 5–60 分鐘、晚安 1–24 小時或從不；改了立刻 tick：調短立刻生效，調長只有自動進晚安區的會回來、已沉睡的不叫醒）、範圍、工具箱面板 | 真機驗證；三個新設定：大小離線渲染驗證、時間單元測試＋啟動 log 驗證載入、滑入開關待 Jade 親手試 |
 | Plugin 架構 | `AgentPlugin` 協定；`ClaudeCodePlugin` 內建；`ManifestPlugin` 以 JSON 接新 agent（只能監看） | 單元測試＋假 manifest 真機 |
 | 發佈 | `make bundle` strip debug 符號並守門（執行檔裡不得有 `/Users/…`）；`make dist` 產固定檔名 `Cubi.zip`；`scripts/install.sh` 下載、sha256 完整性校驗、`codesign -R` 比對 cubi-dev 憑證 hash 後才裝並拿掉 quarantine；`ci.yml`／`release.yml`（tag 觸發，從 secrets 匯入 .p12 簽） | 真機驗證：v0.1.0 由 release.yml 在 macos-26 建、簽、掛上 Release（1.5 分鐘）；從 `releases/latest/download/` 抓回來 sha256 與 `codesign -R` 都過、OSO 0、版本 0.1.0 |
-| 文件 | README（建置、憑證、安裝、用法、解除）、`docs/protocol.md`（relay 協定、欄位、manifest 格式）、`docs/plan.md` | 經審查員對帳 |
+| 文件 | README（介紹、機器人表情與島的截圖 `docs/images/`、安裝、操作一覽、解除）、`docs/development.md`（make 目標、CLI、憑證、發版、設計上刻意的事）、`docs/protocol.md`（relay 協定、欄位、manifest 格式）、`docs/plan.md` | 經審查員對帳；圖是 `--render-island` 渲染後裁的 |
 
 舊工具退役：`cctl menubar` 已停並取消登入啟動、`cctl notify off`、`notify-hook.sh` 從 settings.json 移除；保留 `statusline.sh`、`cctl`、`zh-reply-guard.py`。
 

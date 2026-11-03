@@ -1,10 +1,90 @@
-# cubi
+<p align="center">
+  <img src="docs/images/icon.png" width="128" alt="Cubi">
+</p>
 
-住在 MacBook 瀏海的 Claude Code 小機器人。每個 session 一隻、各自一種顏色，看得出它在做什麼；權限審批與 AskUserQuestion 直接在瀏海上按；右翼顯示 plan 用量（5h / 7d）；context 快滿時會露出疲憊表情。
+<h1 align="center">Cubi</h1>
 
-一個 app 加一個 hook relay，沒有雲端、沒有遙測。資料只在這台機器的 unix socket 上走。
+<p align="center"><b>住在 MacBook 瀏海的 Claude Code 小機器人。</b></p>
 
-## 安裝（現成的 app）
+<p align="center">
+  <a href="https://github.com/jc33654/cubi/releases"><img src="https://img.shields.io/github/v/release/jc33654/cubi?label=release" alt="release"></a>
+  <img src="https://img.shields.io/badge/macOS-15%2B-black" alt="macOS 15+">
+  <img src="https://img.shields.io/badge/Swift-6-orange" alt="Swift 6">
+  <img src="https://img.shields.io/badge/%E7%AC%AC%E4%B8%89%E6%96%B9%E4%BE%9D%E8%B3%B4-0-brightgreen" alt="零第三方依賴">
+</p>
+
+<p align="center">
+  <img src="docs/images/hero.png" width="720" alt="瀏海兩側：左邊三隻機器人與一個晚安膠囊，右邊 ＋ 與 5h / 7d 用量">
+</p>
+
+每開一個 Claude Code session，瀏海旁就多一隻小機器人。它在想事情、在跑工具、在等你、累了、睡了，一眼看得出來。要你批准指令或回答問題時，卡片直接從瀏海滑下來，按一下就好，不用去翻是哪個終端分頁在叫。
+
+一個 app 加一個 hook relay。沒有雲端、沒有帳號、沒有遙測：資料只在這台機器的 unix socket 上走。
+
+## 為什麼
+
+同時開三、四個 Claude Code，每個都在不同的終端分頁裡。誰在等我批准？誰已經做完了？哪個 context 快爆了？切來切去很煩，漏掉一個「要不要允許」更煩。
+
+瀏海平常就是一塊黑，剛好拿來住人。
+
+## 認識小機器人
+
+每隻機器人代表一個 session，各自一種顏色（右鍵可以換形狀、換顏色，它會記得）。表情就是狀態：
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/images/bot-idle.png" width="65"><br><b>idle</b><br><sub>等你說話</sub></td>
+    <td align="center"><img src="docs/images/bot-thinking.png" width="65"><br><b>thinking</b><br><sub>頭頂三點</sub></td>
+    <td align="center"><img src="docs/images/bot-working.png" width="65"><br><b>working</b><br><sub>在跑工具</sub></td>
+    <td align="center"><img src="docs/images/bot-waiting.png" width="65"><br><b>waiting</b><br><sub>跳著等你批准或回答</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/images/bot-happy.png" width="65"><br><b>happy</b><br><sub>做完了，開心 1.5 秒</sub></td>
+    <td align="center"><img src="docs/images/bot-error.png" width="65"><br><b>error</b><br><sub>抖一下</sub></td>
+    <td align="center"><img src="docs/images/bot-sleeping.png" width="65"><br><b>sleeping</b><br><sub>10 分鐘沒動靜，點一下叫醒</sub></td>
+    <td align="center"><img src="docs/images/bot-tired.png" width="65"><br><b>tired</b><br><sub>context ≥ 80%，≥ 90% 紅邊脈動</sub></td>
+  </tr>
+</table>
+
+眼睛會跟著你的滑鼠轉。
+
+## 它會做的事
+
+- 🛎️ **審批直接在瀏海上按** — Claude Code 要跑指令、改檔案，卡片滑下來：**拒絕／在終端處理／總是允許／允許**。你在終端先答了，卡片自己收回。
+- ❓ **AskUserQuestion 也在這裡答** — 每題一組按鈕，多選用勾選；想回終端答也行。
+- 🔍 **看它改了什麼** — 清單上的 `+N −M` 徽章點開就是那次 Edit / Write 的 diff。
+- 📊 **plan 用量** — 右翼顯示 5h / 7d 用掉的百分比，跨 session 合併，快到上限會變色。
+- 🪫 **context 快滿會露出疲憊表情** — 不用自己去看 status line。
+- 🧭 **點機器人跳到它的終端** — Terminal.app、Ghostty 都認得分頁。
+- ➕ **從瀏海開新 session** — 選專案、填第一句話、要不要接續上次，⌘↩ 就開在你的終端裡。
+- 🌙 **晚安區** — 放著不管的 session 自動進晚安區不佔位子；也可以手動「去睡覺」或「放生」。
+- 🎨 **換形狀、換顏色、拖著排順序** — 全部記得住，Cubi 重啟、session 回來都還在。
+- 🪟 **拖出來變浮動視窗** — 沒瀏海的螢幕、外接螢幕都能用，拖回頂端就回去。
+- 🔌 **其他 agent 也能接** — 一份 manifest 就能讓別的 agent 的 session 出現在島上（目前只能監看）。
+
+<p align="center">
+  <img src="docs/images/approval.png" width="640" alt="審批卡片：alpha 想要執行指令，拒絕／在終端處理／總是允許／允許"><br>
+  <sub>要批准的時候，整張卡片就在瀏海下面。</sub>
+</p>
+
+<p align="center">
+  <img src="docs/images/question.png" width="640" alt="AskUserQuestion 卡片：三個選項各一張按鈕"><br>
+  <sub>Claude 問你問題，選項直接變按鈕。</sub>
+</p>
+
+<p align="center">
+  <img src="docs/images/diff.png" width="640" alt="diff 卡片：一次 Edit 的 +2 −1"><br>
+  <sub>它剛改了什麼，點徽章就看得到。</sub>
+</p>
+
+<p align="center">
+  <img src="docs/images/floating.png" width="300" alt="浮動視窗版的島"><br>
+  <sub>拖離瀏海就變成浮動視窗，哪個螢幕都行。</sub>
+</p>
+
+## 安裝
+
+### 現成的 app
 
 ```
 curl -fsSL https://raw.githubusercontent.com/jc33654/cubi/main/scripts/install.sh | bash
@@ -19,18 +99,9 @@ curl -fsSL https://raw.githubusercontent.com/jc33654/cubi/main/scripts/install.s
 
 每一版都用同一張自簽憑證簽，更新後 Automation 授權不用重做（推論，依 TCC 以 designated requirement 認 app 的規則）。
 
-裝好之後看[第一次執行](#第一次執行)。
+### 從原始碼建置
 
-## 從原始碼建置
-
-### 需求
-
-- macOS 15 以上（開發機是 macOS 26，有瀏海的螢幕；沒瀏海的螢幕會在頂端置中浮一條小 pill）
-- Xcode Command Line Tools（`xcode-select --install`）。**不需要 Xcode.app**
-- Swift 6（CLT 內附）
-- Claude Code 2.1.312 以上（hook payload 以這個版本實錄為準，見 `docs/protocol.md`）
-
-### 建置
+需要 macOS 15 以上、Xcode Command Line Tools（`xcode-select --install`，**不需要 Xcode.app**）、Claude Code 2.1.312 以上。
 
 ```
 git clone https://github.com/jc33654/cubi.git
@@ -41,28 +112,9 @@ make install   # 建置、打包、簽章、安裝到 ~/Applications/Cubi.app
 open ~/Applications/Cubi.app
 ```
 
-#### 第一次：建自簽憑證 `cubi-dev`
+憑證怎麼建、其他 make 目標、發版流程都在 [docs/development.md](docs/development.md)。
 
-沒有 Developer ID 也能用，但要有一張**穩定的**憑證：macOS 的 TCC（Automation、通知授權）認的是「bundle id + 憑證」，ad-hoc 簽章每次重編都會變，授權就會靜默失效。所以一次性在 Keychain Access 建一張：
-
-1. 開 **Keychain Access** → 選單 **Keychain Access → Certificate Assistant → Create a Certificate…**
-2. Name：`cubi-dev`；Identity Type：**Self Signed Root**；Certificate Type：**Code Signing**
-3. Create。之後 `make cert` 會回報 `identity 'cubi-dev' found`。
-
-沒有這張憑證時 `make install` 會退回 ad-hoc 簽章並印警告，app 仍可用，但每次重編後要重新授權 Automation。
-
-#### 其他 make 目標
-
-| 目標 | 做什麼 |
-|---|---|
-| `make build` / `make release` | debug / release 建置到 `.build/` |
-| `make test` | 跑 CubiKit 單元測試（CLT 的 swift-testing 需要額外 rpath，Makefile 已處理） |
-| `make bundle` | 只打包簽章到 `build/Cubi.app`，不安裝；會 strip 掉 debug 符號，並檢查兩個執行檔裡沒有任何 `/Users/…` 本機路徑，有就失敗 |
-| `make dist` | `make bundle` 再壓成 `build/Cubi.zip` + `Cubi.zip.sha256`（release 用的固定檔名） |
-| `make run` | 安裝並重啟 app |
-| `make hook-test` | app 沒開時餵 relay 一筆假資料，必須 exit 0 且無輸出 |
-
-## 第一次執行
+### 第一次執行
 
 1. 啟動後 menubar 會有一個圖示，但 menubar 太滿時 macOS 會把它藏到瀏海後面。**所有選單在島上按右鍵**也有：顯示／收起、保持顯示、系統通知、音效、登入時啟動、設定…、結束。
 2. hooks 還沒裝時會自動打開設定視窗。按 **安裝…**，看完 diff 再按 **寫入**。寫入前會先備份到 `~/.claude/backups/cubi/`。
@@ -70,41 +122,13 @@ open ~/Applications/Cubi.app
 4. 第一次點機器人跳回終端時，macOS 會跳 **Automation** 授權（控制 Terminal / Ghostty），按允許。
 5. 系統通知預設關；在設定頁開啟時 macOS 會問通知授權。
 
-### 裝 hooks 會寫哪些東西
-
-| 位置 | 內容 |
-|---|---|
-| `~/.claude/settings.json` | 12 個 hook 事件各一組 `cubi-hook` 指令，加 `PreToolUse` 的 `AskUserQuestion` matcher；`statusLine` 包一層：`cubi-hook … statusline --then '<原指令>'`，原指令照常執行、輸出不變 |
-| `~/.claude/backups/cubi/settings.json.bak-<時間>` | 每次寫入前的備份 |
-| `~/.cubi/bin/cubi-hook` | relay 本體，app 啟動時從 bundle 複製、內容不同就更新；路徑刻意無空白 |
-| `~/.cubi/agents/claude-code.json` | 串接前的 `statusLine`，解除安裝時還原 |
-| `~/Library/Application Support/cubi/cubi.sock` | app 的 unix socket（0600，只收同 UID） |
-| `~/Library/Logs/cubi.log` | 事件與錯誤 log，出問題先看這裡 |
-
-你自己原有的 hooks 不會被動；安裝器只追加自己的條目，解除時只刪自己的。設定頁可勾選「同時移除舊的桌面通知 hook」。
-
-### 命令列
-
-```
-~/Applications/Cubi.app/Contents/MacOS/cubi --hooks-status
-~/Applications/Cubi.app/Contents/MacOS/cubi --hooks-plan            # 只印 diff，不寫
-~/Applications/Cubi.app/Contents/MacOS/cubi --install-hooks         # 印 diff 後寫入（含備份）
-~/Applications/Cubi.app/Contents/MacOS/cubi --uninstall-hooks
-~/Applications/Cubi.app/Contents/MacOS/cubi --settings              # 啟動 app 並直接開設定頁
-~/Applications/Cubi.app/Contents/MacOS/cubi --new-session ~/proj [--continue | --resume <id>] [--prompt "第一句話"] [--terminal ghostty|terminal]
-```
-
-`--hooks-plan` 與 `--install-hooks` 可加 `--retire-notify`：同時移除舊的 `notify-hook.sh` 桌面通知 hook（設定頁的同一個勾選）。
-
-CLI 跟 app 一樣以 `$HOME` 為家目錄；要對假目錄測就 `HOME=/tmp/x cubi --hooks-plan`。
-
-## 怎麼用
+## 操作一覽
 
 | 動作 | 效果 |
 |---|---|
-| 滑鼠靠近瀏海 | 島展開成 compact（機器人一排 + 用量） |
+| 滑鼠靠近瀏海 | 島滑出來成 compact（機器人一排 + 用量） |
 | 點島 | expanded：session 清單（名稱、context %、最近一次編輯的 +N −M）、用量列。高度隨內容長，最多到螢幕七成 |
-| 點清單的一列 | 右邊打開這個 session 的資訊：專案、模型／effort／版本、開始時間、使用時間（Claude Code 回報的時長加上之後經過的時間，每秒走）、回合與工具呼叫數、花費、變更行數、context、終端。按「跳到終端」切到它的分頁，✕ 關閉 |
+| 點清單的一列 | 右邊打開這個 session 的資訊：專案、模型／effort／版本、開始時間、使用時間（每秒走）、回合與工具呼叫數、花費、變更行數、context、終端。按「跳到終端」切到它的分頁，✕ 關閉 |
 | 點機器人 | 跳到那個 session 的終端分頁（Terminal.app 用 tty、Ghostty 用標題／cwd、其他 app 只切到 app）；hooks 環境沒有 `TERM_PROGRAM`／tty 的 session 只能用名稱／cwd 猜：先問 Ghostty 再問 Terminal.app，都沒中就不動。沉睡中的機器人點一下會醒 |
 | 有審批 | 島自動打開卡片：**拒絕 / 在終端處理 / 總是允許 / 允許**。「總是允許」會把 Claude Code 自己建議的規則寫進 session 與 `settings.local.json` |
 | 有 AskUserQuestion | 每題一組選項按鈕；多選用勾選；也可「在終端回答」 |
@@ -118,8 +142,6 @@ CLI 跟 app 一樣以 `$HOME` 為家目錄；要對假目錄測就 `HOME=/tmp/x 
 | 用量旁的 ＋（島一滑入就能按，不用展開）、右鍵 → 開新 session…（⌘N） | 對話框：選專案目錄（Cubi 開過的 + Claude Code 記錄過的 `~/.claude.json` projects，或「瀏覽…」）、選填第一句話（一開就送出）、「接續上次對話」（`claude --continue`）、終端（自動＝Ghostty 有裝就 Ghostty，否則 Terminal.app）。⌘↩ 開始。Ghostty 開在最前面視窗的新分頁、Terminal.app 開新視窗，指令當第一行輸入打進去，所以 PATH、shell 都是你自己的 |
 | 右鍵機器人 → 在這個專案再開一個…／在新分頁接續這個 session；資訊面板「再開一個」 | 用那個 session 的專案目錄與終端。「接續這個 session」不開對話框，直接 `claude --resume <這個 session 的 id>`（不是 `--continue`：同目錄有兩個 session 時才不會接錯）。終端開不了（Automation 沒允許、Ghostty 太舊）會跳一個警告；Ghostty 失敗會改試 Terminal.app |
 
-機器人狀態：idle、thinking（頭頂三點）、working、waiting（跳動 + ! 或 ?）、error（抖一下）、happy（完成後 1.5 秒）、sleeping（預設 10 分鐘無事件，設定頁可調，點一下叫醒）、tired（context ≥ 80%，≥ 90% 描邊紅色脈動）。
-
 音效用 macOS 內建系統音，設定頁可關。
 
 ## 設定頁
@@ -130,6 +152,27 @@ CLI 跟 app 一樣以 `$HOME` 為家目錄；要對假目錄測就 `HOME=/tmp/x 
 - **睡眠**：多久沒動靜進入沉睡（5–60 分鐘，預設 10）、沉睡多久自動進晚安區（1–24 小時或從不，預設 12）
 - **範圍**：忽略哪些目錄開頭的 session（一行一個，可用 `~`）
 - **工具箱**：有 `~/.claude-toolkit/panel/index.html` 時才出現，載入原本 ClaudeToolkit 的管理面板
+
+## 它動了哪些東西
+
+| 位置 | 內容 |
+|---|---|
+| `~/.claude/settings.json` | 12 個 hook 事件各一組 `cubi-hook` 指令，加 `PreToolUse` 的 `AskUserQuestion` matcher；`statusLine` 包一層：`cubi-hook … statusline --then '<原指令>'`，原指令照常執行、輸出不變 |
+| `~/.claude/backups/cubi/settings.json.bak-<時間>` | 每次寫入前的備份 |
+| `~/.cubi/bin/cubi-hook` | relay 本體，app 啟動時從 bundle 複製、內容不同就更新；路徑刻意無空白 |
+| `~/.cubi/agents/claude-code.json` | 串接前的 `statusLine`，解除安裝時還原 |
+| `~/Library/Application Support/cubi/cubi.sock` | app 的 unix socket（0600，只收同 UID） |
+| `~/Library/Logs/cubi.log` | 事件與錯誤 log，出問題先看這裡 |
+
+你自己原有的 hooks 不會被動；安裝器只追加自己的條目，解除時只刪自己的。設定頁可勾選「同時移除舊的桌面通知 hook」。
+
+## 怎麼運作
+
+- **relay** `cubi-hook` 是 Claude Code 每個 hook 事件跑的小程式：stdin 讀 payload，送進 unix socket，等 app 回覆再寫回 stdout。只 import Darwin，冷啟動個位數毫秒。
+- **app** 收事件、更新每個 session 的狀態機、畫機器人。審批這類 blocking 事件最多等 115 秒；app 沒開或當掉，Claude Code 自動退回終端自己問，什麼都不會卡住。
+- 島的狀態：`hidden → compact → expanded`。瀏海是物理的，所以島永遠以瀏海為中心留白，機器人在左翼、用量在右翼。
+- 零第三方依賴：AppKit + SwiftUI，SwiftPM，不用 Xcode.app。
+- 設計與決策寫在 [docs/plan.md](docs/plan.md)，relay 協定與欄位在 [docs/protocol.md](docs/protocol.md)，進度在 [docs/status.md](docs/status.md)。
 
 ## 多 agent plugin
 
@@ -147,45 +190,10 @@ Claude Code 是內建 plugin。其他 agent 可以用一份 manifest 接進來�
 5. 有存過 plugin 的 API key 的話，Keychain Access 搜尋 service `cc.dotdot.cubi` 刪掉。
 6. `~/.claude/backups/cubi/` 是 settings.json 的歷史備份，可留。
 
-## 發版
+## 開發與發版
 
-1. 一次性：把 `cubi-dev` 憑證放進 GitHub secrets。Keychain Access → 我的憑證 → `cubi-dev` → 右鍵「輸出」存成 `.p12`（設一個密碼），然後 `base64 -i cubi-dev.p12 | pbcopy`。到 repo Settings → Secrets and variables → Actions 新增 `CUBI_CERT_P12`（貼上）與 `CUBI_CERT_PASSWORD`。匯出後把 `.p12` 刪掉。
-2. 每次：`git tag v0.2.0 && git push origin v0.2.0`。`.github/workflows/release.yml` 會在 macOS runner 跑測試、用這張憑證簽、把 `Cubi.zip` 與 `Cubi.zip.sha256` 掛到 Release，release notes 由 commit 自動生成。版本號來自 tag（`bundle.sh` 只在剛好在 tag 上時覆寫 `CFBundleShortVersionString`）；打 tag 前先把 `Packaging/Info.plist` 與 `CubiInfo.version` 改成同一個號碼，`make bundle` 會檢查兩者一致。只接受 `vX.Y.Z`，`-rc` 之類的 tag 不會觸發。
-3. 備援：本機 `make dist`，把 `build/Cubi.zip` 與 `.sha256` 手動上傳到 Release。
+改程式、make 目標、命令列、憑證、CI 與發版流程：[docs/development.md](docs/development.md)。
 
-**把私鑰放 GitHub secrets 的風險**：有 repo 寫入權或能跑 Actions 的人可能拿到它；拿到只能簽出「在已裝 Cubi 的機器上繼承 Automation 授權」的假 app，Gatekeeper 仍不信任那張憑證。fork 來的 PR 讀不到 secrets，`ci.yml` 也不引用 secrets。懷疑外洩或換憑證的順序（`release.yml` 讀的是**被 tag 的那個 commit** 裡的 `scripts/install.sh`，所以新 hash 必須已經在那個 commit 裡）：
+## 致謝
 
-1. `make cert` 重建憑證，換 secrets。
-2. 本機改 `scripts/install.sh` 的 `REQUIREMENT`（只有這一處），commit。
-3. 在同一個 commit 上打 tag，**只 push tag**：`git push origin v0.2.0`，先不 push `main`。
-4. Actions 綠了、Release 掛上新 zip 之後，再 `git push origin main`。
-
-順序反過來會有空窗：`main` 上的腳本要求新憑證，Releases 上的 zip 還是舊憑證簽的，所有 `curl | bash` 都會「簽章不符」；tag 打在舊 hash 的 commit 上則 verify 步驟一定失敗。使用者更新後要重新授權一次 Automation。
-
-`ci.yml` 在 push `main` 與 PR 時跑 `swift test`、`make bundle`（沒憑證走 ad-hoc，仍會跑本機路徑守門）。
-
-## 開發
-
-```
-Sources/CubiKit/     純邏輯：事件模型、解碼、session 狀態機、回覆編碼、安裝器、plugin 協定（可測）
-Sources/cubi/        AppKit + SwiftUI app
-Sources/cubi-hook/   relay，只 import Darwin，冷啟動個位數 ms
-Tests/CubiKitTests/  單元測試；Fixtures/claude-2.1.312/ 是實錄的 hook payload
-scripts/             bundle.sh（打包、strip、簽章、路徑守門）、install.sh（使用者安裝）、make-icns.sh、import-fixtures.py
-.github/workflows/   ci.yml、release.yml
-docs/                plan.md（設計與決策）、protocol.md（relay 協定、欄位、manifest 格式）、status.md（進度）
-```
-
-常用的驗證方式：
-
-- `make test`
-- 離線渲染島：`.build/release/cubi --render-island <hidden|compact|expanded|detail|approval|question|usage|usage-compact|diff|floating|floating-approval> <botState> out.png`；環境變數 `CUBI_RENDER_BOTS=n` 畫 n 隻（預設 4，第三隻在晚安區）、`CUBI_RENDER_BOT_SIZE=small|large` 換機器人大小（預設 regular，不吃這台機器的設定）
-- 重播實錄 payload：`python3 -c 'import json;print(json.dumps(json.load(open("Tests/CubiKitTests/Fixtures/claude-2.1.312/SessionStart-1.json"))["payload"]))' | ~/.cubi/bin/cubi-hook --agent claude-code --event SessionStart`
-- 錄新版 Claude Code 的 payload：先 `make release`（capture 用的是 `.build/release/cubi-hook`），repo 要在 `$HOME/Documents/cubi`（`docs/capture.settings.local.json` 寫死這個路徑，放別處就改它）。把那份 hooks 放進某個專案的 `.claude/settings.local.json`，跑一輪後用 `scripts/import-fixtures.py <版本>` 匯入（會把路徑洗掉）。錄完要把那些 hooks 拿掉，不然該專案的事件會重複觸發：在 `~/Documents/cubi` 錄的可以在設定頁按「移除」（預設只看這個目錄），在別的專案錄的要自己手動刪。
-
-### 設計上刻意的事
-
-- 協定與做法借自 [Coucou](https://github.com/louis-cfm/coucou)（MIT），程式碼與素材都是自己的。
-- relay 等回覆最多 115 秒（hook timeout 120），app 沒開或當掉時 Claude Code 自動退回終端自己問。
-- 每條連線一個待決請求，以 fd 為鍵；終端先答了就關連線，卡片跟著收。
-- 用量讀數跨 session 合併：只有最近有活動的 session 能覆寫 5h / 7d，閒置 session 送來的空值不會清掉既有數字。
+協定與做法借自 [Coucou](https://github.com/louis-cfm/coucou)（MIT）。Cubi 的程式碼、機器人與圖示都是自己畫的。

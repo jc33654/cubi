@@ -83,13 +83,16 @@ enum IconRenderer {
             FileHandle.standardError.write(Data("cubi: unknown bot state \(botState)\n".utf8))
             return false
         }
-        let names: [String] = mode == "usage-compact" ? ["alpha"] : ["alpha", "beta", "gamma", "delta"]
+        // CUBI_RENDER_BOTS=n draws n robots (default 4; the third one rests), to check crowded wings.
+        let count = Int(ProcessInfo.processInfo.environment["CUBI_RENDER_BOTS"] ?? "") ?? 4
+        let stock = ["alpha", "beta", "gamma", "delta", "eps", "zeta", "eta", "theta"]
+        let names = (0..<count).map { stock[$0 % stock.count] + ($0 < stock.count ? "" : String($0)) }
         for (i, name) in names.enumerated() {
-            let bot = BotRuntime(id: name, name: name, color: SessionPalette.colors[i * 2])
-            bot.shape = BotShape.allCases[i]
+            let bot = BotRuntime(id: name, name: name, color: SessionPalette.colors[(i * 2) % SessionPalette.colors.count])
+            bot.shape = BotShape.allCases[i % 4]
             if i == 2 { bot.resting = true }
             bot.model.setState(i == 0 ? bs : (bot.resting ? .sleeping : .idle))
-            bot.contextPercent = [92, 35, 0, 12][i]
+            bot.contextPercent = [92, 35, 0, 12][i % 4]
             if i == 0 {
                 bot.lastEdit = EditSummary(path: "/Users/me/Documents/cubi/Sources/cubi/Island/IslandRootView.swift", added: 2, removed: 1, lines: [
                     DiffLine(kind: .hunk, text: "@@ -41 +41 @@"),

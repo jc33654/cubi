@@ -221,9 +221,15 @@ final class IslandState {
 
     static let expandedBaseWidth: CGFloat = 640
     static let detailWidth: CGFloat = 860
+    /// The robot row with the notch gap (or the floating gap) and the usage wing: the expanded
+    /// island is never narrower than this, or robots would hang out of its left edge.
+    var wingRowWidth: CGFloat {
+        leftWingWidth + (placement == .notch ? geometry.notchWidth : Self.floatingGap) + Self.rightWingWidth
+    }
     /// Wider with the info panel open; the height follows whatever is shown (cards, diff, list).
     var expandedWidth: CGFloat {
-        pendingCards.isEmpty && showingDiffFor == nil && selectedSession != nil ? Self.detailWidth : Self.expandedBaseWidth
+        let base = pendingCards.isEmpty && showingDiffFor == nil && selectedSession != nil ? Self.detailWidth : Self.expandedBaseWidth
+        return max(base, wingRowWidth + 16)
     }
     /// Never wider than its screen, taller than most of it, or bigger than the panel it is drawn in.
     var maxExpandedSize: CGSize {
@@ -250,10 +256,11 @@ final class IslandState {
         let pill = restingBots.isEmpty ? 0 : Self.restingPillWidth + 6
         return max(Self.minLeftWingWidth, 16 + CGFloat(activeBots.count) * wingSlot + pill)
     }
-    /// The wings differ in width but the notch must stay in the middle: shift the island (compact)
-    /// or the wing row (expanded) by half the difference, otherwise the robots end up under the notch.
+    /// The wings differ in width but the notch must stay in the middle: shift the whole island by
+    /// half the difference (compact and expanded alike), otherwise the robots end up under the
+    /// notch, or, with many of them, outside the island's left edge.
     var wingOffset: CGFloat { (Self.rightWingWidth - leftWingWidth) / 2 }
-    func xOffset(for mode: IslandMode) -> CGFloat { mode == .compact ? wingOffset : 0 }
+    func xOffset(for mode: IslandMode) -> CGFloat { mode == .hidden ? 0 : wingOffset }
 
     func size(for mode: IslandMode) -> CGSize {
         switch mode {

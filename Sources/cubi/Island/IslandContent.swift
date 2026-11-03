@@ -126,7 +126,6 @@ struct IslandContent: View {
             .padding(.trailing, 10)
         }
         .frame(height: height)
-        .offset(x: anchored && state.mode == .expanded ? state.wingOffset : 0)
     }
 }
 

@@ -4,7 +4,7 @@
 
 <h1 align="center">Cubi</h1>
 
-<p align="center"><b>住在 MacBook 瀏海的 Claude Code 小機器人。</b></p>
+<p align="center"><b>住在 MacBook 瀏海的 Claude Code 小機器人 Cubiiii。</b></p>
 
 <p align="center">
   <a href="https://github.com/jc33654/cubi/releases"><img src="https://img.shields.io/github/v/release/jc33654/cubi?label=release" alt="release"></a>
@@ -18,7 +18,7 @@
   <img src="docs/images/hero.png" width="720" alt="瀏海兩側：左邊三隻機器人與一個晚安膠囊，右邊 ＋ 與 5h / 7d 用量">
 </p>
 
-每開一個 Claude Code session，瀏海旁就多一隻小機器人。它在想事情、在跑工具、在等你、累了、睡了，一眼看得出來。要你批准指令或回答問題時，卡片直接從瀏海滑下來，按一下就好，不用去翻是哪個終端分頁在叫。
+每開一個 Claude Code session，瀏海旁就多一隻 Cubiiiii。它在想事情、在跑工具、在等你、累了、睡了，一眼看得出來。要你批准指令或回答問題時，卡片直接從瀏海滑下來，按一下就好，不用去翻是哪個終端分頁在叫。
 
 一個 app 加一個 hook relay。沒有雲端、沒有帳號、沒有遙測：資料只在這台機器的 unix socket 上走。
 
@@ -26,11 +26,11 @@
 
 同時開三、四個 Claude Code，每個都在不同的終端分頁裡。誰在等我批准？誰已經做完了？哪個 context 快爆了？切來切去很煩，漏掉一個「要不要允許」更煩。
 
-瀏海平常就是一塊黑，剛好拿來住人。
+瀏海平常就是一塊黑，剛好拿來住人。住進去的叫 Cubiiii：i 的數量沒有規定，看心情。
 
-## 認識小機器人
+## 認識 Cubiiiiii
 
-每隻機器人代表一個 session，各自一種顏色（右鍵可以換形狀、換顏色，它會記得）。表情就是狀態：
+一隻 Cubiii 就是一個 session，各自一種顏色（右鍵可以換形狀、換顏色，它會記得）。表情就是狀態：
 
 <table>
   <tr>
@@ -56,7 +56,7 @@
 - 🔍 **看它改了什麼** — 清單上的 `+N −M` 徽章點開就是那次 Edit / Write 的 diff。
 - 📊 **plan 用量** — 右翼顯示 5h / 7d 用掉的百分比，跨 session 合併，快到上限會變色。
 - 🪫 **context 快滿會露出疲憊表情** — 不用自己去看 status line。
-- 🧭 **點機器人跳到它的終端** — Terminal.app、Ghostty 都認得分頁。
+- 🧭 **點 Cubiii 跳到它的終端** — Terminal.app、Ghostty 都認得分頁。
 - ➕ **從瀏海開新 session** — 選專案、填第一句話、要不要接續上次，⌘↩ 就開在你的終端裡。
 - 🌙 **晚安區** — 放著不管的 session 自動進晚安區不佔位子；也可以手動「去睡覺」或「放生」。
 - 🎨 **換形狀、換顏色、拖著排順序** — 全部記得住，Cubi 重啟、session 回來都還在。
@@ -70,7 +70,7 @@
 
 <p align="center">
   <img src="docs/images/question.png" width="640" alt="AskUserQuestion 卡片：三個選項各一張按鈕"><br>
-  <sub>Claude 問你問題，選項直接變按鈕。</sub>
+  <sub>Claude 問你問題，Cubiiii 把選項變成按鈕。</sub>
 </p>
 
 <p align="center">
@@ -80,7 +80,7 @@
 
 <p align="center">
   <img src="docs/images/floating.png" width="300" alt="浮動視窗版的島"><br>
-  <sub>拖離瀏海就變成浮動視窗，哪個螢幕都行。</sub>
+  <sub>拖離瀏海就變成浮動視窗，Cubiiiii 哪個螢幕都能住。</sub>
 </p>
 
 ## 安裝
@@ -197,7 +197,7 @@ Claude Code 是內建 plugin。其他 agent 可以用一份 manifest 接進來�
 
 ## 致謝
 
-協定與做法借自 [Coucou](https://github.com/louis-cfm/coucou)（MIT）。Cubi 的程式碼、機器人與圖示都是自己畫的。
+協定與做法借自 [Coucou](https://github.com/louis-cfm/coucou)（MIT）。Cubi 的程式碼、Cubiiii 與圖示都是自己畫的。
 
 ## 授權
 

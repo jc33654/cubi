@@ -32,7 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let coordinator = SessionCoordinator(island: island)
         self.coordinator = coordinator
         let settings = SettingsWindow(island: island.state, notifier: coordinator.notifier, ignored: coordinator.ignored,
-                                      registry: coordinator.registry, toolkit: toolkit)
+                                      timing: coordinator.timing, registry: coordinator.registry, toolkit: toolkit)
         self.settings = settings
         let newSession = NewSessionWindow(recent: coordinator.recentProjects)
         coordinator.newSessionWindow = newSession

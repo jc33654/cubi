@@ -202,16 +202,32 @@ private func hook(_ id: String, _ event: CanonicalEvent, cwd: String? = "/Users/
     #expect(store.sessions["s"]?.ticker == "醒了")
 }
 
+@Test func sleepAndRestClocksAreSettings() {
+    var store = SessionStore()
+    store.sleepAfter = 60
+    store.restAfter = .infinity
+    _ = store.apply(hook("s", .sessionStart(source: nil)), now: 0)
+    store.tick(now: 59)
+    #expect(store.sessions["s"]?.botState == .idle)
+    store.tick(now: 60)
+    #expect(store.sessions["s"]?.botState == .sleeping)
+    store.tick(now: 365 * 24 * 3600)
+    #expect(store.sessions["s"]?.rest == SessionInfo.Rest.none)   // never: the user turned it off
+    store.restAfter = 120
+    store.tick(now: 120)
+    #expect(store.sessions["s"]?.rest == .auto)
+}
+
 // MARK: - 工作中 / 晚安 zones and 放生
 
 @Test func halfADayOfSilenceRestsASessionAndAnyEventWakesIt() {
     var store = SessionStore()
     _ = store.apply(hook("s", .sessionStart(source: nil)), now: 0)
-    store.tick(now: SessionStore.restAfter - 1)
+    store.tick(now: store.restAfter - 1)
     #expect(store.sessions["s"]?.botState == .sleeping && store.sessions["s"]?.rest == SessionInfo.Rest.none)
-    store.tick(now: SessionStore.restAfter)
+    store.tick(now: store.restAfter)
     #expect(store.sessions["s"]?.rest == .auto && store.sessions["s"]?.resting == true)
-    _ = store.apply(hook("s", .toolStart(tool: "Bash", input: .null)), now: SessionStore.restAfter + 1)
+    _ = store.apply(hook("s", .toolStart(tool: "Bash", input: .null)), now: store.restAfter + 1)
     #expect(store.sessions["s"]?.rest == SessionInfo.Rest.none)
 }
 

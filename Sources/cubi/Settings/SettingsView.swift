@@ -8,6 +8,7 @@ struct SettingsView: View {
     @Bindable var registry: PluginRegistry
     let notifier: Notifier
     let ignored: IgnoredDirectories
+    @Bindable var timing: SleepTiming
     let openToolkit: () -> Void
 
     @State private var soundsOn = Sounds.enabled
@@ -23,6 +24,8 @@ struct SettingsView: View {
                 PluginsSection(registry: registry, hooks: hooks)
                 Divider()
                 displaySection
+                Divider()
+                sleepSection
                 Divider()
                 scopeSection
                 if FileManager.default.fileExists(atPath: ToolkitPanel.htmlPath) {
@@ -117,6 +120,23 @@ struct SettingsView: View {
             }
         }
         .font(.system(size: 12))
+    }
+
+    // MARK: Sleep
+
+    private var sleepSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("睡眠").font(.headline)
+            Picker("多久沒動靜進入沉睡", selection: $timing.sleepMinutes) {
+                ForEach(SleepTiming.sleepChoices, id: \.self) { Text("\($0) 分鐘").tag($0) }
+            }
+            Picker("沉睡多久自動進晚安區", selection: $timing.restHours) {
+                ForEach(SleepTiming.restChoices, id: \.self) { Text(SleepTiming.restLabel($0)).tag($0) }
+            }
+            Text("手動「去睡覺」的不受這裡影響；狀態列持續回報不算動靜。").font(.system(size: 11)).foregroundStyle(.secondary)
+        }
+        .font(.system(size: 12))
+        .frame(maxWidth: 420, alignment: .leading)
     }
 
     // MARK: Scope

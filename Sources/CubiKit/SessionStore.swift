@@ -15,9 +15,10 @@ public struct SessionStore: Sendable {
 
     public static let happyDuration = 1.5
     public static let endedLinger = 3.0
-    public static let sleepAfter = 600.0
-    /// Sleeping this long moves a session to the 晚安 zone on its own.
-    public static let restAfter = 12 * 3600.0
+    /// Silence this long sends a robot to sleep. A user setting: the app sets both clocks.
+    public var sleepAfter = 600.0
+    /// Sleeping this long moves a session to the 晚安 zone on its own (`.infinity`: never).
+    public var restAfter = 12 * 3600.0
 
     /// Sessions the user let go of ("放生"): their events are dropped until they need the user again.
     /// Set on launch from the previous run's saved set.
@@ -241,8 +242,8 @@ public struct SessionStore: Sendable {
 
     public mutating func tick(now: Double) {
         for (id, var s) in sessions where !s.ended && s.pending == nil {
-            if now - s.lastEventAt >= Self.sleepAfter, s.botState == .idle || s.botState == .tired { s.botState = .sleeping }
-            if now - s.lastEventAt >= Self.restAfter, s.rest == .none { s.rest = .auto }
+            if now - s.lastEventAt >= sleepAfter, s.botState == .idle || s.botState == .tired { s.botState = .sleeping }
+            if now - s.lastEventAt >= restAfter, s.rest == .none { s.rest = .auto }
             sessions[id] = s
         }
     }

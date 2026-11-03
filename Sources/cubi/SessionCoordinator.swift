@@ -9,6 +9,7 @@ final class SessionCoordinator {
     let island: IslandController
     let notifier = Notifier()
     let ignored = IgnoredDirectories()
+    let timing = SleepTiming()
     let registry = PluginRegistry()
     private var ignoredLogged: Set<String> = []
     private var server: HookServer?
@@ -53,6 +54,8 @@ final class SessionCoordinator {
             sync()
             TerminalFocus.focus(info)
         }
+        // A shorter clock takes effect now, not at the next minute.
+        timing.onChange = { [weak self] in self?.applyTiming(); self?.tick() }
         notifier.onActivate = { [weak self] id in
             guard let info = self?.store.sessions[id] else { return }
             TerminalFocus.focus(info)
@@ -94,6 +97,7 @@ final class SessionCoordinator {
         store.dismissed = Self.loadSet(Self.dismissedKey)
         store.manuallyRested = Self.loadSet(Self.restedKey)
         store.seedOrder(UserDefaults.standard.stringArray(forKey: Self.orderKey) ?? [])
+        applyTiming()
         island.state.seedLooks(Self.loadLooks())
         CubiLog.write("restored dismissed=\(store.dismissed.count) rested=\(store.manuallyRested.count) order=\(store.preferredOrder.count) looks=\(island.state.looks.bySession.count)")
         // The status line only fires when a session changes; restore the last reading so the
@@ -367,5 +371,11 @@ final class SessionCoordinator {
     private func tick() {
         store.tick(now: Date().timeIntervalSinceReferenceDate)
         sync()
+    }
+
+    private func applyTiming() {
+        store.sleepAfter = timing.sleepAfter
+        store.restAfter = timing.restAfter
+        CubiLog.write("timing sleepAfter=\(timing.sleepMinutes)m restAfter=\(SleepTiming.restLabel(timing.restHours))")
     }
 }

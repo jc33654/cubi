@@ -8,16 +8,16 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 |---|---|---|
 | Relay `cubi-hook` | Darwin-only，stdin → unix socket → stdout；blocking 事件等回覆 115 s；statusline 串接（原指令 shell-quote 成單一參數）；`--capture` 錄 payload | 真機驗證 |
 | 事件模型 CubiKit | canonical events、`SessionStore` reducer、回覆編碼（allow / always / deny / 問題答案）、`EditSummary` diff、`TranscriptWatcher`、安裝器（備份、diff、CAS 寫入、依 `--agent <id> ` 辨識自己的 hooks） | 單元測試 |
-| 島（瀏海） | hidden / compact / expanded；機器人列隨數量變寬並以瀏海為中心；expanded 高度隨內容、有資訊面板時 860 寬；右鍵 app 選單 | 真機驗證 |
+| 島（瀏海） | hidden / compact / expanded；機器人列隨數量變寬並以瀏海為中心（compact 與 expanded 都是整個島往左挪，排比 640 寬才加寬；之前 expanded 置中，五隻以上第一隻被切）；expanded 高度隨內容、有資訊面板時 860 寬；右鍵 app 選單 | 真機驗證；多隻版面離線渲染 4／5／6／8 隻驗證 |
 | 浮動視窗 | 拖離瀏海即浮動，可放任何螢幕；位置記島頂中心；拔螢幕夾回；拖回頂端 dock；選單切換 | 真機驗證（外接螢幕） |
 | 機器人 | 8 種狀態（含 tired）；每 session 一色；右鍵換形狀（方塊／圓／三角／六角）與顏色，記住（UserDefaults `sessionLooks`，200 上限）；翼上拖曳排順序，清單同序，記住（`sessionOrder`） | 單元測試（順序、looks 淘汰、JSON 往返）；載回路徑真機 log；拖曳與重啟後外觀待 Jade 親手試 |
 | 審批／問題卡片 | 拒絕／在終端處理／總是允許／允許；AskUserQuestion 選項卡；終端先答或 Esc 自動撤卡；只認同一 tool call 的事件 | 真機驗證 |
 | Session 資訊面板 | 專案、模型／effort／版本、開始時間（transcript 建立時間）、使用時間、回合與工具呼叫數、花費、變更行數、context、終端、跳到終端 | 離線渲染驗證；點列待 Jade 親手試 |
-| 工作中／晚安／放生 | 12 小時沒事件自動進晚安區；右鍵「去睡覺」「起床上班」「放生」；放生後只有送訊息、被問、SessionStart 會回來；兩個集合存 UserDefaults | 放生與拉回真機以 fixture 重播驗證；右鍵待 Jade 親手試 |
+| 工作中／晚安／放生 | 沉睡 12 小時（可調）自動進晚安區；右鍵「去睡覺」「起床上班」「放生」；放生後只有送訊息、被問、SessionStart 會回來；兩個集合存 UserDefaults | 放生與拉回真機以 fixture 重播驗證；右鍵待 Jade 親手試 |
 | 開新 session | 右鍵「開新 session…」對話框（最近專案／瀏覽、第一句話、接續、終端）、機器人右鍵「再開一個」「在新分頁接續這個 session」（`--resume <id>`）、右翼用量旁的 ＋（compact 就能按）；Ghostty 走 AppleScript `new surface configuration` + `input text`（不用 `initial input`，見已知限制），Terminal.app 走 `do script`；`cubi --new-session` CLI 同一條路 | CLI 真機驗證（Ghostty 帶第一句話 → 4 秒內 SessionStart + prompt；Terminal.app `--continue` → 接到同一個 session；`--resume <id>` 真機驗證；終端開不了時的警告路徑沒驗）；對話框與右鍵待 Jade 親手試 |
 | 用量 | 5h / 7d / cost 跨 session 合併，最近活動的 session 才能覆寫 | 真機驗證 |
 | 聚焦終端 | Terminal.app（tty）、Ghostty（標題／cwd）、其他 app 只切 app；沒有終端身分時用名稱／cwd 猜 Ghostty 再 Terminal.app；點沉睡的機器人會叫醒 | 有身分路徑真機驗證；猜測路徑只有腳本語法驗證 |
-| 安裝器 UI | 設定頁：Claude Code hooks 安裝／解除（看 diff 再寫）、退役舊 notify hook、Agents 開關與 API key、顯示、範圍、工具箱面板 | 真機驗證 |
+| 安裝器 UI | 設定頁：Claude Code hooks 安裝／解除（看 diff 再寫）、退役舊 notify hook、Agents 開關與 API key、顯示（保持顯示、滑入就展開、機器人大小 28／36／44）、睡眠（沉睡 5–60 分鐘、晚安 1–24 小時或從不；改了立刻 tick）、範圍、工具箱面板 | 真機驗證；三個新設定：大小離線渲染驗證、時間單元測試＋啟動 log 驗證載入、滑入開關待 Jade 親手試 |
 | Plugin 架構 | `AgentPlugin` 協定；`ClaudeCodePlugin` 內建；`ManifestPlugin` 以 JSON 接新 agent（只能監看） | 單元測試＋假 manifest 真機 |
 | 發佈 | `make bundle` strip debug 符號並守門（執行檔裡不得有 `/Users/…`）；`make dist` 產固定檔名 `Cubi.zip`；`scripts/install.sh` 下載、sha256 完整性校驗、`codesign -R` 比對 cubi-dev 憑證 hash 後才裝並拿掉 quarantine；`ci.yml`／`release.yml`（tag 觸發，從 secrets 匯入 .p12 簽） | 真機驗證：v0.1.0 由 release.yml 在 macos-26 建、簽、掛上 Release（1.5 分鐘）；從 `releases/latest/download/` 抓回來 sha256 與 `codesign -R` 都過、OSO 0、版本 0.1.0 |
 | 文件 | README（建置、憑證、安裝、用法、解除）、`docs/protocol.md`（relay 協定、欄位、manifest 格式）、`docs/plan.md` | 經審查員對帳 |
@@ -32,7 +32,8 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 4. 右鍵「去睡覺」→ 翼上消失、出現「💤 1」、清單在晚安區；「放生」→ 消失；在那個 session 送一句話 → 回來。
 5. 翼上拖一隻機器人換順序 → 清單同序；重啟 Cubi 順序還在；拖機器人時島不會變浮動；右鍵改形狀／顏色後重啟還在。
 6. 右鍵「開新 session…」：對話框選專案、填第一句話（含繁中）、開始 → 終端開新分頁、島上出現新機器人；機器人右鍵「在新分頁接續這個 session」。（Jade 已驗：對話框與繁中第一句話 OK）
-7. 在另一台沒裝過的機器跑 `curl -fsSL https://raw.githubusercontent.com/jc33654/cubi/main/scripts/install.sh | bash`，看 Automation 授權與機器人是否出現（v0.1.0 已發，secrets 已設）。
+7. 五隻以上（含一隻晚安）展開 → 第一隻完整在島內；設定頁關「滑入就展開」→ 滑入停 compact、點一下才展開；切「大」「小」後翼上拖曳換順序格子沒偏；沉睡改 5 分鐘 → 5 分鐘後機器人閉眼。
+8. 在另一台沒裝過的機器跑 `curl -fsSL https://raw.githubusercontent.com/jc33654/cubi/main/scripts/install.sh | bash`，看 Automation 授權與機器人是否出現（v0.1.0 已發，secrets 已設）。
 
 ## 已知限制
 
@@ -40,6 +41,7 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 - 回合數、工具呼叫數只算 Cubi 看到的；Cubi 重啟歸零。
 - hooks 環境沒有 `TERM_PROGRAM`／tty 的 session（來源不明，log 曾出現）只能用名稱／cwd 猜終端，猜不到就不動。
 - 離線渲染（`--render-island`）畫不出 `ScrollView` 內容，清單只能真機看。
+- 翼上約 12 隻以上時島會超出 1000 pt 的面板被切（推論，沒渲染到那麼多）。
 - 從瀏海拖出的瞬間島直接出現在滑鼠下方，沒有飛出動畫。
 - 沒有 Apple 公證：下載的 app 會被 Gatekeeper 擋，install.sh 驗過簽章後拿掉 quarantine；手動裝的人要右鍵開啟或「隱私與安全性 → 強制打開」。憑證 hash 寫死在 install.sh，換憑證要同步改。
 - 開 session：Ghostty 1.3.1 的 AppleScript `initial input` 會把非 ASCII 雙重編碼（繁中變成 `ç¥èåº«` 這種亂碼），所以指令改用 `input text` 打進新分頁（驗證過繁中原樣到達）；`input text` 靠 pty 緩衝，shell 啟動特別慢的機器理論上可能吃掉一截（沒遇過）。

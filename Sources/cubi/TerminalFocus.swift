@@ -28,10 +28,11 @@ enum TerminalFocus {
     static func focus(_ info: SessionInfo) {
         let client = info.client
         let bundle = client.bundleID ?? ""
-        // A rename reaches Claude Code's registry (and the tab title) before the next status line.
+        // A /rename reaches Claude Code's registry (and the tab title) before the next status line.
+        // Only a name the user chose counts: a derived one (`proj-32`) is not what the tab shows.
         // Only the title-matching branches need it; Terminal.app goes by tty.
         var name: String {
-            let fromRegistry = ClaudeSessionRegistry.entry(for: info.id, in: ClaudeSessionRegistry.directory(home: CubiPaths.home.path))?.name ?? ""
+            let fromRegistry = ClaudeSessionRegistry.entry(for: info.id, in: ClaudeSessionRegistry.directory(home: CubiPaths.home.path))?.userName ?? ""
             return !fromRegistry.isEmpty ? fromRegistry : (info.explicitName ? info.name : "")
         }
         let cwd = info.cwd ?? ""

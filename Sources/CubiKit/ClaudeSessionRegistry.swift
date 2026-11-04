@@ -8,8 +8,19 @@ public enum ClaudeSessionRegistry {
     public struct Entry: Sendable, Equatable {
         public var sessionID: String
         public var name: String?
+        /// Claude Code's `nameSource`: `user` for a /rename, `derived` for a name it made up
+        /// (like `proj-32`), absent in older versions.
+        public var source: String?
         /// Milliseconds since 1970, as Claude Code writes it.
         public var updatedAt: Double
+
+        public init(sessionID: String, name: String?, source: String? = nil, updatedAt: Double) {
+            self.sessionID = sessionID; self.name = name; self.source = source; self.updatedAt = updatedAt
+        }
+
+        /// The name only when the user chose it. A derived name is not what the terminal tab
+        /// shows (that follows the status line) and must not replace a better name Cubi has.
+        public var userName: String? { source == "user" ? name : nil }
     }
 
     public static func directory(home: String) -> URL {
@@ -36,6 +47,6 @@ public enum ClaudeSessionRegistry {
         guard let value = try? JSONDecoder().decode(JSONValue.self, from: data),
               let id = value["sessionId"]?.string, !id.isEmpty else { return nil }
         let name = value["name"]?.string.flatMap { $0.isEmpty ? nil : $0 }
-        return Entry(sessionID: id, name: name, updatedAt: value["updatedAt"]?.double ?? 0)
+        return Entry(sessionID: id, name: name, source: value["nameSource"]?.string, updatedAt: value["updatedAt"]?.double ?? 0)
     }
 }

@@ -388,7 +388,9 @@ final class SessionCoordinator {
         guard !candidates.isEmpty else { return }
         let registry = ClaudeSessionRegistry.entries(in: ClaudeSessionRegistry.directory(home: CubiPaths.home.path))
         for info in candidates {
-            guard let name = ClaudeSessionRegistry.entry(for: info.id, in: registry)?.name, name != info.name else { continue }
+            // Only a name the user typed (/rename). Claude Code's own derived names (`proj-32`)
+            // would replace the status line's better name and match no tab title.
+            guard let name = ClaudeSessionRegistry.entry(for: info.id, in: registry)?.userName, name != info.name else { continue }
             store.setName(name, for: info.id)
             CubiLog.write("name session=\(info.id.prefix(8)) \(info.name) → \(name) (registry)")
         }

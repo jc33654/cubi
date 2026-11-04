@@ -20,7 +20,10 @@ private func withRegistry<T>(_ files: [String: String], _ body: (URL) throws -> 
         "101.abc.key": "not json",
     ]) { dir in
         #expect(ClaudeSessionRegistry.entries(in: dir).count == 3)
-        #expect(ClaudeSessionRegistry.entry(for: "aaaa-1", in: dir) == .init(sessionID: "aaaa-1", name: "甲專案", updatedAt: 200))
+        #expect(ClaudeSessionRegistry.entry(for: "aaaa-1", in: dir) == .init(sessionID: "aaaa-1", name: "甲專案", source: "user", updatedAt: 200))
+        #expect(ClaudeSessionRegistry.entry(for: "aaaa-1", in: dir)?.userName == "甲專案")
+        // No nameSource (older Claude Code) or "derived": the name is there but not the user's.
+        #expect(ClaudeSessionRegistry.entry(for: "bbbb-2", in: dir)?.userName == nil)
         #expect(ClaudeSessionRegistry.entry(for: "no-name", in: dir)?.name == nil)   // empty name is no name
         #expect(ClaudeSessionRegistry.entry(for: "missing", in: dir) == nil)
     }
@@ -32,6 +35,13 @@ private func withRegistry<T>(_ files: [String: String], _ body: (URL) throws -> 
         "2.json": #"{"pid":2,"sessionId":"s","name":"新名字","updatedAt":200}"#,
     ]) { dir in
         #expect(ClaudeSessionRegistry.entry(for: "s", in: dir)?.name == "新名字")
+    }
+}
+
+@Test func registryDerivedNameIsNotAUserName() throws {
+    try withRegistry(["1.json": #"{"pid":1,"sessionId":"s","cwd":"/Users/me/proj","name":"proj-32","nameSource":"derived","updatedAt":1}"#]) { dir in
+        let e = ClaudeSessionRegistry.entry(for: "s", in: dir)
+        #expect(e?.name == "proj-32" && e?.source == "derived" && e?.userName == nil)
     }
 }
 

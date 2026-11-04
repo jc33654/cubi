@@ -26,7 +26,6 @@
     "time.remove":       { "run": ["/usr/bin/python3", "$plugin/sprint.py", "time.remove"],       "args": ["text"], "stdin": 1 },
     "review.update":     { "run": ["/usr/bin/python3", "$plugin/sprint.py", "review.update"],     "args": ["text"], "stdin": 1 },
     "review.export":     { "run": ["/usr/bin/python3", "$plugin/sprint.py", "review.export"],     "args": ["text"], "stdin": 1, "reveal": true },
-    "config.get":        { "run": ["/usr/bin/python3", "$plugin/sprint.py", "config.get"],        "args": ["text"], "stdin": 1 },
     "config.set":        { "run": ["/usr/bin/python3", "$plugin/sprint.py", "config.set"],        "args": ["text"], "stdin": 1 }
   }
 }

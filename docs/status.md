@@ -23,7 +23,7 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 | session 掛件 | 工具插件選填 `session{info,refresh}`：資訊窗選到 session 時 cubi 把 session（含活動時段）餵 stdin、畫它回的列（可帶連結）與按鈕，「開面板」把 session 注入面板；`$plugin`、相對執行檔、工作目錄＝插件目錄；hook 命令 20 秒逾時（殺整個 process group） | 單元測試（manifest 驗證、PluginIO 上限）；CLI 餵 stdin 走通；真機畫面待 Jade |
 | 活動時段 | `SessionInfo.segments`：真事件開段／依 sleepAfter 切段、tick 收段、SessionEnd 收段、叫醒不算；結束／放生的最後一段保留到下一次 tick | 單元測試 |
 | 行事曆 | 工具插件選填 `tick{action,every}`：定時餵所有 session，回的 calendar 條目由 `SystemCalendar`（EventKit）寫進設定頁選的行事曆；記號去重、同記號延長、同標題 5 分鐘內合併、每筆 commit、標「空閒」；設定頁「行事曆」區 | `CalendarMerge` 純函式測試；EventKit 真機授權與事件待 Jade |
-| sprint 插件 | `docs/plugins/sprint/`：Python 標準庫；Jira 用 netrc；sprint＝標籤（這個 Jira 沒有 Sprint 欄位）；自動／手動綁單、多單比例分攤、手動時段、transition、實際點數本機（可設欄位寫回）、回顧五卡四圖、Markdown 匯出 | 12 個 unittest；CLI 對真 Jira：`session.info` 讀到 DDP 單的摘要／狀態／估點、`sprint.sync` 抓到 66 張單；面板待 Jade |
+| sprint 插件 | `docs/plugins/sprint/`：Python 標準庫；Jira 用 netrc；sprint＝標籤（這個 Jira 沒有 Sprint 欄位）；自動／手動綁單、多單比例分攤、手動時段、transition、實際點數本機（可設欄位寫回）、回顧五卡四圖、Markdown 匯出 | 12 個 unittest；CLI 對真 Jira：`session.info` 讀到真 Jira 單的摘要／狀態／估點、`sprint.sync` 抓到 66 張單；面板待 Jade |
 | 發佈 | `make bundle` strip debug 符號並守門（執行檔裡不得有 `/Users/…`）；`make dist` 產固定檔名 `Cubi.zip`；`scripts/install.sh` 下載、sha256 完整性校驗、`codesign -R` 比對 cubi-dev 憑證 hash 後才裝並拿掉 quarantine；`ci.yml`／`release.yml`（tag 觸發，從 secrets 匯入 .p12 簽） | 真機驗證：v0.1.0 由 release.yml 在 macos-26 建、簽、掛上 Release（1.5 分鐘）；從 `releases/latest/download/` 抓回來 sha256 與 `codesign -R` 都過、OSO 0、版本 0.1.0 |
 | 文件 | README（介紹、機器人表情與島的截圖 `docs/images/`、安裝、操作一覽、解除）、`docs/development.md`（make 目標、CLI、憑證、發版、設計上刻意的事）、`docs/protocol.md`（relay 協定、欄位、manifest 格式）、`docs/plan.md` | 經審查員對帳；圖是 `--render-island` 渲染後裁的 |
 

@@ -102,7 +102,7 @@ def markdown(sprint, rows, m):
     lines += ["## 數據", "", "| 單號 | 摘要 | 狀態 | 估點 | 實際 | 投入時數 |", "|---|---|---|---|---|---|"]
     for r in rows:
         lines.append(f"| {r['key']} | {r['summary']} | {r['status']} | {pts(r['estimate'])} | {pts(r['actual'])} | {fmt_hours(r['seconds'])} |")
-    ratio = f"、估/實 {m['ratio']}" if m["ratio"] else ""
+    ratio = f"、實際/估點 {m['ratio']}" if m["ratio"] else ""
     meeting = f"（其中會議 {fmt_hours(m['meetingSeconds'])}）" if m["meetingSeconds"] else ""
     lines += ["", f"合計：估 {pts(m['estimate'])} 點、實際 {pts(m['actual'])} 點、完成 {m['done']}/{m['tickets']}、"
                   f"投入 {fmt_hours(m['seconds'])}{meeting}{ratio}", ""]

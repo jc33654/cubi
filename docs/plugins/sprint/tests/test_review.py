@@ -25,6 +25,7 @@ class ReviewTests(unittest.TestCase):
         self.sprint = s
 
     def tearDown(self):
+        self.store.save()
         self.dir.cleanup()
 
     def rows(self):
@@ -34,8 +35,7 @@ class ReviewTests(unittest.TestCase):
 
     def test_parse_issue_reads_points_status_and_done(self):
         t = parse_issue(ISSUE, "customfield_10016")
-        self.assertEqual((t["key"], t["summary"], t["status"], t["done"], t["estimate"], t["resolutionDate"]),
-                         ("PROJ-12", "範例工單 甲", "處理完畢", True, 3.5, "2026-11-05"))
+        self.assertEqual(t, {"key": "PROJ-12", "summary": "範例工單 甲", "status": "處理完畢", "done": True, "estimate": 3.5, "resolutionDate": "2026-11-05"})
         self.assertIsNone(parse_issue({"key": "X-1", "fields": {}}, "customfield_10016")["estimate"])
 
     def test_metrics(self):
@@ -63,7 +63,7 @@ class ReviewTests(unittest.TestCase):
         self.assertIn("目標：退場", md)
         self.assertIn("| PROJ-1 | 工單 PROJ-1 | 進行中 | 5 | 3 | 11h20m |", md)
         self.assertIn("| PROJ-3 | 工單 PROJ-3 | 進行中 | 1 | – | – |", md)
-        self.assertIn("合計：估 8 點、實際 6 點、完成 1/3、投入 17h25m（其中會議 1h00m）、估/實 0.75", md)
+        self.assertIn("合計：估 8 點、實際 6 點、完成 1/3、投入 17h25m（其中會議 1h00m）、實際/估點 0.75", md)
         self.assertIn("## 想感謝的夥伴\n\n- 某人：幫忙查", md)
 
     def test_fmt_hours(self):

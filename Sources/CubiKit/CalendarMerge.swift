@@ -36,7 +36,9 @@ public enum CalendarMerge {
         // marker means "update". It may now touch other events of ours; those fold in too.
         if let same = nearby.first(where: { markers(in: $0.notes).contains(e.marker) }) {
             let start = min(same.start, e.start), end = max(same.end, e.end)
-            let others = ours(e.title, in: nearby, start: start, end: end).filter { $0.id != same.id }
+            // Neighbours are looked up by the event's own title: the entry's may have changed
+            // (another ticket got bound) and the event keeps the title it was written with.
+            let others = ours(same.title, in: nearby, start: start, end: end).filter { $0.id != same.id }
             guard e.start < same.start || e.end > same.end || !others.isEmpty else { return .skip("已寫過") }
             let all = [same] + others
             return .extend(id: same.id, start: min(start, all.map(\.start).min()!), end: max(end, all.map(\.end).max()!),
@@ -66,14 +68,20 @@ public enum CalendarMerge {
     /// What the events said apart from their marker lines (blank lines and all), then the new
     /// entry's notes unless already there: a note someone typed into the event survives an extension.
     public static func body(of events: [Existing], plus new: String?) -> String {
-        var blocks: [String] = []
+        var lines: [String] = []
         for text in events.map(\.notes) + [new] {
-            let kept = (text ?? "").split(separator: "\n", omittingEmptySubsequences: false)
-                .filter { !$0.hasPrefix(markerLinePrefix) }
-                .joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-            if !kept.isEmpty, !blocks.contains(where: { $0.contains(kept) }) { blocks.append(kept) }
+            // Each note minus its marker line and the blank lines around it; inside, a blank line
+            // stays (a paragraph break someone typed), a line already present is not repeated.
+            var block = (text ?? "").split(separator: "\n", omittingEmptySubsequences: false)
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.hasPrefix(markerLinePrefix) }[...]
+            while block.first?.isEmpty == true { block = block.dropFirst() }
+            while block.last?.isEmpty == true { block = block.dropLast() }
+            for line in block where line.isEmpty ? (lines.last.map { !$0.isEmpty } ?? false) : !lines.contains(line) {
+                lines.append(line)
+            }
         }
-        return blocks.joined(separator: "\n")
+        return lines.joined(separator: "\n")
     }
 
     public static func notes(body: String?, markers: [String]) -> String {

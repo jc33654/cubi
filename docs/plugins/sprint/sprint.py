@@ -11,6 +11,7 @@ import json
 import os
 import sys
 import time
+import traceback
 from datetime import date, datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -26,19 +27,40 @@ def jira(store):
 
 
 def fetch_tickets(store, keys):
-    """Refresh these tickets from Jira; local fields (actual, notes, doneAt) are kept."""
+    """Refresh these tickets from Jira; local fields (actual, notes, doneAt) are kept. A key Jira
+    does not know is remembered as notFound so it is not asked again every minute."""
     if not keys:
         return
     field = store.config["pointsField"]
-    issues = jira(store).search(f"key in ({','.join(keys)})", TICKET_FIELDS + [field])
+    j = jira(store)
+    try:
+        issues = j.search(f"key in ({','.join(keys)})", TICKET_FIELDS + [field])
+    except JiraError as e:
+        if e.code != 400:
+            raise
+        # One unknown key fails the whole search: ask one by one.
+        issues = []
+        for key in keys:
+            try:
+                issues.append(j.issue(key, TICKET_FIELDS + [field]))
+            except JiraError as single:
+                if single.code not in (400, 404):
+                    raise
+                store.ticket(key)["notFound"] = True
+    seen = set()
     for issue in issues:
         apply_issue(store, parse_issue(issue, field))
+        seen.add(issue["key"])
+    for key in keys:
+        if key not in seen and not store.tickets.get(key, {}).get("summary"):
+            store.ticket(key)["notFound"] = True
 
 
 def apply_issue(store, parsed):
     t = store.ticket(parsed["key"])
     was_done = t.get("done")
-    t.update({k: parsed[k] for k in ("summary", "status", "done", "resolutionDate", "labels", "assignee", "updated")})
+    t.update({k: parsed[k] for k in ("summary", "status", "done", "resolutionDate")})
+    t.pop("notFound", None)
     if parsed["estimate"] is not None:
         t["estimate"] = parsed["estimate"]
     if parsed["done"] and not was_done and not t.get("doneAt"):
@@ -68,7 +90,7 @@ def session_info(store, p, sync=False):
     store.record_segments(p, shares)
     keys = store.bound_keys(rec)
     error = None
-    missing = [k for k in keys if not store.tickets.get(k, {}).get("summary")]
+    missing = [k for k in keys if not store.tickets.get(k, {}).get("summary") and not store.tickets.get(k, {}).get("notFound")]
     if keys and (sync or missing):
         try:
             fetch_tickets(store, keys if sync else missing)
@@ -81,7 +103,7 @@ def session_info(store, p, sync=False):
     for key in keys:
         t = store.tickets.get(key, {})
         rows.append({"label": key, "url": store.browse_url(key),
-                     "value": " · ".join(x for x in [t.get("summary") or "（還沒從 Jira 讀到）", t.get("status"),
+                     "value": " · ".join(x for x in [t.get("summary") or ("Jira 查不到這張單" if t.get("notFound") else "（還沒從 Jira 讀到）"), t.get("status"),
                                                       f"估 {pts(t.get('estimate'))} 實 {pts(t.get('actual'))}",
                                                       review.fmt_hours(hours.get(key, {}).get("total", 0))] if x)})
     if not keys:
@@ -268,10 +290,6 @@ def review_export(store, p):
     return {"_raw": path}
 
 
-def config_get(store, p):
-    return panel_state(store, p)
-
-
 def config_set(store, p):
     for k in CONFIG_KEYS:
         if k in p:
@@ -287,8 +305,10 @@ ACTIONS = {
     "ticket.add": ticket_add, "ticket.update": ticket_update, "ticket.transition": ticket_transition, "points.push": points_push,
     "time.add": time_add, "time.remove": time_remove,
     "review.update": review_update, "review.export": review_export,
-    "config.get": config_get, "config.set": config_set,
+    "config.set": config_set,
 }
+# Their stdout is a path for cubi's `reveal`, so an error must go to stderr with a non-zero exit.
+RAW_ACTIONS = {"review.export"}
 
 
 def main(argv):
@@ -304,10 +324,19 @@ def main(argv):
     store = Store()
     try:
         result = ACTIONS[argv[1]](store, payload)
-    except (JiraError, ValueError, KeyError) as e:
-        result = {"error": str(e) if not isinstance(e, KeyError) else f"缺少欄位 {e}"}
-    store.save()
-    if isinstance(result, dict) and "_raw" in result:
+    except JiraError as e:
+        result = {"error": str(e)}
+    except KeyError as e:
+        result = {"error": f"缺少欄位 {e}"}
+    except Exception as e:  # noqa: BLE001 — one line for the card, the traceback for the log
+        traceback.print_exc(file=sys.stderr)
+        result = {"error": f"{type(e).__name__}: {e}"}
+    finally:
+        store.save()
+    if argv[1] in RAW_ACTIONS:
+        if "error" in result:
+            print(result["error"], file=sys.stderr)
+            return 1
         print(result["_raw"])
     else:
         print(json.dumps(result, ensure_ascii=False))

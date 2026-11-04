@@ -80,7 +80,7 @@ window.cubiSession   // {id, name, cwd, projectDirectory, agent, segments}；之
 
 - action 不在表裡、參數數量或型別不符 → 不執行，JS 收到 reject（錯誤訊息是中文的原因）；每次執行與拒絕都寫 `~/Library/Logs/cubi.log`。
 - `pick.file`／`pick.dir` 是內建的原生選擇器，不用宣告，也是保留字（manifest 裡定義會被拒載）。
-- 面板裡任何離開已載入 HTML 的導頁（連結、`location.href`、表單、meta refresh）一律取消；http(s) 的目標改用系統瀏覽器開。bridge 永遠只給面板自己的頁面用。
+- 面板裡任何離開已載入 HTML 的導頁（連結、`location.href`、表單、meta refresh、`target=_blank`）一律取消；主頁面的 http(s) 目標改用系統瀏覽器開，iframe 裡的只取消。bridge 永遠只給面板自己的頁面用。
 - 設定頁關掉工具後，已開著的面板送來的請求也會被拒；資訊窗區塊與 tick 也停。
 - manifest 是使用者自己放進 `plugins/` 的，跟 agent manifest 一樣信任它；安全邊界在「面板的 JS 只能叫到表裡的指令、參數過型別檢查、不經 shell」。
 
@@ -117,8 +117,8 @@ stdin：`{"now": <epoch 秒>, "sessions": [<同上的 session 物件>…]}`，�
 {"calendar":[{"title":"PROJ-12 範例工單","start":1762218720,"end":1762228000,"notes":"https://jira.example/browse/PROJ-12","marker":"sprint:3d221898:1762218720"}]}
 ```
 
-- `calendar[]`（最多 50 筆）：要出現在行事曆上的事件。`marker`（`[A-Za-z0-9:._-]{1,80}`）是這筆的穩定識別，cubi 埋在事件備註最後一行 `由 Cubi 記錄 · <marker>…`；同 marker 再送：時間變長就延長那筆事件，沒變就略過。所以**每次 tick 把該在行事曆上的東西全部重送就對了**，不必自己記哪些寫過。
-- 單筆要 start < end、不超過 24 小時、start 在現在前後一年內（毫秒誤當秒會被擋），不到 60 秒不寫。
+- `calendar[]`（最多 50 筆，多的不收）：要出現在行事曆上的事件。`marker`（`[A-Za-z0-9:._-]{1,80}`）是這筆的穩定識別，cubi 埋在事件備註最後一行 `由 Cubi 記錄 · <marker>…`；同 marker 再送：時間變長就延長那筆事件，碰到旁邊自己的事件也會併進去，都沒變就略過。所以**每次 tick 把該在行事曆上的東西全部重送就對了**，不必自己記哪些寫過。
+- 單筆要 start < end、不超過 24 小時、start 在現在前後一年內（毫秒誤當秒會被擋），不到 60 秒不寫。不合規的那筆單獨略過（log 列原因），其他照寫。
 - 同標題、前後 5 分鐘內的事件會合成一筆（延長既有事件、刪掉多的，備註與記號合併，使用者自己加的備註行保留）。只併 cubi 自己寫的（備註有記號行）；別人手動建的事件不碰。
 - 事件標「空閒」。EventKit 設不了「私人」，那本行事曆別分享給人。
 - 行事曆沒授權或沒選（設定頁「行事曆」）時整批略過，log 每 10 分鐘提醒一次。

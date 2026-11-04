@@ -62,6 +62,7 @@ final class PluginTicker {
             logQuietly(tool.id, "parse", "tick \(tool.id): \(error.localizedDescription)")
             return
         }
+        if !output.problems.isEmpty { logQuietly(tool.id, "entries", "tick \(tool.id): 略過 \(output.problems.count) 筆：\(output.problems.prefix(3).joined(separator: "；"))") }
         guard !output.calendar.isEmpty else { return }
         guard calendar.isReady else {
             logQuietly(tool.id, "calendar", "tick \(tool.id): 行事曆未設定，略過 \(output.calendar.count) 筆")

@@ -17,6 +17,7 @@ class StoreTests(unittest.TestCase):
         self.store.config["site"] = "jira.example"
 
     def tearDown(self):
+        self.store.save()   # releases the directory lock
         self.dir.cleanup()
 
     def test_extracts_project_keys_once_in_order(self):
@@ -84,10 +85,36 @@ class StoreTests(unittest.TestCase):
         self.store.add_manual("PROJ-1", 96_000, 30, kind="會議", note="站會", calendar=True)
         self.store.add_manual("PROJ-1", 97_000, 30, kind="開發", note="", calendar=False)
         entries = self.store.calendar_entries(now, window=10_000)
-        self.assertEqual([e["marker"] for e in entries], ["sprint:s1:90000", f"sprint:manual:{self.store.segments['manual'][0]['id']}"])
-        self.assertEqual(entries[0]["title"], "PROJ-1 PROJ-1 登入")
-        self.assertEqual(entries[0]["notes"], "https://jira.example/browse/PROJ-1")
-        self.assertEqual(entries[1]["title"], "PROJ-1 站會（會議）")
+        # Manual entries first, then stretches newest first; the name does not repeat the key.
+        self.assertEqual([e["marker"] for e in entries], [f"sprint:manual:{self.store.segments['manual'][0]['id']}", "sprint:s1:90000"])
+        self.assertEqual(entries[0]["title"], "PROJ-1 站會（會議）")
+        self.assertEqual(entries[1]["title"], "PROJ-1 登入")
+        self.assertEqual(entries[1]["notes"], "https://jira.example/browse/PROJ-1")
+
+    def test_manual_entries_are_validated(self):
+        with self.assertRaises(ValueError):
+            self.store.add_manual("PROJ-1", 1000, 0)
+        with self.assertRaises(ValueError):
+            self.store.add_manual("PROJ-1", 1000, 25 * 60)
+        with self.assertRaises(ValueError):
+            self.store.add_manual("PROJ-1", 1000, None)
+        with self.assertRaises(ValueError):
+            self.store.new_sprint("../x")
+        self.assertEqual(self.store.add_manual("PROJ-1", 1000, "90")["end"], 1000 + 90 * 60)
+
+    def test_lower_case_project_key_still_binds(self):
+        self.store.config["projectKey"] = "proj"
+        self.assertEqual(self.store.extract_keys("proj-3 與 PROJ-4"), ["PROJ-3", "PROJ-4"])
+
+    def test_broken_file_is_set_aside_not_overwritten(self):
+        self.store.save()
+        with open(self.store.root / "tickets.json", "w") as f:
+            f.write("{not json")
+        again = Store(self.dir.name)
+        self.assertEqual(again.tickets, {})
+        self.assertTrue(any(p.name.startswith("tickets.json.bad-") for p in again.root.iterdir()))
+        again.save()
+        self.assertTrue(any(p.name.startswith("tickets.json.bad-") for p in again.root.iterdir()))
 
     def test_save_and_reload_round_trip(self):
         self.store.new_sprint("Sprint7", "Sprint 7", "2026-11-03", "2026-11-14", "目標")

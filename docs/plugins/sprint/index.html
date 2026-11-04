@@ -95,8 +95,15 @@ async function call(action, payload = {}) {
 async function refresh(action = "panel.state", payload = {}) { state = await call(action, payload); render(); }
 
 // ---------- rendering ----------
+// A re-render while the user is typing elsewhere must not eat the keystrokes: remember the
+// focused field (by its data attribute), its text and caret, and put them back afterwards.
 function render() {
+  const a = document.activeElement, tag = a && a.tagName;
+  const keep = (tag === "INPUT" || tag === "TEXTAREA") && a.dataset && Object.keys(a.dataset).length
+    ? { sel: `[data-${Object.keys(a.dataset)[0].replace(/[A-Z]/g, c => "-" + c.toLowerCase())}="${CSS.escape(Object.values(a.dataset)[0])}"]`, value: a.value, pos: a.selectionStart }
+    : null;
   renderSprint(); renderReview(); renderSettings();
+  if (keep) { const el = document.querySelector(keep.sel); if (el) { el.value = keep.value; el.focus(); try { el.setSelectionRange(keep.pos, keep.pos); } catch (_) {} } }
 }
 
 function renderSprint() {

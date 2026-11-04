@@ -117,15 +117,22 @@ public enum PluginIO {
         }
     }
 
-    /// stdout of `tick`.
+    /// stdout of `tick`. A bad entry is dropped with a note in `problems`; the rest still count,
+    /// since a plugin resends everything each tick and one bad line must not hold up the others.
     public struct TickOutput: Sendable, Equatable {
         public var calendar: [CalendarEntry]
+        public var problems: [String]
 
         public static func parse(_ stdout: String, now: Double = Date().timeIntervalSince1970) throws -> TickOutput {
             let v = try PluginIO.decode(stdout)
             let list = v["calendar"]?.array ?? []
-            guard list.count <= maxCalendarEntries else { throw ParseError.badCalendar(list.count, "一次最多 \(maxCalendarEntries) 筆") }
-            return TickOutput(calendar: try list.enumerated().map { try CalendarEntry.validate($1, index: $0 + 1, now: now) })
+            var out = TickOutput(calendar: [], problems: [])
+            if list.count > maxCalendarEntries { out.problems.append("calendar 有 \(list.count) 筆，只收前 \(maxCalendarEntries) 筆") }
+            for (i, item) in list.prefix(maxCalendarEntries).enumerated() {
+                do { out.calendar.append(try CalendarEntry.validate(item, index: i + 1, now: now)) }
+                catch { out.problems.append(error.localizedDescription) }
+            }
+            return out
         }
     }
 

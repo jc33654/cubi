@@ -3,8 +3,8 @@ import CubiKit
 
 /// Runs a checked invocation without a shell, in the plugin's directory. stdin feeds long bodies
 /// (too long for argv). With a `timeout`, a command still running at the deadline gets SIGKILL.
-/// The pipes are read to EOF, so a background grandchild that outlives its parent and keeps stdout
-/// open keeps us waiting: hook commands must not leave children behind (documented).
+/// The pipes are read to EOF, so a background grandchild that outlives its parent keeps us waiting
+/// until the deadline (without one, forever): hook commands must not leave children behind.
 enum ToolRunner {
     struct Result: Sendable {
         var out: String
@@ -58,13 +58,13 @@ enum ToolRunner {
         group.enter(); DispatchQueue.global(qos: .userInitiated).async { box.err = errPipe.fileHandleForReading.readDataToEndOfFile(); group.leave() }
         var killer: DispatchWorkItem?
         if let timeout {
-            // Only a process still running is reported as timed out; one that just finished is not.
-            // Process puts the child in its own group, so the whole tree goes (a script's curl too).
+            // Process puts the child in its own group (pgid == pid), so the whole tree goes at the
+            // deadline, a finished parent's leftover children included (they still hold the pipes).
+            // Only a parent still running counts as a timeout; the pid is not reused while the group lives.
+            let pgid = p.processIdentifier
             let item = DispatchWorkItem {
-                guard p.isRunning else { return }
-                box.markKilled()
-                let pid = p.processIdentifier
-                kill(getpgid(pid) == pid ? -pid : pid, SIGKILL)
+                if p.isRunning { box.markKilled() }
+                kill(-pgid, SIGKILL)
             }
             DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: item)
             killer = item

@@ -9,7 +9,9 @@ import urllib.request
 
 
 class JiraError(Exception):
-    pass
+    def __init__(self, message, code=None):
+        super().__init__(message)
+        self.code = code
 
 
 class Jira:
@@ -41,7 +43,7 @@ class Jira:
             detail = e.read().decode(errors="replace")[:300]
             if e.code in (401, 403):
                 raise JiraError("Jira 認證失敗（401/403），檢查 netrc 的帳號與 token")
-            raise JiraError(f"{method} {path} → HTTP {e.code} {detail}")
+            raise JiraError(f"{method} {path} → HTTP {e.code} {detail}", e.code)
         except (urllib.error.URLError, TimeoutError, OSError) as e:
             raise JiraError(f"連不上 Jira：{e}")
         return json.loads(raw) if raw else None
@@ -71,24 +73,19 @@ class Jira:
         self.api("PUT", f"/rest/api/3/issue/{key}", {"fields": {field: value}})
 
 
-TICKET_FIELDS = ["summary", "status", "resolutiondate", "labels", "assignee", "updated"]
+TICKET_FIELDS = ["summary", "status", "resolutiondate"]
 
 
 def parse_issue(issue, points_field):
     """The part of an issue the plugin keeps."""
     f = issue.get("fields", {})
     status = f.get("status") or {}
-    category = (status.get("statusCategory") or {}).get("key")
     points = f.get(points_field)
-    assignee = f.get("assignee") or {}
     return {
         "key": issue["key"],
         "summary": f.get("summary") or "",
         "status": status.get("name") or "",
-        "done": category == "done",
+        "done": (status.get("statusCategory") or {}).get("key") == "done",
         "estimate": float(points) if isinstance(points, (int, float)) else None,
         "resolutionDate": (f.get("resolutiondate") or "")[:10] or None,
-        "labels": f.get("labels") or [],
-        "assignee": assignee.get("displayName") or "",
-        "updated": f.get("updated") or "",
     }

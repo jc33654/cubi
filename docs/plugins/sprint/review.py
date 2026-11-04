@@ -1,5 +1,10 @@
-"""Numbers and text for a sprint: totals, burndown, history, and the Markdown export."""
+"""Numbers and text for a sprint: per-ticket rows with actual points, categories, totals,
+burndown, history, the Markdown export, and the brief handed to a Claude Code session."""
+import json
 from datetime import date, datetime, timedelta
+
+CATEGORIES = ("提早／準時完成", "超時完成", "未完成", "超時未完成", "未估點")
+REVIEW_FIELDS = ("summary", "wentWell", "toImprove", "suggestions", "thanks")
 
 
 def fmt_hours(secs):
@@ -7,6 +12,12 @@ def fmt_hours(secs):
         return "–"
     h, m = divmod(int(secs // 60), 60)
     return f"{h}h{m:02d}m" if h else f"{m}m"
+
+
+def pts(v):
+    if v is None:
+        return "–"
+    return str(int(v)) if float(v).is_integer() else f"{float(v):g}"
 
 
 def parse_date(text):
@@ -28,16 +39,32 @@ def done_on(ticket):
     return parse_date(ticket.get("doneAt") or ticket.get("resolutionDate"))
 
 
-def ticket_rows(sprint, tickets, hours):
+def category(done, estimate, actual):
+    if estimate is None:
+        return CATEGORIES[4]
+    over = actual is not None and actual > estimate
+    if done:
+        return CATEGORIES[1] if over else CATEGORIES[0]
+    return CATEGORIES[3] if over else CATEGORIES[2]
+
+
+def ticket_rows(sprint, tickets, hours, hours_per_point=8.0):
+    """One row per ticket. `actual` is the user's override when set, else hours ÷ hours-per-point
+    (None while nothing was worked)."""
     rows = []
     for key in sprint.get("keys", []):
         t = tickets.get(key, {"key": key})
         h = hours.get(key, {})
+        seconds = h.get("total", 0.0)
+        auto = round(seconds / 3600 / hours_per_point, 2) if seconds else None
+        override = t.get("actual")
+        actual = override if override is not None else auto
         rows.append({
             "key": key, "summary": t.get("summary", ""), "status": t.get("status", ""), "done": bool(t.get("done")),
-            "estimate": t.get("estimate"), "actual": t.get("actual"), "notes": t.get("notes", ""),
-            "doneAt": (done_on(t) or date.min).isoformat() if done_on(t) else None,
-            "seconds": h.get("total", 0.0), "sessionSeconds": h.get("session", 0.0),
+            "estimate": t.get("estimate"), "actual": actual, "autoActual": auto, "override": override, "notes": t.get("notes", ""),
+            "doneAt": done_on(t).isoformat() if done_on(t) else None,
+            "category": category(bool(t.get("done")), t.get("estimate"), actual),
+            "seconds": seconds, "sessionSeconds": h.get("session", 0.0),
             "manualSeconds": h.get("manual", 0.0), "meetingSeconds": h.get("meeting", 0.0),
         })
     return rows
@@ -56,6 +83,7 @@ def metrics(rows):
         "ratio": round(actual / estimate, 2) if estimate and actual else None,
         "seconds": seconds, "meetingSeconds": meeting,
         "hoursPerPoint": round(seconds / 3600 / points_for_hours, 1) if points_for_hours else None,
+        "categories": {c: sum(1 for r in rows if r["category"] == c) for c in CATEGORIES},
     }
 
 
@@ -86,29 +114,80 @@ def history(store, limit=4):
     out = []
     for s in sprints[-limit:]:
         since, until = sprint_range(s)
-        m = metrics(ticket_rows(s, store.tickets, store.hours_by_key(since, until)))
+        m = metrics(ticket_rows(s, store.tickets, store.hours_by_key(since, until), store.hours_per_point()))
         out.append({"label": s["label"], "name": s.get("name") or s["label"], "donePoints": m["donePoints"],
                     "estimate": m["estimate"], "actual": m["actual"], "ratio": m["ratio"], "seconds": m["seconds"]})
     return out
 
 
-def markdown(sprint, rows, m):
-    def pts(v):
-        return "–" if v is None else (str(int(v)) if float(v).is_integer() else str(v))
+def _ticket_line(r):
+    return f"- {r['key']} {r['summary']}：估 {pts(r['estimate'])} → 實 {pts(r['actual'])}（{fmt_hours(r['seconds'])}，{r['status']}）"
 
-    lines = [f"# {sprint.get('name') or sprint['label']} 回顧（{sprint.get('start') or '?'} – {sprint.get('end') or '?'}）", ""]
-    if sprint.get("goal"):
-        lines += [f"目標：{sprint['goal']}", ""]
-    lines += ["## 數據", "", "| 單號 | 摘要 | 狀態 | 估點 | 實際 | 投入時數 |", "|---|---|---|---|---|---|"]
-    for r in rows:
-        lines.append(f"| {r['key']} | {r['summary']} | {r['status']} | {pts(r['estimate'])} | {pts(r['actual'])} | {fmt_hours(r['seconds'])} |")
-    ratio = f"、實際/估點 {m['ratio']}" if m["ratio"] else ""
-    meeting = f"（其中會議 {fmt_hours(m['meetingSeconds'])}）" if m["meetingSeconds"] else ""
-    lines += ["", f"合計：估 {pts(m['estimate'])} 點、實際 {pts(m['actual'])} 點、完成 {m['done']}/{m['tickets']}、"
-                  f"投入 {fmt_hours(m['seconds'])}{meeting}{ratio}", ""]
-    review = sprint.get("review") or {}
+
+def _review_sections(review):
+    lines = []
     for title, field in (("做得好的地方", "wentWell"), ("需要改善的地方", "toImprove"), ("改善建議", "suggestions")):
         lines += [f"## {title}", ""] + [f"- {item}" for item in review.get(field, []) if item] + [""]
     lines += ["## 想感謝的夥伴", ""]
     lines += [f"- {t.get('who', '')}：{t.get('why', '')}" for t in review.get("thanks", []) if t.get("who") or t.get("why")]
+    return lines
+
+
+def markdown(sprint, rows, m):
+    review = sprint.get("review") or {}
+    lines = [f"# {sprint.get('name') or sprint['label']} 回顧（{sprint.get('start') or '?'} – {sprint.get('end') or '?'}）", ""]
+    if sprint.get("goal"):
+        lines += [f"目標：{sprint['goal']}", ""]
+    if review.get("summary"):
+        lines += ["## 總結", "", review["summary"].strip(), ""]
+    ratio = f"、實際/估點 {m['ratio']}" if m["ratio"] else ""
+    meeting = f"（其中會議 {fmt_hours(m['meetingSeconds'])}）" if m["meetingSeconds"] else ""
+    lines += ["## 數據", "",
+              f"估 {pts(m['estimate'])} 點、實際 {pts(m['actual'])} 點（1 點 = 8 小時換算，可覆寫）、完成 {m['done']}/{m['tickets']}、"
+              f"投入 {fmt_hours(m['seconds'])}{meeting}{ratio}", "",
+              "| 分類 | 張數 |", "|---|---|"]
+    lines += [f"| {c} | {n} |" for c, n in m["categories"].items()]
+    lines.append("")
+    for c in CATEGORIES:
+        group = [r for r in rows if r["category"] == c]
+        if group:
+            lines += [f"### {c}（{len(group)}）", ""] + [_ticket_line(r) for r in group] + [""]
+    lines += _review_sections(review)
     return "\n".join(lines).rstrip() + "\n"
+
+
+def brief(sprint, rows, m, cubi, review_path):
+    """The data file a Claude Code session reads before writing the review, with the exact
+    command to hand the result back to the panel."""
+    label = sprint["label"]
+    review = sprint.get("review") or {}
+    template = {"label": label, "summary": "三到五句的總結", "wentWell": ["…"], "toImprove": ["…"], "suggestions": ["…"],
+                "thanks": [{"who": "名字", "why": "原因"}]}
+    lines = [f"# {sprint.get('name') or label} 回顧資料", "",
+             f"sprint：{label}，{sprint.get('start') or '?'} – {sprint.get('end') or '?'}；目標：{sprint.get('goal') or '（沒填）'}", "",
+             "## 數據", "",
+             f"估 {pts(m['estimate'])} 點、實際 {pts(m['actual'])} 點（1 點 = 8 小時，實際由投入時數換算，可能被手動覆寫）、"
+             f"完成 {m['done']}/{m['tickets']}、投入 {fmt_hours(m['seconds'])}、會議 {fmt_hours(m['meetingSeconds'])}", "",
+             "| 單號 | 摘要 | 狀態 | 估點 | 實際 | 投入 | 分類 | 備註 |", "|---|---|---|---|---|---|---|---|"]
+    for r in rows:
+        lines.append(f"| {r['key']} | {r['summary']} | {r['status']} | {pts(r['estimate'])} | {pts(r['actual'])} | {fmt_hours(r['seconds'])} | {r['category']} | {r['notes']} |")
+    lines += ["", "## 目前已寫的回顧（可以修、可以補）", ""]
+    if review.get("summary"):
+        lines += ["總結：" + review["summary"], ""]
+    lines += _review_sections(review)
+    lines += ["", "## 寫回面板", "",
+              "寫好之後，把下面的 JSON 填滿（繁體中文、每段一行一條、感謝只寫資料裡看得到依據的人），用這個指令送回 Cubi 的 sprint 面板：", "",
+              "```sh",
+              f"cat <<'EOF' | {cubi} --tool-run sprint review.update -",
+              json.dumps(template, ensure_ascii=False, indent=2),
+              "EOF",
+              "```", "",
+              f"然後把完整回顧（總結＋數據＋四段＋感謝）存成 Markdown 到 `{review_path}`。不要改其他檔案。"]
+    return "\n".join(lines) + "\n"
+
+
+def brief_prompt(sprint, data_path):
+    label = sprint["label"]
+    return (f"請讀 {data_path}（{sprint.get('name') or label} 的 sprint 數據與目前的回顧筆記），幫我整理這個 sprint 的回顧："
+            "總結（三到五句）、做得好的地方、需要改善的地方、改善建議、想感謝的夥伴（名字＋原因，只寫資料裡有依據的）。"
+            "每段條列、一行一條、繁體中文。寫好後照檔案最後「寫回面板」那一節的指令把 JSON 送回 Cubi，再把完整回顧存成那裡指定的 Markdown。")

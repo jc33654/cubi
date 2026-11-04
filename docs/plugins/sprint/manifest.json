@@ -11,6 +11,9 @@
     "session.sync":      { "run": ["/usr/bin/python3", "$plugin/sprint.py", "session.sync"],      "args": ["text"], "stdin": 1 },
     "session.bind":      { "run": ["/usr/bin/python3", "$plugin/sprint.py", "session.bind"],      "args": ["text"], "stdin": 1 },
     "session.unbind":    { "run": ["/usr/bin/python3", "$plugin/sprint.py", "session.unbind"],    "args": ["text"], "stdin": 1 },
+    "session.unbind1":   { "run": ["/usr/bin/python3", "$plugin/sprint.py", "session.unbind1"],   "args": ["text"], "stdin": 1 },
+    "session.unbind2":   { "run": ["/usr/bin/python3", "$plugin/sprint.py", "session.unbind2"],   "args": ["text"], "stdin": 1 },
+    "session.unbind3":   { "run": ["/usr/bin/python3", "$plugin/sprint.py", "session.unbind3"],   "args": ["text"], "stdin": 1 },
     "session.shares":    { "run": ["/usr/bin/python3", "$plugin/sprint.py", "session.shares"],    "args": ["text"], "stdin": 1 },
     "tick":              { "run": ["/usr/bin/python3", "$plugin/sprint.py", "tick"],              "args": ["text"], "stdin": 1 },
     "panel.state":       { "run": ["/usr/bin/python3", "$plugin/sprint.py", "panel.state"],       "args": ["text"], "stdin": 1 },
@@ -25,6 +28,7 @@
     "time.add":          { "run": ["/usr/bin/python3", "$plugin/sprint.py", "time.add"],          "args": ["text"], "stdin": 1 },
     "time.remove":       { "run": ["/usr/bin/python3", "$plugin/sprint.py", "time.remove"],       "args": ["text"], "stdin": 1 },
     "review.update":     { "run": ["/usr/bin/python3", "$plugin/sprint.py", "review.update"],     "args": ["text"], "stdin": 1 },
+    "review.brief":      { "run": ["/usr/bin/python3", "$plugin/sprint.py", "review.brief"],      "args": ["text"], "stdin": 1 },
     "review.export":     { "run": ["/usr/bin/python3", "$plugin/sprint.py", "review.export"],     "args": ["text"], "stdin": 1, "reveal": true },
     "config.set":        { "run": ["/usr/bin/python3", "$plugin/sprint.py", "config.set"],        "args": ["text"], "stdin": 1 }
   }

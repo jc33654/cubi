@@ -19,7 +19,9 @@ import review  # noqa: E402
 from jira import TICKET_FIELDS, Jira, JiraError, parse_issue  # noqa: E402
 from store import Store, empty_review  # noqa: E402
 
-CONFIG_KEYS = ("site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "reviewDir")
+CONFIG_KEYS = ("site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "hoursPerPoint", "reviewDir", "reviewSessionDir")
+CUBI = "~/Applications/Cubi.app/Contents/MacOS/cubi"
+MAX_UNBIND_BUTTONS = 3
 
 
 def jira(store):
@@ -92,8 +94,12 @@ def current_range(store):
     return review.sprint_range(s) if s else (time.time() - 14 * 86400, None)
 
 
-def pts(v):
-    return "–" if v is None else (str(int(v)) if float(v).is_integer() else str(v))
+pts = review.pts
+
+
+def rows_for(store, sprint):
+    since, until = review.sprint_range(sprint)
+    return review.ticket_rows(sprint, store.tickets, store.hours_by_key(since, until), store.hours_per_point())
 
 
 # ---------- session hook ----------
@@ -113,22 +119,27 @@ def session_info(store, p, sync=False):
     since, until = current_range(store)
     hours = store.hours_by_key(since, until)
     today = store.hours_by_key(datetime.combine(date.today(), datetime.min.time()).timestamp(), None)
+    hpp = store.hours_per_point()
     rows = []
     for key in keys:
         t = store.tickets.get(key, {})
+        secs = hours.get(key, {}).get("total", 0)
+        actual = t.get("actual") if t.get("actual") is not None else (round(secs / 3600 / hpp, 1) if secs else None)
         rows.append({"label": key, "url": store.browse_url(key),
                      "value": " · ".join(x for x in [t.get("summary") or ("Jira 查不到這張單" if t.get("notFound") else "（還沒從 Jira 讀到）"), t.get("status"),
-                                                      f"估 {pts(t.get('estimate'))} 實 {pts(t.get('actual'))}",
-                                                      review.fmt_hours(hours.get(key, {}).get("total", 0))] if x)})
+                                                      f"估 {pts(t.get('estimate'))} 實 {pts(actual)}", review.fmt_hours(secs)] if x)})
     if not keys:
-        rows.append(["工單", "未綁定；用「開面板」加"])
+        rows.append(["工單", "未綁定；按「綁單號…」"])
     else:
         today_secs = sum(today.get(k, {}).get("session", 0) for k in keys)
         split = f"（{len(keys)} 張單依比例分）" if len(keys) > 1 else ""
         rows.append(["今日", review.fmt_hours(today_secs) + split])
     sprint = store.current_sprint()
-    out = {"title": f"Sprint · {sprint['label']}" if sprint else "Sprint", "rows": rows,
-           "actions": [{"label": "同步 Jira", "action": "session.sync"}] if keys else []}
+    actions = [{"label": "綁單號…", "action": "session.bind", "input": "要綁的單號（可多個，用空白隔開）"}]
+    actions += [{"label": f"解除 {k}", "action": f"session.unbind{i + 1}"} for i, k in enumerate(keys[:MAX_UNBIND_BUTTONS])]
+    if keys:
+        actions.append({"label": "同步 Jira", "action": "session.sync"})
+    out = {"title": f"Sprint · {sprint['label']}" if sprint else "Sprint", "rows": rows, "actions": actions[:5]}
     if error:
         out["error"] = error
     return out
@@ -157,10 +168,10 @@ def panel_state(store, p):
              "current": store.sprints.get("current"), "session": binding, "history": review.history(store),
              "today": date.today().isoformat(), "site": store.config["site"], "warnings": store.warnings}
     if sprint:
-        since, until = review.sprint_range(sprint)
-        rows = review.ticket_rows(sprint, store.tickets, store.hours_by_key(since, until))
-        state["sprint"] = {**{k: sprint.get(k) for k in ("label", "name", "start", "end", "goal")}, "review": sprint.get("review") or empty_review(),
+        rows = rows_for(store, sprint)
+        state["sprint"] = {**{k: sprint.get(k) for k in ("label", "name", "start", "end", "goal")}, "review": {**empty_review(), **(sprint.get("review") or {})},
                            "tickets": rows, "metrics": review.metrics(rows), "burndown": review.burndown(sprint, rows),
+                           "categories": list(review.CATEGORIES),
                            "manual": [m for m in store.segments["manual"] if m["key"] in sprint["keys"]]}
     return state
 
@@ -189,12 +200,21 @@ def sprint_select(store, p):
 
 
 def sprint_sync(store, p):
+    """Pull the sprint's tickets from Jira. `replace` makes the sprint exactly what the JQL
+    returns (dropping tickets added by hand or by an earlier, wider query)."""
     s = target_sprint(store, p)
-    jql = store.config["jql"].format(project=store.config["projectKey"], label=s["label"])
+    projects = store.project_keys()
+    jql = store.config["jql"].format(projects=", ".join(projects), project=projects[0] if projects else "", label=s["label"])
     field = store.config["pointsField"]
+    found = []
     for issue in jira(store).search(jql, TICKET_FIELDS + [field]):
         apply_issue(store, parse_issue(issue, field))
-        store.add_to_sprint(s["label"], issue["key"])
+        found.append(issue["key"])
+    if p.get("replace"):
+        store.set_sprint_keys(s["label"], found)
+    else:
+        for key in found:
+            store.add_to_sprint(s["label"], key)
     fetch_tickets(store, [k for k in s["keys"] if not store.tickets.get(k, {}).get("summary")])
     return panel_state(store, p)
 
@@ -256,15 +276,24 @@ def time_remove(store, p):
 
 
 def session_bind(store, p):
+    """From the panel: `key`; from the card's 綁單號… button: whatever the user typed in `input`."""
     s = session_of(p)
-    for key in store.extract_keys(p.get("key", "")):
+    keys = store.extract_keys(p.get("key", ""), p.get("input", ""))
+    if not keys:
+        raise ValueError(f"沒看到 {'／'.join(store.project_keys())} 的單號")
+    for key in keys:
         store.bind(s["id"], key)
     return panel_state(store, p) if "session" in p else session_info(store, s)
 
 
-def session_unbind(store, p):
+def session_unbind(store, p, index=None):
+    """From the panel: `key`; from the card's 解除 buttons: the n-th bound key."""
     s = session_of(p)
-    store.unbind(s["id"], p.get("key", ""))
+    key = p.get("key", "")
+    if index is not None:
+        bound = store.bound_keys(store.binding(s))
+        key = bound[index] if index < len(bound) else ""
+    store.unbind(s["id"], key)
     return panel_state(store, p) if "session" in p else session_info(store, s)
 
 
@@ -281,34 +310,59 @@ def session_shares(store, p):
 def review_update(store, p):
     s = target_sprint(store, p)
     r = s.setdefault("review", empty_review())
-    for k in ("wentWell", "toImprove", "suggestions", "thanks"):
+    for k in review.REVIEW_FIELDS:
         if k in p:
             r[k] = p[k]
     return panel_state(store, p)
 
 
-def review_export(store, p):
-    s = target_sprint(store, p)
-    since, until = review.sprint_range(s)
-    rows = review.ticket_rows(s, store.tickets, store.hours_by_key(since, until))
+def review_dir(store):
     folder = os.path.expanduser(store.config["reviewDir"])
     os.makedirs(folder, exist_ok=True)
-    path = os.path.join(folder, f"{s['label']}.md")
+    return folder
+
+
+def review_export(store, p):
+    s = target_sprint(store, p)
+    rows = rows_for(store, s)
+    path = os.path.join(review_dir(store), f"{s['label']}.md")
     with open(path, "w", encoding="utf-8") as f:
         f.write(review.markdown(s, rows, review.metrics(rows)))
     return {"_raw": path}
+
+
+def review_brief(store, p):
+    """Write the data file for a Claude Code session and say where to open it; the panel then
+    asks cubi (built-in session.new) to open the session with `prompt`."""
+    s = target_sprint(store, p)
+    rows = rows_for(store, s)
+    folder = review_dir(store)
+    data_path = os.path.join(folder, f"{s['label']}-data.md")
+    with open(data_path, "w", encoding="utf-8") as f:
+        f.write(review.brief(s, rows, review.metrics(rows), CUBI, os.path.join(folder, f"{s['label']}.md")))
+    directory = os.path.expanduser(store.config["reviewSessionDir"])
+    if not os.path.isdir(directory):
+        raise ValueError(f"回顧 session 的資料夾不存在：{directory}（設定分頁可改）")
+    return {"directory": directory, "prompt": review.brief_prompt(s, data_path), "file": data_path}
 
 
 def config_set(store, p):
     for k in CONFIG_KEYS:
         if k in p:
             store.config[k] = str(p[k]).strip()
+    if "hoursPerPoint" in p:
+        try:
+            store.config["hoursPerPoint"] = max(0.1, float(p["hoursPerPoint"]))
+        except (TypeError, ValueError):
+            raise ValueError("每點小時數要是數字")
     return panel_state(store, p)
 
 
 ACTIONS = {
     "session.info": session_info, "session.sync": lambda s, p: session_info(s, p, sync=True),
     "session.bind": session_bind, "session.unbind": session_unbind, "session.shares": session_shares,
+    **{f"session.unbind{i + 1}": (lambda i: lambda s, p: session_unbind(s, p, index=i))(i) for i in range(MAX_UNBIND_BUTTONS)},
+    "review.brief": review_brief,
     "tick": tick, "panel.state": panel_state,
     "sprint.new": sprint_new, "sprint.update": sprint_update, "sprint.select": sprint_select, "sprint.sync": sprint_sync,
     "ticket.add": ticket_add, "ticket.update": ticket_update, "ticket.transition": ticket_transition, "points.push": points_push,

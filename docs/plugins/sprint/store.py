@@ -24,13 +24,19 @@ FILES = ("config.json", "sprints.json", "tickets.json", "bindings.json", "segmen
 DEFAULT_CONFIG = {
     "site": "example.atlassian.net",
     "netrc": "~/.config/atlassian/netrc",
+    # One or more, comma separated; issue keys of these projects are recognised.
     "projectKey": "PROJ",
-    # {project} and {label} are filled in; sprints are labels on the issues.
-    "jql": 'project = {project} AND labels = "{label}" ORDER BY key',
+    # {projects} (all, comma separated), {project} (the first) and {label} are filled in; sprints
+    # are labels on the issues.
+    "jql": 'project in ({projects}) AND labels = "{label}" AND assignee = currentUser() ORDER BY key',
     "pointsField": "customfield_10016",
     # A number field to push the actual points to; empty keeps them local.
     "actualPointsField": "",
+    # One point of estimate is this many hours of work.
+    "hoursPerPoint": 8,
     "reviewDir": "~/Documents/sprint-reviews",
+    # Where the "用 Claude 整理回顧" session opens.
+    "reviewSessionDir": "~/Documents",
 }
 
 
@@ -115,20 +121,37 @@ class Store:
             s["keys"].append(key)
         self.ticket(key)
 
+    def set_sprint_keys(self, label, keys):
+        """The sprint holds exactly these tickets (a resync that drops what Jira no longer lists)."""
+        s = self.sprint(label)
+        if s is not None:
+            s["keys"] = list(dict.fromkeys(keys))
+            for key in s["keys"]:
+                self.ticket(key)
+
     def browse_url(self, key):
         return f"https://{self.config['site']}/browse/{key}"
 
     # ---------- bindings ----------
 
+    def project_keys(self):
+        return [p.strip().upper() for p in re.split(r"[,\s]+", self.config["projectKey"]) if p.strip()]
+
     def extract_keys(self, *texts):
-        """Issue keys of the configured project, in order of first appearance."""
-        prefix = self.config["projectKey"].upper() + "-"
+        """Issue keys of the configured projects, in order of first appearance."""
+        prefixes = tuple(p + "-" for p in self.project_keys())
         found = []
         for text in texts:
             for k in KEY_RE.findall((text or "").upper()):
-                if k.startswith(prefix) and k not in found:
+                if k.startswith(prefixes) and k not in found:
                     found.append(k)
         return found
+
+    def hours_per_point(self):
+        try:
+            return max(0.1, float(self.config.get("hoursPerPoint") or 8))
+        except (TypeError, ValueError):
+            return 8.0
 
     def binding(self, session):
         """Refresh what the session is bound to from its name, branch and cwd; manual edits win."""
@@ -260,7 +283,7 @@ class Store:
 
 
 def empty_review():
-    return {"wentWell": [], "toImprove": [], "suggestions": [], "thanks": []}
+    return {"summary": "", "wentWell": [], "toImprove": [], "suggestions": [], "thanks": []}
 
 
 def overlap(start, end, since, until):

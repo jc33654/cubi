@@ -106,6 +106,19 @@ class StoreTests(unittest.TestCase):
         self.store.config["projectKey"] = "proj"
         self.assertEqual(self.store.extract_keys("proj-3 與 PROJ-4"), ["PROJ-3", "PROJ-4"])
 
+    def test_several_projects(self):
+        self.store.config["projectKey"] = "PROJ, ops,QA"
+        self.assertEqual(self.store.project_keys(), ["PROJ", "OPS", "QA"])
+        self.assertEqual(self.store.extract_keys("PROJ-1 OPS-22 QA-3 OTHER-9"), ["PROJ-1", "OPS-22", "QA-3"])
+        self.store.new_sprint("Sprint7")
+        self.store.add_to_sprint("Sprint7", "PROJ-1")
+        self.store.add_to_sprint("Sprint7", "OPS-22")
+        self.store.set_sprint_keys("Sprint7", ["QA-3", "QA-3", "OPS-22"])
+        self.assertEqual(self.store.sprint("Sprint7")["keys"], ["QA-3", "OPS-22"])
+        self.assertEqual(self.store.hours_per_point(), 8.0)
+        self.store.config["hoursPerPoint"] = "6"
+        self.assertEqual(self.store.hours_per_point(), 6.0)
+
     def test_broken_file_is_set_aside_not_overwritten(self):
         self.store.save()
         with open(self.store.root / "tickets.json", "w") as f:

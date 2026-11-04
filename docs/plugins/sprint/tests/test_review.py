@@ -28,10 +28,34 @@ class ReviewTests(unittest.TestCase):
         self.store.save()
         self.dir.cleanup()
 
+    HOURS = {"PROJ-1": {"total": 40_800.0, "session": 40_800.0, "manual": 0.0, "meeting": 0.0},
+             "PROJ-2": {"total": 21_900.0, "session": 18_300.0, "manual": 3600.0, "meeting": 3600.0}}
+
     def rows(self):
-        hours = {"PROJ-1": {"total": 40_800.0, "session": 40_800.0, "manual": 0.0, "meeting": 0.0},
-                 "PROJ-2": {"total": 21_900.0, "session": 18_300.0, "manual": 3600.0, "meeting": 3600.0}}
-        return review.ticket_rows(self.sprint, self.store.tickets, hours)
+        return review.ticket_rows(self.sprint, self.store.tickets, self.HOURS, 8)
+
+    def test_actual_points_come_from_hours_unless_overridden(self):
+        rows = {r["key"]: r for r in self.rows()}
+        # PROJ-1: override 3 wins over 11h20m ÷ 8 = 1.42; PROJ-3: no hours → no actual.
+        self.assertEqual((rows["PROJ-1"]["actual"], rows["PROJ-1"]["autoActual"], rows["PROJ-1"]["override"]), (3, 1.42, 3))
+        self.assertIsNone(rows["PROJ-3"]["actual"])
+        self.store.ticket("PROJ-1")["actual"] = None
+        rows = {r["key"]: r for r in self.rows()}
+        self.assertEqual(rows["PROJ-1"]["actual"], 1.42)
+        self.assertEqual(review.ticket_rows(self.sprint, self.store.tickets, self.HOURS, 4)[0]["actual"], 2.83)
+
+    def test_categories(self):
+        c = review.category
+        self.assertEqual(c(True, 5, 3), "提早／準時完成")
+        self.assertEqual(c(True, 5, 5), "提早／準時完成")
+        self.assertEqual(c(True, 2, 3), "超時完成")
+        self.assertEqual(c(False, 1, None), "未完成")
+        self.assertEqual(c(False, 1, 0.5), "未完成")
+        self.assertEqual(c(False, 1, 1.5), "超時未完成")
+        self.assertEqual(c(True, None, 3), "未估點")
+        # PROJ-1 (5 → 3, open) and PROJ-3 (1 → –, open) are simply unfinished; PROJ-2 (2 → 3, done) ran over.
+        self.assertEqual(review.metrics(self.rows())["categories"],
+                         {"提早／準時完成": 0, "超時完成": 1, "未完成": 2, "超時未完成": 0, "未估點": 0})
 
     def test_parse_issue_reads_points_status_and_done(self):
         t = parse_issue(ISSUE, "customfield_10016")
@@ -57,14 +81,25 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(review.burndown({"label": "x"}, []), [])
 
     def test_markdown(self):
-        self.sprint["review"] = {"wentWell": ["一次過"], "toImprove": ["估少了"], "suggestions": ["加 buffer"], "thanks": [{"who": "某人", "why": "幫忙查"}]}
+        self.sprint["review"] = {"summary": "整體順利。", "wentWell": ["一次過"], "toImprove": ["估少了"], "suggestions": ["加 buffer"], "thanks": [{"who": "某人", "why": "幫忙查"}]}
         md = review.markdown(self.sprint, self.rows(), review.metrics(self.rows()))
         self.assertIn("# Sprint 7 回顧（2026-11-03 – 2026-11-14）", md)
         self.assertIn("目標：退場", md)
-        self.assertIn("| PROJ-1 | 工單 PROJ-1 | 進行中 | 5 | 3 | 11h20m |", md)
-        self.assertIn("| PROJ-3 | 工單 PROJ-3 | 進行中 | 1 | – | – |", md)
-        self.assertIn("合計：估 8 點、實際 6 點、完成 1/3、投入 17h25m（其中會議 1h00m）、實際/估點 0.75", md)
+        self.assertIn("## 總結\n\n整體順利。", md)
+        self.assertIn("估 8 點、實際 6 點（1 點 = 8 小時換算，可覆寫）、完成 1/3、投入 17h25m（其中會議 1h00m）、實際/估點 0.75", md)
+        self.assertIn("| 超時完成 | 1 |", md)
+        self.assertIn("### 超時完成（1）\n\n- PROJ-2 工單 PROJ-2：估 2 → 實 3（6h05m，處理完畢）", md)
+        self.assertIn("### 未完成（2）\n\n- PROJ-1 工單 PROJ-1：估 5 → 實 3（11h20m，進行中）\n- PROJ-3 工單 PROJ-3：估 1 → 實 –（–，進行中）", md)
         self.assertIn("## 想感謝的夥伴\n\n- 某人：幫忙查", md)
+
+    def test_brief_carries_data_and_the_write_back_command(self):
+        text = review.brief(self.sprint, self.rows(), review.metrics(self.rows()), "~/Applications/Cubi.app/Contents/MacOS/cubi", "/tmp/r/Sprint7.md")
+        self.assertIn("| PROJ-2 | 工單 PROJ-2 | 處理完畢 | 2 | 3 | 6h05m | 超時完成 |", text)
+        self.assertIn("cat <<'EOF' | ~/Applications/Cubi.app/Contents/MacOS/cubi --tool-run sprint review.update -", text)
+        self.assertIn('"label": "Sprint7"', text)
+        self.assertIn("/tmp/r/Sprint7.md", text)
+        prompt = review.brief_prompt(self.sprint, "/tmp/r/Sprint7-data.md")
+        self.assertTrue(prompt.startswith("請讀 /tmp/r/Sprint7-data.md"))
 
     def test_fmt_hours(self):
         self.assertEqual([review.fmt_hours(x) for x in (0, 59, 60, 3600, 40_800)], ["–", "–", "1m", "1h00m", "11h20m"])

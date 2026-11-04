@@ -72,6 +72,8 @@ const bridge = window.webkit?.messageHandlers?.cubi;          // 或 manifest �
 const r = await bridge.postMessage({ action: "skill.on", args: ["my-skill"] });   // {ok, out, err}
 await bridge.postMessage({ action: "config.set", name: "k", value: "v" });        // 舊形狀：name/value → args
 const picked = await bridge.postMessage({ action: "pick.file", args: [] });      // 內建：{ok, path, cancelled?}
+await bridge.postMessage({ action: "session.new", args: [JSON.stringify({ directory: "~/proj", prompt: "第一句話" })] });
+                                                                                  // 內建：在那個目錄開一個 Claude Code session（走「開新 session」同一條路）
 // 從資訊窗「開面板」打開時：
 window.cubiSession   // {id, name, cwd, projectDirectory, agent, segments}；之後換 session 會收到 "cubisession" 事件
 ```
@@ -79,7 +81,7 @@ window.cubiSession   // {id, name, cwd, projectDirectory, agent, segments}；之
 規則：
 
 - action 不在表裡、參數數量或型別不符 → 不執行，JS 收到 reject（錯誤訊息是中文的原因）；每次執行與拒絕都寫 `~/Library/Logs/cubi.log`。
-- `pick.file`／`pick.dir` 是內建的原生選擇器，不用宣告，也是保留字（manifest 裡定義會被拒載）。
+- `pick.file`／`pick.dir`（原生選擇器）與 `session.new`（開 Claude Code session：目錄要存在，prompt 選填）是內建的，不用宣告，也是保留字（manifest 裡定義會被拒載）。
 - 面板裡任何離開已載入 HTML 的導頁（連結、`location.href`、表單、meta refresh、`target=_blank`）一律取消；主頁面的 http(s) 目標改用系統瀏覽器開，iframe 裡的只取消。bridge 永遠只給面板自己的頁面用。
 - 設定頁關掉工具後，已開著的面板送來的請求也會被拒；資訊窗區塊與 tick 也停。
 - manifest 是使用者自己放進 `plugins/` 的，跟 agent manifest 一樣信任它；安全邊界在「面板的 JS 只能叫到表裡的指令、參數過型別檢查、不經 shell」。
@@ -104,7 +106,7 @@ stdout：
 ```
 
 - `rows[]`：`[label, value]` 或 `{label, value, url?}`。最多 10 列、value 最多 200 字；`url` 只收 http(s)，有的話 label 帶 `↗`、點了用系統瀏覽器開。
-- `actions[]`（最多 5 個）：按鈕；`action` 必須是同一個插件的 hook 命令，按了以同一份 stdin 執行，成功才重抓 `session.info`，失敗訊息留在區塊上。
+- `actions[]`（最多 5 個）：按鈕；`action` 必須是同一個插件的 hook 命令，按了以同一份 stdin 執行，成功才重抓 `session.info`，失敗訊息留在區塊上。加 `"input": "提示文字"` 的按鈕會先跳系統對話框問一行字，cubi 洗掉控制字元、截到 512 字後放進 stdin JSON 的 `input` 欄；按取消就不執行。
 - 區塊固定多一顆「開面板」。
 - stdout 超過 64 KB、不是 JSON 物件、列形狀不對、action 不合規 → 區塊顯示錯誤。
 - 活動時段的切法：真事件（statusline 不算）延長當前段；與上一個事件相隔 ≥ 設定頁「多久沒動靜進入沉睡」就收段、開新段；沉默到門檻也收段（結束點是最後一個事件，不含閒置尾巴）；SessionEnd 收段；點機器人叫醒不算事件。
@@ -134,11 +136,11 @@ stdin：`{"now": <epoch 秒>, "sessions": [<同上的 session 物件>…]}`，�
 
 1. 安裝：`scripts/install-plugin.sh docs/plugins/sprint`，設定頁「插件 → 重新載入」。
 2. Jira 帳號：`~/.config/atlassian/netrc` 一行 `machine <站台> login <email> password <API token>`（跟其他用 netrc 的工具共用；插件不會把 token 存到別處）。
-3. 面板「設定」分頁：站台、專案 key、同步用 JQL（預設抓該標籤的所有單；只要自己的加 `AND assignee = currentUser()`）、估點欄位 id、實際點數欄位 id（Jira 沒有這個欄位就留空，實際點數只存本機）、回顧 Markdown 資料夾。
-4. 「本期 sprint」：建 sprint（標籤要跟 Jira 一樣，起訖日期給 burndown 用）→「同步 Jira」。表格可直接填實際點數、換狀態（走 Jira transition）、「+時數」補實體會議／討論、「寫回」把實際點數寫進設定的欄位。
-5. 綁定：session 名稱、git 分支、cwd 裡的單號自動綁；在面板拿掉的不會再自動加回；一個 session 綁多張單時時數預設平分，比例可改（「套用比例到本 sprint」會回算已過的段）。
+3. 面板「設定」分頁：站台、專案 key（可多個，逗號分開）、抓單用 JQL（預設 `project in ({projects}) AND labels = "{label}" AND assignee = currentUser()`）、估點欄位 id、實際點數欄位 id（Jira 沒有這個欄位就留空，實際點數只存本機）、每點小時數（預設 8）、回顧 Markdown 資料夾、整理回顧的 session 要開在哪。
+4. 「本期 sprint」：建 sprint（標籤要跟 Jira 一樣，起訖日期給 burndown 用）→「同步 Jira」（「重抓並清掉」讓 sprint 等於 JQL 結果）。表格的「實」是投入時數 ÷ 每點小時數，可手動覆寫；換狀態走 Jira transition；「+時數」補實體會議／討論；「寫回」把實際點數寫進設定的欄位。
+5. 綁定：session 名稱、git 分支、cwd 裡的單號自動綁；資訊窗的「綁單號…」「解除 X」直接改；在面板拿掉的不會再自動加回；一個 session 綁多張單時時數預設平分，比例可改（「套用比例到本 sprint」會回算已過的段）。
 6. 時數：session 活動時段依比例分攤給綁的單；手動時段整段算；種類是會議／討論的另計「會議時數」。行事曆：收掉的段（標題＝單號＋session 名）與勾了的手動時段。
-7. 「回顧」：五張數字卡（完成點數、完成單數、實際/估點、每點小時、會議/總投入）、四張圖（估 vs 實、burndown、每單時數、近幾個 sprint）、四段文字與感謝名單（一行一條，離開欄位就存）、「匯出 Markdown」。
+7. 「回顧」：五張數字卡、任務分類甜甜圈（提早／準時完成、超時完成、未完成、超時未完成、未估點；點一類列出那些單）、burndown、近幾個 sprint、總結與四段文字＋感謝（一行一條，離開欄位就存）、「匯出 Markdown」。「用 Claude 整理回顧」把數據寫成 `<reviewDir>/<標籤>-data.md`，在設定的資料夾開一個 Claude Code session，請它寫好四段後用 `cubi --tool-run sprint review.update -` 填回面板。
 8. 資料：`~/Library/Application Support/cubi/sprint/`（config、sprints、tickets、bindings、segments，都是 JSON）。`make plugin-test` 跑它的測試。
 
 ## 命令列

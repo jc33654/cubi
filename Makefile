@@ -56,6 +56,7 @@ install: bundle
 
 run: install
 	-pkill -x cubi
+	sleep 1
 	open "$(APP_DEST)"
 
 # Feed a fake payload through the relay with the app absent: must exit 0 and print nothing.

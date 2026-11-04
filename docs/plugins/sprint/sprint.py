@@ -124,7 +124,8 @@ def session_info(store, p, sync=False):
     for key in keys:
         t = store.tickets.get(key, {})
         secs = hours.get(key, {}).get("total", 0)
-        actual = t.get("actual") if t.get("actual") is not None else (round(secs / 3600 / hpp, 1) if secs else None)
+        auto = round(secs / 3600 / hpp, 2)
+        actual = t.get("actual") if t.get("actual") is not None else (auto if auto >= 0.05 else None)
         rows.append({"label": key, "url": store.browse_url(key),
                      "value": " · ".join(x for x in [t.get("summary") or ("Jira 查不到這張單" if t.get("notFound") else "（還沒從 Jira 讀到）"), t.get("status"),
                                                       f"估 {pts(t.get('estimate'))} 實 {pts(actual)}", review.fmt_hours(secs)] if x)})

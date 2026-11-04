@@ -20,6 +20,10 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 | 安裝器 UI | 設定頁：Claude Code hooks 安裝／解除（看 diff 再寫）、退役舊 notify hook、Agents 開關與 API key、顯示（保持顯示、滑入就展開、機器人大小 28／36／44）、睡眠（沉睡 5–60 分鐘、晚安 1–24 小時或從不；改了立刻 tick：調短立刻生效，調長只有自動進晚安區的會回來、已沉睡的不叫醒）、範圍、插件（Agents／工具） | 真機驗證；三個新設定 Jade 真機驗證（2026-11-03：關滑入展開、切大小後拖曳、沉睡 5 分鐘） |
 | Plugin 架構 | `AgentPlugin` 協定；`ClaudeCodePlugin` 內建；`ManifestPlugin` 以 JSON 接新 agent（只能監看） | 單元測試＋假 manifest 真機 |
 | 工具插件 | `kind: tool` manifest：HTML 面板 + 白名單指令表（`ToolPlugin` 解析／型別驗證、`ToolPanel` 執行不經 shell、bridge 名可設）；選單與設定頁入口；`cubi --tool-run`；原本寫死在 app 裡的那個管理面板改成 Jade 本機的私用插件（manifest 放 plugins/，不進 repo） | 6 個單元測試；真機 `--tool-run`：私用插件的 status／asset.read 走通、`../x` 與未宣告 action 被擋；面板點擊待 Jade 親手試 |
+| session 掛件 | 工具插件選填 `session{info,refresh}`：資訊窗選到 session 時 cubi 把 session（含活動時段）餵 stdin、畫它回的列（可帶連結）與按鈕，「開面板」把 session 注入面板；`$plugin`、相對執行檔、工作目錄＝插件目錄；hook 命令 20 秒逾時（殺整個 process group） | 單元測試（manifest 驗證、PluginIO 上限）；CLI 餵 stdin 走通；真機畫面待 Jade |
+| 活動時段 | `SessionInfo.segments`：真事件開段／依 sleepAfter 切段、tick 收段、SessionEnd 收段、叫醒不算；結束／放生的最後一段保留到下一次 tick | 單元測試 |
+| 行事曆 | 工具插件選填 `tick{action,every}`：定時餵所有 session，回的 calendar 條目由 `SystemCalendar`（EventKit）寫進設定頁選的行事曆；記號去重、同記號延長、同標題 5 分鐘內合併、每筆 commit、標「空閒」；設定頁「行事曆」區 | `CalendarMerge` 純函式測試；EventKit 真機授權與事件待 Jade |
+| sprint 插件 | `docs/plugins/sprint/`：Python 標準庫；Jira 用 netrc；sprint＝標籤（這個 Jira 沒有 Sprint 欄位）；自動／手動綁單、多單比例分攤、手動時段、transition、實際點數本機（可設欄位寫回）、回顧五卡四圖、Markdown 匯出 | 12 個 unittest；CLI 對真 Jira：`session.info` 讀到 DDP 單的摘要／狀態／估點、`sprint.sync` 抓到 66 張單；面板待 Jade |
 | 發佈 | `make bundle` strip debug 符號並守門（執行檔裡不得有 `/Users/…`）；`make dist` 產固定檔名 `Cubi.zip`；`scripts/install.sh` 下載、sha256 完整性校驗、`codesign -R` 比對 cubi-dev 憑證 hash 後才裝並拿掉 quarantine；`ci.yml`／`release.yml`（tag 觸發，從 secrets 匯入 .p12 簽） | 真機驗證：v0.1.0 由 release.yml 在 macos-26 建、簽、掛上 Release（1.5 分鐘）；從 `releases/latest/download/` 抓回來 sha256 與 `codesign -R` 都過、OSO 0、版本 0.1.0 |
 | 文件 | README（介紹、機器人表情與島的截圖 `docs/images/`、安裝、操作一覽、解除）、`docs/development.md`（make 目標、CLI、憑證、發版、設計上刻意的事）、`docs/protocol.md`（relay 協定、欄位、manifest 格式）、`docs/plan.md` | 經審查員對帳；圖是 `--render-island` 渲染後裁的 |
 
@@ -36,6 +40,9 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 7. 點改過名的那隻（同目錄還有別的 session 時）→ 跳到它自己的分頁；改名後一分鐘內機器人名字跟著變。
 8. 右鍵選單開私用面板走一輪（status、開關、編輯寫入、reveal、pick），行為應與之前一樣。
 9. 在另一台沒裝過的機器跑 `curl -fsSL https://raw.githubusercontent.com/jc33654/cubi/main/scripts/install.sh | bash`，看 Automation 授權與機器人是否出現（v0.1.0 已發，secrets 已設）。
+10. 資訊窗：選一個名字帶單號的 session，底下有「Sprint · Sprint6」區塊，單號列可點開瀏覽器，「同步 Jira」「開面板」有反應；example-tool 的區塊也在。
+11. 設定頁「行事曆」：允許存取 → 選一本行事曆；一分鐘後綁了單的 session 收掉的段出現在行事曆（標題＝單號＋session 名、標空閒、備註最後一行有記號）；重啟 Cubi 不重複；前後 5 分鐘內的段合成一筆。
+12. Sprint 面板：Sprint6 已建（沒填起訖）、同步過 66 張單——填起訖日期、改一個「實」、+時數一筆會議勾行事曆、換一個狀態（會真的送 Jira）、回顧分頁看五卡四圖、匯出 Markdown 到 Finder。預設 JQL 抓整個團隊的標籤；只要自己的在設定分頁 JQL 加 `AND assignee = currentUser()`。
 
 ## 已知限制
 

@@ -51,6 +51,12 @@ private func ours(_ id: String, _ start: Double, _ end: Double, markers: [String
                                          notes: "https://jira/browse/PROJ-12\n同事加的備註\n\n由 Cubi 記錄 · sprint:s1:1000")
     let plan = CalendarMerge.plan(entry(1000, 4600, marker: "sprint:s1:1000"), nearby: [written])
     #expect(plan == .extend(id: "e", start: 1000, end: 4600, notes: "https://jira/browse/PROJ-12\n同事加的備註\n\n由 Cubi 記錄 · sprint:s1:1000", remove: []))
-    // Nothing new: left alone, even if an adjacent event of ours is nearby.
-    #expect(CalendarMerge.plan(entry(1000, 2000, marker: "sprint:s1:1000"), nearby: [written, ours("b", 2100, 3000, markers: ["sprint:s1:2100"])]) == .skip("已寫過"))
+    // Nothing new in time, but it now touches another event of ours: fold that one in.
+    #expect(CalendarMerge.plan(entry(1000, 2000, marker: "sprint:s1:1000"), nearby: [written, ours("b", 2100, 3000, markers: ["sprint:s1:2100"])])
+            == .extend(id: "e", start: 1000, end: 3000, notes: "https://jira/browse/PROJ-12\n同事加的備註\nx\n\n由 Cubi 記錄 · sprint:s1:1000 sprint:s1:2100", remove: ["b"]))
+    // Nothing new at all: left alone.
+    #expect(CalendarMerge.plan(entry(1000, 2000, marker: "sprint:s1:1000"), nearby: [written]) == .skip("已寫過"))
+    // A multi-paragraph note someone typed keeps its blank line.
+    let typed = CalendarMerge.Existing(id: "t", title: "PROJ-12 範例工單", start: 0, end: 800, notes: "第一段\n\n第二段\n\n由 Cubi 記錄 · m")
+    #expect(CalendarMerge.body(of: [typed], plus: "第一段") == "第一段\n\n第二段")
 }

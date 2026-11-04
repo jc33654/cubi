@@ -99,7 +99,8 @@ final class ToolPanel: NSObject, NSWindowDelegate, WKNavigationDelegate {
             decisionHandler(.allow)
             return
         }
-        if ["http", "https"].contains(url.scheme?.lowercased() ?? "") { NSWorkspace.shared.open(url) }
+        // A sub-frame (an iframe) is refused quietly; only the page's own navigation opens the browser.
+        if ["http", "https"].contains(url.scheme?.lowercased() ?? ""), action.targetFrame?.isMainFrame ?? true { NSWorkspace.shared.open(url) }
         decisionHandler(.cancel)
     }
 }

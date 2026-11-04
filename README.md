@@ -62,7 +62,8 @@
 - 🎨 **換形狀、換顏色、拖著排順序** — 全部記得住，Cubi 重啟、session 回來都還在。
 - 🪟 **拖出來變浮動視窗** — 沒瀏海的螢幕、外接螢幕都能用，拖回頂端就回去。
 - 🔌 **其他 agent 也能接** — 一份 manifest 就能讓別的 agent 的 session 出現在島上（目前只能監看）。
-- 🧰 **工具插件** — 一個 HTML 面板加一張白名單指令表就是一個插件，從選單打開。
+- 🧰 **工具插件** — 一個 HTML 面板加一張白名單指令表就是一個插件，從選單打開；還能在每個 session 的資訊窗掛一塊自己的內容。
+- 🗓️ **工時進行事曆** — 內建的 sprint 插件把 session 有在做的時段寫進你選的行事曆、對到 Jira 工單，sprint 結束時回顧頁有估點 vs 實際、burndown 與投入時數。
 
 <p align="center">
   <img src="docs/images/approval.png" width="640" alt="審批卡片：alpha 想要執行指令，拒絕／在終端處理／總是允許／允許"><br>
@@ -151,6 +152,7 @@ open ~/Applications/Cubi.app
 - **Claude Code**：hooks 與 status line 狀態、安裝／解除、舊 hook 退役選項
 - **顯示**：保持顯示、滑入就展開、機器人大小（小／預設／大）、音效、系統通知、登入時啟動
 - **睡眠**：多久沒動靜進入沉睡（5–60 分鐘，預設 10）、沉睡多久自動進晚安區（1–24 小時或從不，預設 12）
+- **行事曆**：允許存取、選要寫入的行事曆（給有 tick hook 的插件用；只寫入、標「空閒」）
 - **範圍**：忽略哪些目錄開頭的 session（一行一個，可用 `~`）
 - **插件**：Agents（各 agent plugin 開關、安裝、API key）與工具（開關、開啟面板）；「重新載入」掃 plugins 目錄
 
@@ -163,6 +165,8 @@ open ~/Applications/Cubi.app
 | `~/.cubi/bin/cubi-hook` | relay 本體，app 啟動時從 bundle 複製、內容不同就更新；路徑刻意無空白 |
 | `~/.cubi/agents/claude-code.json` | 串接前的 `statusLine`，解除安裝時還原 |
 | `~/Library/Application Support/cubi/cubi.sock` | app 的 unix socket（0600，只收同 UID） |
+| `~/Library/Application Support/cubi/plugins/` | 插件；`cubi/sprint/` 是 sprint 插件自己的資料 |
+| 你選的行事曆 | 有 tick hook 的插件要求時才寫事件（備註最後一行 `由 Cubi 記錄 · …` 是去重記號） |
 | `~/Library/Logs/cubi.log` | 事件與錯誤 log，出問題先看這裡 |
 
 你自己原有的 hooks 不會被動；安裝器只追加自己的條目，解除時只刪自己的。設定頁可勾選「同時移除舊的桌面通知 hook」。
@@ -177,11 +181,11 @@ open ~/Applications/Cubi.app
 
 ## 插件
 
-都放在 `~/Library/Application Support/cubi/plugins/<id>/manifest.json`，欄位說明在 [docs/protocol.md](docs/protocol.md)。
+都放在 `~/Library/Application Support/cubi/plugins/<id>/manifest.json`，規格在 [docs/advanced.md](docs/advanced.md)（進階操作）。
 
 **Agent plugin**：Claude Code 是內建的。其他 agent 可以用一份 manifest 接進來，在設定頁開啟；範例在 `docs/plugins/example-agent/`。目前 manifest plugin **只能監看**（session、工具開始／結束、結束），它的審批不會出現在島上，會落回那個 agent 自己的提示。要做審批得寫程式碼 plugin（實作 `AgentPlugin` 協定）。
 
-**工具插件**（`"kind": "tool"`）：一個 HTML 面板加一張指令表。面板的 JavaScript 只能呼叫表裡的指令，每個參數都有型別（名稱／值／選項／長文走 stdin），不經 shell。選單與設定頁各有入口。範例在 `docs/plugins/example-tool/`。
+**工具插件**（`"kind": "tool"`）：一個 HTML 面板加一張指令表。面板的 JavaScript 只能呼叫表裡的指令，每個參數都有型別（名稱／值／選項／長文走 stdin），不經 shell。選單與設定頁各有入口。再掛兩個選填的 hook 就能進島：`session`（資訊窗選到 session 時執行，回幾列文字、連結與按鈕）與 `tick`（定時執行，回要寫進行事曆的事件，由 Cubi 去寫）。範例在 `docs/plugins/example-tool/`（最小）與 `docs/plugins/sprint/`（完整：Jira 工單、估點／實際、時數、回顧圖表）。
 
 ## 解除安裝
 

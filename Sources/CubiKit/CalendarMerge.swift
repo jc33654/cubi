@@ -33,19 +33,28 @@ public enum CalendarMerge {
     public static func plan(_ e: PluginIO.CalendarEntry, nearby: [Existing]) -> Plan {
         guard e.end - e.start >= minDuration else { return .skip("不到 1 分鐘") }
         // Seen before: a stretch still running is reported again with a later end, so the same
-        // marker means "update", and only an entry that adds nothing is skipped.
+        // marker means "update". It may now touch other events of ours; those fold in too.
         if let same = nearby.first(where: { markers(in: $0.notes).contains(e.marker) }) {
-            guard e.start < same.start || e.end > same.end else { return .skip("已寫過") }
-            return .extend(id: same.id, start: min(same.start, e.start), end: max(same.end, e.end),
-                           notes: notes(body: body(of: [same], plus: e.notes), markers: markers(in: same.notes)), remove: [])
+            let start = min(same.start, e.start), end = max(same.end, e.end)
+            let others = ours(e.title, in: nearby, start: start, end: end).filter { $0.id != same.id }
+            guard e.start < same.start || e.end > same.end || !others.isEmpty else { return .skip("已寫過") }
+            let all = [same] + others
+            return .extend(id: same.id, start: min(start, all.map(\.start).min()!), end: max(end, all.map(\.end).max()!),
+                           notes: notes(body: body(of: all, plus: e.notes), markers: all.flatMap { markers(in: $0.notes) }),
+                           remove: others.map(\.id))
         }
-        let adjacent = nearby
-            .filter { $0.title == e.title && !markers(in: $0.notes).isEmpty && $0.end >= e.start - gap && $0.start <= e.end + gap }
-            .sorted { $0.start < $1.start }
+        let adjacent = ours(e.title, in: nearby, start: e.start, end: e.end)
         let notes = notes(body: body(of: adjacent, plus: e.notes), markers: adjacent.flatMap { markers(in: $0.notes) } + [e.marker])
         guard let first = adjacent.first else { return .create(title: e.title, start: e.start, end: e.end, notes: notes) }
         return .extend(id: first.id, start: min(e.start, first.start), end: max(e.end, adjacent.map(\.end).max()!),
                        notes: notes, remove: adjacent.dropFirst().map(\.id))
+    }
+
+    /// Events Cubi wrote (they carry a marker line) with this title, touching [start, end] within
+    /// the gap, earliest first.
+    static func ours(_ title: String, in nearby: [Existing], start: Double, end: Double) -> [Existing] {
+        nearby.filter { $0.title == title && !markers(in: $0.notes).isEmpty && $0.end >= start - gap && $0.start <= end + gap }
+            .sorted { $0.start < $1.start }
     }
 
     public static func markers(in notes: String?) -> [String] {
@@ -54,17 +63,17 @@ public enum CalendarMerge {
             .flatMap { $0.dropFirst(markerLinePrefix.count).split(separator: " ").map(String.init) }
     }
 
-    /// What the events said apart from their marker lines, plus the new entry's lines, each once:
-    /// a link or a note someone typed into the event is never thrown away by an extension.
+    /// What the events said apart from their marker lines (blank lines and all), then the new
+    /// entry's notes unless already there: a note someone typed into the event survives an extension.
     public static func body(of events: [Existing], plus new: String?) -> String {
-        var lines: [String] = []
+        var blocks: [String] = []
         for text in events.map(\.notes) + [new] {
-            for raw in (text ?? "").split(separator: "\n", omittingEmptySubsequences: false) {
-                let line = raw.trimmingCharacters(in: .whitespaces)
-                if !line.isEmpty, !line.hasPrefix(markerLinePrefix), !lines.contains(line) { lines.append(line) }
-            }
+            let kept = (text ?? "").split(separator: "\n", omittingEmptySubsequences: false)
+                .filter { !$0.hasPrefix(markerLinePrefix) }
+                .joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !kept.isEmpty, !blocks.contains(where: { $0.contains(kept) }) { blocks.append(kept) }
         }
-        return lines.joined(separator: "\n")
+        return blocks.joined(separator: "\n")
     }
 
     public static func notes(body: String?, markers: [String]) -> String {

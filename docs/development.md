@@ -6,12 +6,12 @@ README 放的是給使用者看的東西；這裡是改程式、打包、發版�
 
 ```
 Sources/CubiKit/     純邏輯：事件模型、解碼、session 狀態機、回覆編碼、安裝器、plugin 協定（可測）
-Sources/cubi/        AppKit + SwiftUI app
+Sources/cubi/        AppKit + SwiftUI app；Plugins/（面板、hook 執行、資訊窗掛件、ticker）、Calendar/（EventKit）
 Sources/cubi-hook/   relay，只 import Darwin，冷啟動個位數 ms
 Tests/CubiKitTests/  單元測試；Fixtures/claude-2.1.312/ 是實錄的 hook payload
-scripts/             bundle.sh（打包、strip、簽章、路徑守門）、install.sh（使用者安裝）、make-icns.sh、import-fixtures.py
+scripts/             bundle.sh（打包、strip、簽章、路徑守門）、install.sh（使用者安裝）、install-plugin.sh（複製插件到 plugins/）、make-icns.sh、import-fixtures.py
 .github/workflows/   ci.yml、release.yml
-docs/                plan.md（設計與決策）、protocol.md（relay 協定、欄位、manifest 格式）、status.md（進度）、images/（README 的圖）
+docs/                plan.md（設計與決策）、protocol.md（relay socket 協定）、advanced.md（插件規格、CLI、行事曆規則）、status.md（進度）、plugins/（範例與內建插件）、images/（README 的圖）
 ```
 
 ## make 目標
@@ -20,6 +20,7 @@ docs/                plan.md（設計與決策）、protocol.md（relay 協定�
 |---|---|
 | `make build` / `make release` | debug / release 建置到 `.build/` |
 | `make test` | 跑 CubiKit 單元測試（CLT 的 swift-testing 需要額外 rpath，Makefile 已處理） |
+| `make plugin-test` | 跑 `docs/plugins/sprint/` 的 Python unittest |
 | `make cert` | 檢查簽章憑證 `cubi-dev`，第一次會告訴你怎麼建 |
 | `make icon` | 由程式自己畫出 app icon |
 | `make bundle` | 只打包簽章到 `build/Cubi.app`，不安裝；會 strip 掉 debug 符號，並檢查兩個執行檔裡沒有任何 `/Users/…` 本機路徑，有就失敗 |
@@ -37,20 +38,7 @@ docs/                plan.md（設計與決策）、protocol.md（relay 協定�
 
 ## 命令列
 
-```
-~/Applications/Cubi.app/Contents/MacOS/cubi --version
-~/Applications/Cubi.app/Contents/MacOS/cubi --hooks-status
-~/Applications/Cubi.app/Contents/MacOS/cubi --hooks-plan            # 只印 diff，不寫
-~/Applications/Cubi.app/Contents/MacOS/cubi --install-hooks         # 印 diff 後寫入（含備份）
-~/Applications/Cubi.app/Contents/MacOS/cubi --uninstall-hooks
-~/Applications/Cubi.app/Contents/MacOS/cubi --settings              # 啟動 app 並直接開設定頁
-~/Applications/Cubi.app/Contents/MacOS/cubi --tool-run <id> <action> [args…]   # 走工具插件的路徑執行一條指令，印 {ok,out,err}
-~/Applications/Cubi.app/Contents/MacOS/cubi --new-session ~/proj [--continue | --resume <id>] [--prompt "第一句話"] [--terminal ghostty|terminal]
-```
-
-`--hooks-plan` 與 `--install-hooks` 可加 `--retire-notify`：同時移除舊的 `notify-hook.sh` 桌面通知 hook（設定頁的同一個勾選）。
-
-CLI 跟 app 一樣以 `$HOME` 為家目錄；要對假目錄測就 `HOME=/tmp/x cubi --hooks-plan`。
+全部列在 [advanced.md](advanced.md) 的「命令列」。開發時常用：`--tool-run <id> <action> -`（參數 `-` 從 stdin 讀，餵 hook 命令的 JSON）、`HOME=/tmp/x cubi --hooks-plan`（對假目錄測）。
 
 ## 自簽憑證 `cubi-dev`
 

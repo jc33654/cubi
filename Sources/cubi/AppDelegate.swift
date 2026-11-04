@@ -33,6 +33,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.coordinator = coordinator
         let toolPanels = ToolPanels(registry: coordinator.registry)
         self.toolPanels = toolPanels
+        let widgets = SessionWidgetStore(registry: coordinator.registry)
+        widgets.input = { [weak coordinator] in coordinator?.sessionInput(for: $0) }
+        island.state.widgets = widgets
+        island.state.onOpenTool = { [toolPanels, weak coordinator] tool, session in
+            toolPanels.show(tool, session: coordinator?.sessionInput(for: session))
+        }
         let settings = SettingsWindow(island: island.state, notifier: coordinator.notifier, ignored: coordinator.ignored,
                                       timing: coordinator.timing, registry: coordinator.registry,
                                       openTool: { [toolPanels] in toolPanels.show($0) })

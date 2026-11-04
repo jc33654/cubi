@@ -144,4 +144,9 @@ private let hooked = #"""
     #expect(try tool.invocation(action: "hello", args: ["世界"]).arguments == ["hello,", "世界"])
     #expect(try tool.invocation(action: "date", args: []).executable == "/bin/date")
     #expect(throws: ToolPlugin.InvokeError.self) { try tool.invocation(action: "hello", args: ["-n"]) }
+    #expect(tool.session == .init(info: "session.info", refresh: 60))
+    // What the sample echoes is a valid widget: one plain row, one link row.
+    let echoed = try tool.invocation(action: "session.info", args: ["{}"]).arguments[0]
+    let widget = try PluginIO.WidgetOutput.parse(echoed, tool: tool)
+    #expect(widget.rows.count == 2 && widget.rows[1].url == "https://github.com/jc33654/cubi")
 }

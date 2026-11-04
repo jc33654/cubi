@@ -111,12 +111,14 @@ if arguments.contains("--new-session") {
 
 // Run one of a tool plugin's commands the way its panel would (checks and all), for testing:
 //   --tool-run <plugin id> <action> [args…]   prints {ok, out, err}; exit 1 when rejected or failed
+//                                             an argument given as `-` is read from stdin (for text args)
 if let i = arguments.firstIndex(of: "--tool-run") {
     guard i + 2 < arguments.count else {
-        FileHandle.standardError.write(Data("usage: cubi --tool-run <plugin id> <action> [args…]\n".utf8))
+        FileHandle.standardError.write(Data("usage: cubi --tool-run <plugin id> <action> [args…|-]\n".utf8))
         exit(2)
     }
-    let id = arguments[i + 1], action = arguments[i + 2], args = Array(arguments[(i + 3)...])
+    let id = arguments[i + 1], action = arguments[i + 2]
+    let args = arguments[(i + 3)...].map { $0 == "-" ? String(decoding: FileHandle.standardInput.readDataToEndOfFile(), as: UTF8.self) : $0 }
     let code: Int32 = MainActor.assumeIsolated {
         let registry = PluginRegistry()
         guard let tool = registry.tools.first(where: { $0.id == id }) else {

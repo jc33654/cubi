@@ -82,6 +82,10 @@ final class IslandState {
     /// reopen that very session (`claude --resume <id>`) in its project and terminal.
     enum NewSessionIntent { case dialog(fromSession: String?), resume(session: String) }
     @ObservationIgnored var onNewSession: (NewSessionIntent) -> Void = { _ in }
+    /// Tool plugins' sections of the detail card; nil when rendering offline (no plugins).
+    @ObservationIgnored var widgets: SessionWidgetStore?
+    /// "開面板" in a plugin's section: (tool id, session id).
+    @ObservationIgnored var onOpenTool: (String, String) -> Void = { _, _ in }
 
     /// 工作中: on the wing. 晚安: only in the list, counted on the wing.
     var activeBots: [BotRuntime] { bots.filter { !$0.resting } }

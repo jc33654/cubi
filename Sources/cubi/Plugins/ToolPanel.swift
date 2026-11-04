@@ -10,14 +10,15 @@ final class ToolPanels {
 
     init(registry: PluginRegistry) { self.registry = registry }
 
-    func show(_ id: String) {
+    /// `session`: opened from a session's detail card; the page gets it as `window.cubiSession`.
+    func show(_ id: String, session: PluginIO.SessionInput? = nil) {
         guard let tool = registry.tools.first(where: { $0.id == id }), registry.isEnabled(id) else {
             CubiLog.write("tool \(id): not loaded or disabled")
             return
         }
         let panel = panels[id] ?? ToolPanel(isEnabled: { [registry] in registry.isEnabled(id) })
         panels[id] = panel
-        panel.show(tool)
+        panel.show(tool, session: session)
     }
 }
 
@@ -26,10 +27,11 @@ final class ToolPanels {
 /// `window.webkit.messageHandlers.<bridge>`. The HTML is re-read every time the window opens, so
 /// a panel can change without a rebuild. `baseURL: nil` means no file:// base and a null origin;
 /// it does not stop the page from loading external resources (the HTML is the user's own, trusted
-/// like the manifest).
+/// like the manifest). Links to http(s) open in the browser, never inside the panel.
 @MainActor
-final class ToolPanel: NSObject, NSWindowDelegate {
+final class ToolPanel: NSObject, NSWindowDelegate, WKNavigationDelegate {
     private var window: NSWindow?
+    private var web: WKWebView?
     private let bridge: ToolBridge
 
     /// `isEnabled` is asked on every message, so switching the plugin off in the settings stops
@@ -38,16 +40,26 @@ final class ToolPanel: NSObject, NSWindowDelegate {
         bridge = ToolBridge(isEnabled: isEnabled)
     }
 
-    func show(_ tool: ToolPlugin) {
+    func show(_ tool: ToolPlugin, session: PluginIO.SessionInput?) {
         bridge.tool = tool
-        if let w = window {
+        if let w = window, let web {
+            // Already open: hand the page the new session without reloading (its state survives);
+            // the page listens for `cubisession`. The user script is replaced too, for a later reload.
+            if let session {
+                web.configuration.userContentController.removeAllUserScripts()
+                web.configuration.userContentController.addUserScript(Self.sessionScript(session))
+                web.evaluateJavaScript(Self.sessionAssignment(session) + " window.dispatchEvent(new Event('cubisession'));")
+            }
             w.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
         let cfg = WKWebViewConfiguration()
         cfg.userContentController.addScriptMessageHandler(bridge, contentWorld: .page, name: tool.panel.bridge)
+        if let session { cfg.userContentController.addUserScript(Self.sessionScript(session)) }
         let web = WKWebView(frame: .zero, configuration: cfg)
+        web.navigationDelegate = self
+        self.web = web
         let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: tool.panel.width, height: tool.panel.height),
                          styleMask: [.titled, .closable, .miniaturizable, .resizable],
                          backing: .buffered, defer: false)
@@ -64,43 +76,29 @@ final class ToolPanel: NSObject, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    /// The JSON is an object literal; a user script is not HTML, so nothing needs escaping.
+    private static func sessionAssignment(_ session: PluginIO.SessionInput) -> String {
+        "window.cubiSession = \(session.json());"
+    }
+
+    private static func sessionScript(_ session: PluginIO.SessionInput) -> WKUserScript {
+        WKUserScript(source: sessionAssignment(session), injectionTime: .atDocumentStart, forMainFrameOnly: true)
+    }
+
     func windowWillClose(_ notification: Notification) {
         window = nil
-    }
-}
-
-/// Runs a checked invocation without a shell. stdin feeds long bodies (too long for argv).
-enum ToolRunner {
-    struct Result: Sendable {
-        var out: String
-        var err: String
-        var code: Int32
+        web = nil
     }
 
-    static func run(_ invocation: ToolPlugin.Invocation) -> Result {
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: invocation.executable)
-        p.arguments = invocation.arguments
-        let outPipe = Pipe(), errPipe = Pipe(), inPipe = Pipe()
-        p.standardOutput = outPipe
-        p.standardError = errPipe
-        if invocation.stdin != nil { p.standardInput = inPipe }
-        do { try p.run() } catch { return Result(out: "", err: "無法執行 \(invocation.executable)：\(error.localizedDescription)", code: 127) }
-        // Drain both pipes concurrently, and before feeding stdin: a child that answers while still
-        // reading its input would otherwise block on a full pipe and so would we.
-        final class Box: @unchecked Sendable { var out = Data(); var err = Data() }
-        let box = Box()
-        let group = DispatchGroup()
-        group.enter(); DispatchQueue.global(qos: .userInitiated).async { box.out = outPipe.fileHandleForReading.readDataToEndOfFile(); group.leave() }
-        group.enter(); DispatchQueue.global(qos: .userInitiated).async { box.err = errPipe.fileHandleForReading.readDataToEndOfFile(); group.leave() }
-        if let input = invocation.stdin {
-            inPipe.fileHandleForWriting.write(Data(input.utf8))
-            inPipe.fileHandleForWriting.closeFile()
+    func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
+                 decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void) {
+        if action.navigationType == .linkActivated, let url = action.request.url,
+           ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+            NSWorkspace.shared.open(url)
+            decisionHandler(.cancel)
+            return
         }
-        group.wait()
-        p.waitUntilExit()
-        return Result(out: String(data: box.out, encoding: .utf8) ?? "", err: String(data: box.err, encoding: .utf8) ?? "",
-                      code: p.terminationStatus)
+        decisionHandler(.allow)
     }
 }
 

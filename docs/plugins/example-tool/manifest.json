@@ -4,8 +4,13 @@
   "id": "example-tool",
   "name": "Example Tool",
   "panel": { "file": "index.html", "width": 520, "height": 360 },
+  "session": { "info": "session.info", "refresh": 60 },
   "commands": {
     "hello": { "run": ["/bin/echo", "hello,", "$1"], "args": ["value"] },
-    "date":  { "run": ["/bin/date"] }
+    "date":  { "run": ["/bin/date"] },
+    "session.info": {
+      "run": ["/bin/echo", "{\"rows\":[[\"範例\",\"這一塊由插件決定\"],{\"label\":\"連結\",\"value\":\"點左邊開瀏覽器\",\"url\":\"https://github.com/jc33654/cubi\"}]}"],
+      "args": ["text"], "stdin": 1
+    }
   }
 }

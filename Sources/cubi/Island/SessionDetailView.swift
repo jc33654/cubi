@@ -80,6 +80,7 @@ struct SessionDetailView: View {
                 if let t = SessionDetail.terminal(bot.client) { row("終端", t, mono: true) }
                 row("session", String(bot.id.prefix(8)), mono: true)
             }
+            if let widgets = state.widgets { SessionWidgetView(bot: bot, state: state, store: widgets) }
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)

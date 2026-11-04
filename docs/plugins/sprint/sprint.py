@@ -155,7 +155,7 @@ def panel_state(store, p):
              "sprints": [{"label": s["label"], "name": s.get("name"), "start": s.get("start"), "end": s.get("end")}
                          for s in sorted(store.sprints["sprints"].values(), key=lambda s: (s.get("start") or "", s["label"]))],
              "current": store.sprints.get("current"), "session": binding, "history": review.history(store),
-             "today": date.today().isoformat(), "site": store.config["site"]}
+             "today": date.today().isoformat(), "site": store.config["site"], "warnings": store.warnings}
     if sprint:
         since, until = review.sprint_range(sprint)
         rows = review.ticket_rows(sprint, store.tickets, store.hours_by_key(since, until))
@@ -242,8 +242,11 @@ def points_push(store, p):
 
 
 def time_add(store, p):
-    start = datetime.fromisoformat(p["start"]).timestamp()
-    store.add_manual(p["key"], start, float(p["minutes"]), p.get("kind", "開發"), p.get("note", ""), p.get("calendar", False))
+    try:
+        start = datetime.fromisoformat(p["start"]).timestamp()
+    except (TypeError, ValueError):
+        raise ValueError("開始時間格式不對")
+    store.add_manual(p["key"], start, p.get("minutes"), p.get("kind", "開發"), p.get("note", ""), p.get("calendar", False))
     return panel_state(store, p)
 
 

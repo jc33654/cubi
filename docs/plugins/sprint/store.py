@@ -44,6 +44,7 @@ class Store:
         self._lock = open(self.root / ".lock", "w")
         fcntl.flock(self._lock, fcntl.LOCK_EX)
         self._loaded = {}
+        self.warnings = []
         self.config = {**DEFAULT_CONFIG, **self._read("config.json", {})}
         self.sprints = self._read("sprints.json", {"current": None, "sprints": {}})
         self.tickets = self._read("tickets.json", {})
@@ -63,7 +64,9 @@ class Store:
             # Keep the broken file for the user to look at; never overwrite it with defaults silently.
             bad = path.with_name(f"{name}.bad-{int(time.time())}")
             os.replace(path, bad)
-            print(f"{name} 不是合法 JSON（{e}），已搬到 {bad.name}，改用預設", file=sys.stderr)
+            message = f"{name} 不是合法 JSON（{e}），已搬到 {bad.name}，改用預設"
+            print(message, file=sys.stderr)
+            self.warnings.append(message)
             data = default
         self._loaded[name] = json.dumps(data, sort_keys=True)
         return data

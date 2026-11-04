@@ -99,10 +99,14 @@ async function refresh(action = "panel.state", payload = {}) { state = await cal
 // focused field (by its data attribute), its text and caret, and put them back afterwards.
 function render() {
   const a = document.activeElement, tag = a && a.tagName;
-  const keep = (tag === "INPUT" || tag === "TEXTAREA") && a.dataset && Object.keys(a.dataset).length
-    ? { sel: `[data-${Object.keys(a.dataset)[0].replace(/[A-Z]/g, c => "-" + c.toLowerCase())}="${CSS.escape(Object.values(a.dataset)[0])}"]`, value: a.value, pos: a.selectionStart }
-    : null;
+  let keep = null;
+  if (tag === "INPUT" || tag === "TEXTAREA") {
+    const sel = a.id ? "#" + CSS.escape(a.id)
+      : Object.keys(a.dataset).length ? `[data-${Object.keys(a.dataset)[0].replace(/[A-Z]/g, c => "-" + c.toLowerCase())}="${CSS.escape(Object.values(a.dataset)[0])}"]` : null;
+    if (sel) keep = { sel, value: a.value, pos: a.selectionStart };
+  }
   renderSprint(); renderReview(); renderSettings();
+  if (state.warnings && state.warnings.length) status(state.warnings.join("；"), true);
   if (keep) { const el = document.querySelector(keep.sel); if (el) { el.value = keep.value; el.focus(); try { el.setSelectionRange(keep.pos, keep.pos); } catch (_) {} } }
 }
 

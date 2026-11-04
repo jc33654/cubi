@@ -18,6 +18,8 @@ final class SessionWidgetStore {
     private(set) var entries: [String: Entry] = [:]
     /// The session as the plugin should see it; set by the coordinator, which owns the store.
     @ObservationIgnored var input: (String) -> PluginIO.SessionInput? = { _ in nil }
+    /// Asks the user for one line (the argument is the prompt); nil when they cancel. Set by the app.
+    @ObservationIgnored var promptForInput: (String) -> String? = { _ in nil }
     @ObservationIgnored private var generation: [String: Int] = [:]
 
     init(registry: PluginRegistry) { self.registry = registry }
@@ -35,17 +37,24 @@ final class SessionWidgetStore {
     }
 
     /// A button in the card: run that command, then ask `session.info` again. A failed action
-    /// stays on screen (no refresh) until the next one.
-    func act(_ action: String, session: String, plugin: ToolPlugin) async {
-        guard plugin.isHook(action) else { return }
-        CubiLog.write("widget \(plugin.id) \(action) session=\(session.prefix(8))")
-        if await run(action, session: session, plugin: plugin) { await refresh(session: session, plugin: plugin) }
+    /// stays on screen (no refresh) until the next one. An action with `input` first asks the
+    /// user for a line; cancelling runs nothing.
+    func act(_ action: PluginIO.WidgetOutput.Action, session: String, plugin: ToolPlugin) async {
+        guard plugin.isHook(action.action) else { return }
+        var typed: String?
+        if let prompt = action.input {
+            guard let line = promptForInput(prompt).flatMap(PluginIO.cleanInput) else { return }
+            typed = line
+        }
+        CubiLog.write("widget \(plugin.id) \(action.action) session=\(session.prefix(8))\(typed == nil ? "" : " input")")
+        if await run(action.action, session: session, plugin: plugin, typed: typed) { await refresh(session: session, plugin: plugin) }
     }
 
     @discardableResult
-    private func run(_ action: String, session: String, plugin: ToolPlugin) async -> Bool {
+    private func run(_ action: String, session: String, plugin: ToolPlugin, typed: String? = nil) async -> Bool {
         let key = Self.key(session, plugin.id)
-        guard registry.isEnabled(plugin.id), let input = input(session) else { return false }
+        guard registry.isEnabled(plugin.id), var input = input(session) else { return false }
+        input.input = typed
         let gen = (generation[key] ?? 0) + 1
         generation[key] = gen
         var entry = entries[key] ?? Entry()

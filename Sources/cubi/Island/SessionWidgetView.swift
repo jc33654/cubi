@@ -58,7 +58,7 @@ private struct WidgetSection: View {
             HStack(spacing: 6) {
                 ForEach(Array((entry?.output?.actions ?? []).enumerated()), id: \.offset) { _, action in
                     CardButton(title: action.label, role: .quiet) {
-                        Task { await store.act(action.action, session: bot.id, plugin: tool) }
+                        Task { await store.act(action, session: bot.id, plugin: tool) }
                     }
                 }
                 CardButton(title: "開面板", role: .secondary) { state.onOpenTool(tool.id, bot.id) }

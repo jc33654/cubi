@@ -72,6 +72,13 @@ final class FloatingController {
     func dragMoved(mouse: CGPoint) {
         guard let p = panel else { return }
         if grab == nil {
+            // For the drag the window shrinks to the island. With separate Spaces per display a
+            // window is shown on the display most of its frame is on, so the 1000 pt transparent
+            // frame kept the island stuck at the edge while the pointer was already next door.
+            let anchor = Self.anchor(of: p)
+            let island = state.floatingSize(for: state.mode)
+            let size = CGSize(width: island.width + 40, height: island.height + 40)
+            p.setFrame(CGRect(x: anchor.x - size.width / 2, y: anchor.y - size.height, width: size.width, height: size.height), display: true)
             grab = CGPoint(x: mouse.x - p.frame.origin.x, y: mouse.y - p.frame.origin.y)
             p.ignoresMouseEvents = false
         }
@@ -83,7 +90,10 @@ final class FloatingController {
     /// the main screen (the notch, or the bar on a Mac without one) and should dock again.
     func dragEnded(notch: NotchGeometry) -> Bool {
         grab = nil
-        guard let p = panel, let rect = islandRect() else { return false }
+        guard let p = panel else { return false }
+        // Back to the full frame, the island staying where it was dropped.
+        p.setFrame(CGRect(origin: Self.origin(forAnchor: Self.anchor(of: p)), size: FloatingPanel.size), display: true)
+        guard let rect = islandRect() else { return false }
         let f = notch.screenFrame
         if rect.maxY >= f.maxY - 60, abs(rect.midX - f.midX) <= 200 { return true }
         p.setFrameOrigin(clamped(p.frame.origin))

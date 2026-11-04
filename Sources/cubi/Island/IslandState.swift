@@ -98,7 +98,7 @@ final class IslandState {
     var dragCenterX: CGFloat = 0
     /// Where inside the robot it was grabbed, so it does not jump to the pointer.
     private var grabOffset: CGFloat = 0
-    /// The user dropped a robot: the new order of every session (resting ones included, demo excluded).
+    /// The user dropped a robot: the new order of every session (resting ones included).
     @ObservationIgnored var onReorder: ([String]) -> Void = { _ in }
 
     /// Gap between robots on the wing; the drop slot maths relies on the HStack using the same.
@@ -129,7 +129,7 @@ final class IslandState {
     func endDrag() {
         guard draggingBot != nil else { return }
         draggingBot = nil
-        onReorder(bots.map(\.id).filter { $0 != "demo" })
+        onReorder(bots.map(\.id))
     }
 
     /// The island hid mid-drag: no drop is coming, keep what was arranged. (A robot vanishing

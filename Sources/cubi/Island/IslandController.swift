@@ -11,7 +11,6 @@ final class IslandController {
     private var closeWork: DispatchWorkItem?
     private var pointerInside = false
     private var screenObserver: NSObjectProtocol?
-    private var demoBot: BotRuntime?
     private var floating: FloatingController!
 
     init() {
@@ -247,33 +246,6 @@ final class IslandController {
             if state.mode == .hidden { setMode(.compact) }
         } else if !pointerInside && !state.holdOpen {
             scheduleClose(after: 1)
-        }
-    }
-
-    func addDemoBot() {
-        guard demoBot == nil else { return }
-        let id = "demo"
-        let bot = BotRuntime(id: id, name: "demo", color: SessionPalette.color(for: id))
-        bot.ticker = "示範用，不是真的 session"
-        bot.startedAt = Date().timeIntervalSinceReferenceDate
-        demoBot = bot
-        state.bots.append(bot)
-    }
-
-    func removeDemoBot() {
-        if state.selectedSession == "demo" { state.selectedSession = nil }
-        state.bots.removeAll { $0.id == "demo" }
-        demoBot = nil
-    }
-
-    func setDemoState(_ s: BotState) {
-        addDemoBot()
-        demoBot?.model.setState(s)
-        demoBot?.stateLabel = s.rawValue
-        if s == .tired { demoBot?.model.contextPercent = 92 }
-        if state.mode == .hidden {
-            setMode(.compact)
-            scheduleClose(after: 4)
         }
     }
 }

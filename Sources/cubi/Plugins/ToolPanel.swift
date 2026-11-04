@@ -122,6 +122,29 @@ private final class ToolBridge: NSObject, WKScriptMessageHandlerWithReply {
             replyHandler(nil, "這個插件已在設定頁關閉")
             return
         }
+        // Built in: start a Claude Code session in a directory with a first prompt, the way the
+        // 開新 session dialog does. `{action:"session.new", args:["{\"directory\":…,\"prompt\":…}"]}`.
+        if action == "session.new" {
+            guard let raw = (body["args"] as? [String])?.first, let data = raw.data(using: .utf8),
+                  let spec = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let dir = spec["directory"] as? String, !dir.isEmpty else {
+                replyHandler(nil, "session.new 要 args[0] 是 {\"directory\", \"prompt\"} 的 JSON")
+                return
+            }
+            let directory = (dir as NSString).expandingTildeInPath
+            var isDir: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: directory, isDirectory: &isDir), isDir.boolValue else {
+                replyHandler(nil, "找不到目錄 \(directory)")
+                return
+            }
+            let prompt = (spec["prompt"] as? String).flatMap { $0.isEmpty ? nil : String($0.prefix(ToolPlugin.textLimit)) }
+            CubiLog.write("tool \(tool.id) session.new in \(directory)")
+            Task { @MainActor in
+                let error = await SessionLauncher.launch(LaunchRequest(directory: directory, prompt: prompt, resume: .none, terminal: .automatic))
+                if let error { replyHandler(nil, error) } else { replyHandler(["ok": true], nil) }
+            }
+            return
+        }
         // Built in: native file pickers, no command involved.
         if action == "pick.file" || action == "pick.dir" {
             let panel = NSOpenPanel()

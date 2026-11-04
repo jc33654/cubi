@@ -32,9 +32,16 @@ private func tool() throws -> ToolPlugin {
     #expect(out.rows == [.init(label: "今日", value: "2h 35m", url: nil),
                          .init(label: "PROJ-12", value: "範例工單 甲", url: "https://jira.example/browse/PROJ-12"),
                          .init(label: "x", value: "y", url: nil)])
-    #expect(out.actions == [.init(label: "同步 Jira", action: "sync")])
+    #expect(out.actions == [.init(label: "同步 Jira", action: "sync", input: nil)])
     let bare = try PluginIO.WidgetOutput.parse(#"{"rows":[]}"#, tool: try tool())
     #expect(bare.rows.isEmpty && bare.actions.isEmpty && bare.title == nil)
+    // An action that wants a line from the user carries the prompt to show.
+    let asking = try PluginIO.WidgetOutput.parse(#"{"actions":[{"label":"綁單號…","action":"sync","input":"單號（可多個，用空白隔開）"}]}"#, tool: try tool())
+    #expect(asking.actions == [.init(label: "綁單號…", action: "sync", input: "單號（可多個，用空白隔開）")])
+    #expect(PluginIO.SessionInput(id: "s", name: "n", cwd: nil, projectDirectory: nil, agent: "a", segments: [], input: "PROJ-1 PROJ-2").json()
+            == #"{"agent":"a","id":"s","input":"PROJ-1 PROJ-2","name":"n","segments":[]}"#)
+    #expect(PluginIO.cleanInput("  PROJ-1 x\u{7}\t ") == "PROJ-1 x" && PluginIO.cleanInput(" \n ") == nil)
+    #expect(PluginIO.cleanInput(String(repeating: "a", count: 600))?.count == PluginIO.inputLimit)
 }
 
 @Test func widgetOutputCapsAndRejects() throws {

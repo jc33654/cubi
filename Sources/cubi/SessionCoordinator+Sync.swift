@@ -12,7 +12,7 @@ extension SessionCoordinator {
         // user had arranged, and do it here rather than through onReorder, which would re-enter sync().
         if let dragging = state.draggingBot, store.sessions[dragging] == nil {
             state.draggingBot = nil
-            store.reorder(state.bots.map(\.id).filter { $0 != "demo" && $0 != dragging })
+            store.reorder(state.bots.map(\.id).filter { $0 != dragging })
         }
         var existing = Dictionary(uniqueKeysWithValues: state.bots.map { ($0.id, $0) })
         var bots: [BotRuntime] = []
@@ -49,7 +49,6 @@ extension SessionCoordinator {
             bot.model.setState(info.botState)
             bots.append(bot)
         }
-        if let demo = existing["demo"] { bots.append(demo) }
         if state.draggingBot != nil {
             // Mid-drag the island's order is the truth; the store catches up when the robot is dropped.
             let shown = state.bots.map(\.id)

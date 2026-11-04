@@ -7,6 +7,8 @@ public enum PluginIO {
     public static let maxRows = 10
     public static let maxActions = 5
     public static let valueLimit = 200
+    /// A line the user types for an action: printable, this long at most.
+    public static let inputLimit = 512
     public static let titleLimit = 60
     public static let calendarTitleLimit = 120
     public static let maxCalendarEntries = 50
@@ -33,10 +35,12 @@ public enum PluginIO {
         public var projectDirectory: String?
         public var agent: String
         public var segments: [Segment]
+        /// What the user typed for an action that asked for `input`; absent otherwise.
+        public var input: String?
 
-        public init(id: String, name: String, cwd: String?, projectDirectory: String?, agent: String, segments: [Segment]) {
+        public init(id: String, name: String, cwd: String?, projectDirectory: String?, agent: String, segments: [Segment], input: String? = nil) {
             self.id = id; self.name = name; self.cwd = cwd; self.projectDirectory = projectDirectory
-            self.agent = agent; self.segments = segments
+            self.agent = agent; self.segments = segments; self.input = input
         }
 
         public func json() -> String { PluginIO.encode(self) }
@@ -65,6 +69,9 @@ public enum PluginIO {
             public var label: String
             /// A hook-shaped command of the same plugin.
             public var action: String
+            /// When set, the app asks the user for a line of text (this is the prompt) and passes
+            /// it as `input`; the action is not run when the user cancels.
+            public var input: String?
         }
 
         public var title: String?
@@ -84,7 +91,8 @@ public enum PluginIO {
             for a in (v["actions"]?.array ?? []).prefix(maxActions) {
                 guard let label = a["label"]?.string, let action = a["action"]?.string else { throw ParseError.badAction("缺 label 或 action") }
                 guard tool.isHook(action) else { throw ParseError.badAction("「\(action)」不是這個插件的 hook 命令") }
-                actions.append(Action(label: String(label.prefix(titleLimit)), action: action))
+                actions.append(Action(label: String(label.prefix(titleLimit)), action: action,
+                                      input: a["input"]?.string.map { String($0.prefix(titleLimit)) }))
             }
             return WidgetOutput(title: v["title"]?.string.map { String($0.prefix(titleLimit)) }, rows: rows, actions: actions,
                                 error: v["error"]?.string)
@@ -152,6 +160,12 @@ public enum PluginIO {
             case .badCalendar(let i, let why): return "calendar[\(i)]：\(why)"
             }
         }
+    }
+
+    /// What the user typed, trimmed and cut to `inputLimit`; nil when nothing printable is left.
+    public static func cleanInput(_ s: String) -> String? {
+        let kept = String(s.unicodeScalars.filter { $0.value >= 0x20 && $0.value != 0x7f }).trimmingCharacters(in: .whitespaces)
+        return kept.isEmpty ? nil : String(kept.prefix(inputLimit))
     }
 
     public static func isValidMarker(_ s: String) -> Bool {

@@ -59,21 +59,6 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         floatItem.target = self
         menu.addItem(floatItem)
 
-        let demo = NSMenuItem(title: "Demo 狀態", action: nil, keyEquivalent: "")
-        let sub = NSMenu()
-        for state in BotState.allCases {
-            let entry = NSMenuItem(title: state.rawValue, action: #selector(setDemoState(_:)), keyEquivalent: "")
-            entry.target = self
-            entry.representedObject = state.rawValue
-            sub.addItem(entry)
-        }
-        sub.addItem(.separator())
-        let removeDemo = NSMenuItem(title: "移除示範機器人", action: #selector(removeDemo), keyEquivalent: "")
-        removeDemo.target = self
-        sub.addItem(removeDemo)
-        demo.submenu = sub
-        menu.addItem(demo)
-
         menu.addItem(.separator())
         notifyItem.target = self
         notifyItem.state = notifier.enabled ? .on : .off
@@ -120,11 +105,6 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         island.toggleFromMenu()
     }
 
-    @objc private func setDemoState(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String, let state = BotState(rawValue: raw) else { return }
-        island.setDemoState(state)
-    }
-
     @objc private func showSettings() { openSettings() }
     @objc private func showNewSession() { openNewSession() }
 
@@ -140,10 +120,6 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     @objc private func togglePinned() {
         island.setPinned(!island.state.pinned)
         pinItem.state = island.state.pinned ? .on : .off
-    }
-
-    @objc private func removeDemo() {
-        island.removeDemoBot()
     }
 
     @objc private func toggleNotifications() {

@@ -62,8 +62,9 @@ public struct ToolPlugin: Sendable, Equatable {
     public static let textLimit = 262_144
     public static let minRefresh = 10
     public static let minTickInterval = 30
-    /// Handled by the panel itself (native pickers); a manifest cannot take these names.
-    public static let reservedActions: Set<String> = ["pick.file", "pick.dir"]
+    /// Handled by the panel itself (native pickers, starting a Claude Code session); a manifest
+    /// cannot take these names.
+    public static let reservedActions: Set<String> = ["pick.file", "pick.dir", "session.new"]
 
     public var id: String
     public var displayName: String

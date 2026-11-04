@@ -36,6 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.toolPanels = toolPanels
         let widgets = SessionWidgetStore(registry: coordinator.registry)
         widgets.input = { [weak coordinator] in coordinator?.sessionInput(for: $0) }
+        widgets.promptForInput = Self.askForLine
         island.state.widgets = widgets
         island.state.onOpenTool = { [toolPanels, weak coordinator] tool, session in
             toolPanels.show(tool, session: coordinator?.sessionInput(for: session))
@@ -70,6 +71,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         island.showBriefly()
+    }
+
+    /// A one-line question from a plugin's card (the island has no text fields of its own).
+    static func askForLine(_ prompt: String) -> String? {
+        let alert = NSAlert()
+        alert.messageText = prompt
+        alert.addButton(withTitle: "確定")
+        alert.addButton(withTitle: "取消")
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+        NSApp.activate(ignoringOtherApps: true)
+        return alert.runModal() == .alertFirstButtonReturn ? field.stringValue : nil
     }
 
     /// Clicking the app in the Dock/Finder while it runs also reveals the island.

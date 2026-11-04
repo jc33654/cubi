@@ -88,6 +88,51 @@ private func hook(_ id: String, _ event: CanonicalEvent, cwd: String? = "/Users/
     #expect(store.sessions["s"]?.botState == .thinking)
 }
 
+@Test func activityIsCutIntoSegmentsAtTheSleepGap() {
+    var store = SessionStore()
+    _ = store.apply(hook("s", .sessionStart(source: nil)), now: 1000)
+    #expect(store.sessions["s"]?.segmentStart == 1000 && store.sessions["s"]?.segments.isEmpty == true)
+    _ = store.apply(hook("s", .prompt("改退款流程")), now: 1100)
+    _ = store.apply(hook("s", .toolStart(tool: "Edit", input: .null)), now: 1400)
+    // The status line is not activity: it neither extends nor opens a stretch.
+    _ = store.apply(hook("s", .statusline(StatuslineInfo())), now: 1500)
+    #expect(store.sessions["s"]?.openSegment == ActivitySegment(start: 1000, end: 1400))
+    // A tick after the gap closes the stretch at the last event, not at the tick.
+    store.tick(now: 1400 + 600)
+    #expect(store.sessions["s"]?.segments == [ActivitySegment(start: 1000, end: 1400)])
+    #expect(store.sessions["s"]?.openSegment == nil)
+    // The next event opens a new stretch; a lone event never becomes a zero-length segment.
+    _ = store.apply(hook("s", .prompt("繼續")), now: 5000)
+    #expect(store.sessions["s"]?.openSegment == ActivitySegment(start: 5000, end: 5000))
+    store.tick(now: 5600)
+    #expect(store.sessions["s"]?.segments.count == 1)
+    // An event arriving after the gap with no tick in between still closes the old stretch.
+    _ = store.apply(hook("s", .prompt("a")), now: 6000)
+    _ = store.apply(hook("s", .prompt("b")), now: 6100)
+    _ = store.apply(hook("s", .prompt("c")), now: 6100 + 700)
+    #expect(store.sessions["s"]?.segments.last == ActivitySegment(start: 6000, end: 6100))
+    #expect(store.sessions["s"]?.segmentStart == 6800)
+    // SessionEnd closes at the end itself.
+    _ = store.apply(hook("s", .sessionEnd(reason: "exit")), now: 6900)
+    #expect(store.sessions["s"]?.segments.last == ActivitySegment(start: 6800, end: 6900) && store.sessions["s"]?.segmentStart == nil)
+}
+
+@Test func segmentsFollowTheSleepSettingAndAreForgottenAfterAWeek() {
+    var store = SessionStore()
+    store.sleepAfter = 1800
+    _ = store.apply(hook("s", .sessionStart(source: nil)), now: 0)
+    _ = store.apply(hook("s", .prompt("x")), now: 1700)   // within the longer gap: same stretch
+    #expect(store.sessions["s"]?.openSegment == ActivitySegment(start: 0, end: 1700))
+    store.tick(now: 1700 + 1800)
+    #expect(store.sessions["s"]?.segments == [ActivitySegment(start: 0, end: 1700)])
+    // A waiting session (pending question) still has its stretch closed when it falls silent.
+    _ = store.apply(hook("s", .question(.object([:]))), now: 4000)
+    store.tick(now: 4000 + 1800)
+    #expect(store.sessions["s"]?.segmentStart == nil && store.sessions["s"]?.botState == .waiting)
+    store.tick(now: 1700 + SessionStore.segmentRetention + 1)
+    #expect(store.sessions["s"]?.segments.isEmpty == true)
+}
+
 @Test func sessionEndForUnknownSessionIsIgnored() {
     var store = SessionStore()
     #expect(store.apply(hook("ghost", .sessionEnd(reason: "other")), now: 1).isEmpty)

@@ -40,6 +40,37 @@ public struct SessionInfo: Sendable, Equatable, Identifiable {
     public var resting: Bool { rest != .none }
 
     public enum Pending: Sendable, Equatable { case approval(tool: String), question }
+
+    /// Stretches of hook activity, closed when the session fell silent for `sleepAfter`; the
+    /// stretch still running starts at `segmentStart` and reaches `lastEventAt`. What plugins
+    /// turn into worked hours and calendar events.
+    public var segments: [ActivitySegment] = []
+    public var segmentStart: Double? = nil
+    public var openSegment: ActivitySegment? { segmentStart.map { ActivitySegment(start: $0, end: lastEventAt) } }
+
+    mutating func noteActivity(now: Double, gap: Double) {
+        guard let start = segmentStart else { segmentStart = now; return }
+        if now - lastEventAt >= gap {
+            closeSegment(at: lastEventAt)
+            segmentStart = now
+        } else if now < start {
+            segmentStart = now
+        }
+    }
+
+    mutating func closeSegment(at end: Double) {
+        if let start = segmentStart, end > start { segments.append(ActivitySegment(start: start, end: end)) }
+        segmentStart = nil
+    }
+}
+
+/// Reference-date seconds, like `SessionInfo.lastEventAt`.
+public struct ActivitySegment: Sendable, Equatable {
+    public var start: Double
+    public var end: Double
+
+    public init(start: Double, end: Double) { self.start = start; self.end = end }
+    public var duration: Double { end - start }
 }
 
 /// Side effects the store cannot perform itself (timers, notifications, usage display).

@@ -64,9 +64,9 @@ public struct SessionStore: Sendable {
             }
         }
         var s = sessions[id]!
-        s.lastEventAt = now
         // The status line keeps running for a short while after SessionEnd; it must not resurrect.
         if case .statusline = hook.event {} else {
+            s.noteActivity(now: now, gap: sleepAfter)
             s.ended = false
             // Auto-rested: anything happening brings it back. Manually rested: only the user does.
             if s.rest == .auto || (s.rest == .manual && hook.event.needsTheUser) {
@@ -74,6 +74,7 @@ public struct SessionStore: Sendable {
                 manuallyRested.remove(id)
             }
         }
+        s.lastEventAt = now
         if s.cwd == nil { s.cwd = hook.session.cwd }
         if s.client.tty == nil { s.client = hook.session.client }
         if let t = hook.session.transcriptPath { s.transcriptPath = t }
@@ -150,6 +151,7 @@ public struct SessionStore: Sendable {
             s.ended = true
             s.botState = .sleeping
             s.ticker = "結束"
+            s.closeSegment(at: now)
             effects.append(.removeLater(id, after: Self.endedLinger))
         case .subagentStart(let type):
             s.botState = .working
@@ -240,13 +242,22 @@ public struct SessionStore: Sendable {
         sessions[id] = s
     }
 
+    /// Closed activity older than this is dropped.
+    public static let segmentRetention = 7 * 24 * 3600.0
+
     public mutating func tick(now: Double) {
-        for (id, var s) in sessions where !s.ended && s.pending == nil {
-            if now - s.lastEventAt >= sleepAfter, s.botState == .idle || s.botState == .tired { s.botState = .sleeping }
-            if now - s.lastEventAt >= restAfter, s.rest == .none { s.rest = .auto }
-            // The clock was lengthened (or turned off): a session that rested on its own comes back.
-            // Sleeping is not undone the same way: a manual rest is sleeping too.
-            if now - s.lastEventAt < restAfter, s.rest == .auto { s.rest = .none }
+        for (id, var s) in sessions {
+            // A stretch of work ends when the session falls silent, however the robot looks
+            // (a pending question left overnight is not work either).
+            if s.segmentStart != nil, now - s.lastEventAt >= sleepAfter { s.closeSegment(at: s.lastEventAt) }
+            s.segments.removeAll { $0.end < now - Self.segmentRetention }
+            if !s.ended && s.pending == nil {
+                if now - s.lastEventAt >= sleepAfter, s.botState == .idle || s.botState == .tired { s.botState = .sleeping }
+                if now - s.lastEventAt >= restAfter, s.rest == .none { s.rest = .auto }
+                // The clock was lengthened (or turned off): a session that rested on its own comes back.
+                // Sleeping is not undone the same way: a manual rest is sleeping too.
+                if now - s.lastEventAt < restAfter, s.rest == .auto { s.rest = .none }
+            }
             sessions[id] = s
         }
     }

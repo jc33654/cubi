@@ -73,6 +73,20 @@ def session_of(p):
     return p.get("session") or p
 
 
+def target_sprint(store, p):
+    """The sprint the payload names, else the current one; a name that does not exist is an error,
+    never silently the current sprint."""
+    if p.get("label"):
+        s = store.sprint(p["label"])
+        if not s:
+            raise ValueError(f"沒有 sprint「{p['label']}」")
+        return s
+    s = store.current_sprint()
+    if not s:
+        raise ValueError("先建一個 sprint")
+    return s
+
+
 def current_range(store):
     s = store.current_sprint()
     return review.sprint_range(s) if s else (time.time() - 14 * 86400, None)
@@ -160,9 +174,7 @@ def sprint_new(store, p):
 
 
 def sprint_update(store, p):
-    s = store.sprint(p.get("label")) or store.current_sprint()
-    if not s:
-        raise ValueError("沒有這個 sprint")
+    s = target_sprint(store, p)
     for k in ("name", "start", "end", "goal"):
         if k in p:
             s[k] = p[k]
@@ -177,9 +189,7 @@ def sprint_select(store, p):
 
 
 def sprint_sync(store, p):
-    s = store.sprint(p.get("label")) or store.current_sprint()
-    if not s:
-        raise ValueError("先建一個 sprint")
+    s = target_sprint(store, p)
     jql = store.config["jql"].format(project=store.config["projectKey"], label=s["label"])
     field = store.config["pointsField"]
     for issue in jira(store).search(jql, TICKET_FIELDS + [field]):
@@ -266,9 +276,7 @@ def session_shares(store, p):
 
 
 def review_update(store, p):
-    s = store.sprint(p.get("label")) or store.current_sprint()
-    if not s:
-        raise ValueError("先建一個 sprint")
+    s = target_sprint(store, p)
     r = s.setdefault("review", empty_review())
     for k in ("wentWell", "toImprove", "suggestions", "thanks"):
         if k in p:
@@ -277,9 +285,7 @@ def review_update(store, p):
 
 
 def review_export(store, p):
-    s = store.sprint(p.get("label")) or store.current_sprint()
-    if not s:
-        raise ValueError("先建一個 sprint")
+    s = target_sprint(store, p)
     since, until = review.sprint_range(s)
     rows = review.ticket_rows(s, store.tickets, store.hours_by_key(since, until))
     folder = os.path.expanduser(store.config["reviewDir"])

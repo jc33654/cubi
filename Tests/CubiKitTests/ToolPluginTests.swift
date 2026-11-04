@@ -44,7 +44,7 @@ private let sample = #"""
     fails(#"{"id":"T!","name":"T","panel":{"file":"a"}}"#, .badID("T!"))
     fails(#"{"id":"t","name":"T"}"#, .missingField("panel.file"))
     fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"x":{"run":[]}}}"#, .badCommand("x", "run 要是非空的字串陣列"))
-    fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"x":{"run":["cli","a"]}}}"#, .badCommand("x", "執行檔要是絕對路徑（可用 ~）"))
+    fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"x":{"run":[""]}}}"#, .badCommand("x", "run 要是非空的字串陣列"))
     fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"x":{"run":["/c","$3"],"args":["name"]}}}"#, .badCommand("x", "$3 沒有對應的 args"))
     fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"x":{"run":["/c","$1"],"args":["text"]}}}"#, .badCommand("x", "args[0] 是 text，只能經 stdin 傳"))
     fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"x":{"run":["/c"],"args":["name"],"stdin":2}}}"#, .badCommand("x", "stdin 要在 1…1"))
@@ -53,10 +53,61 @@ private let sample = #"""
     fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"pick.file":{"run":["/c"]}}}"#, .badCommand("pick.file", "保留給面板內建的選擇器，不能自己定義"))
 }
 
+@Test func toolManifestResolvesPluginRelativeCommands() throws {
+    let t = try parse(#"""
+    {"id":"t","name":"T","panel":{"file":"a"},"commands":{
+      "a": {"run": ["cli", "x"]},
+      "b": {"run": ["/usr/bin/python3", "$plugin/tool.py", "run", "$plugin"]},
+      "c": {"run": ["$plugin/bin/cli"]}
+    }}
+    """#)
+    #expect(t.directory == "/plugins/t")
+    #expect(t.commands["a"]?.run == ["/plugins/t/cli", "x"])
+    #expect(t.commands["b"]?.run == ["/usr/bin/python3", "/plugins/t/tool.py", "run", "/plugins/t"])
+    #expect(t.commands["c"]?.run == ["/plugins/t/bin/cli"])
+    #expect(try t.invocation(action: "a", args: []).directory == "/plugins/t")
+}
+
+private let hooked = #"""
+{"id":"t","name":"T","panel":{"file":"a"},
+ "session": {"info": "session.info", "refresh": 30},
+ "tick": {"action": "tick"},
+ "commands": {
+   "session.info": {"run": ["$plugin/t.py", "info"], "args": ["text"], "stdin": 1},
+   "tick":         {"run": ["$plugin/t.py", "tick"], "args": ["text"], "stdin": 1},
+   "sync":         {"run": ["$plugin/t.py", "sync"], "args": ["text"], "stdin": 1},
+   "open":         {"run": ["$plugin/t.py", "open"], "args": ["text"], "stdin": 1, "reveal": true},
+   "plain":        {"run": ["$plugin/t.py", "plain"]}
+ }}
+"""#
+
+@Test func toolManifestParsesSessionAndTickHooks() throws {
+    let t = try parse(hooked)
+    #expect(t.session == .init(info: "session.info", refresh: 30))
+    #expect(t.tick == .init(action: "tick", every: 60))
+    #expect(t.isHook("sync") && !t.isHook("open") && !t.isHook("plain") && !t.isHook("missing"))
+    let plain = try parse(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{}}"#)
+    #expect(plain.session == nil && plain.tick == nil)
+}
+
+@Test func toolManifestRejectsBadHooks() {
+    func fails(_ json: String, _ expected: ToolPlugin.LoadError) {
+        #expect(throws: expected) { try parse(json) }
+    }
+    let cmds = #""commands":{"h":{"run":["/c"],"args":["text"],"stdin":1},"p":{"run":["/c"]},"r":{"run":["/c"],"args":["text"],"stdin":1,"reveal":true}}"#
+    fails(#"{"id":"t","name":"T","panel":{"file":"a"},"session":{},\#(cmds)}"#, .missingField("session.info"))
+    fails(#"{"id":"t","name":"T","panel":{"file":"a"},"session":{"info":"nope"},\#(cmds)}"#, .badHook("session.info", "沒有這個命令「nope」"))
+    fails(#"{"id":"t","name":"T","panel":{"file":"a"},"session":{"info":"p"},\#(cmds)}"#, .badHook("session.info", "「p」要宣告 args: [\"text\"], stdin: 1"))
+    fails(#"{"id":"t","name":"T","panel":{"file":"a"},"session":{"info":"r"},\#(cmds)}"#, .badHook("session.info", "「r」不能同時 reveal"))
+    fails(#"{"id":"t","name":"T","panel":{"file":"a"},"session":{"info":"h","refresh":5},\#(cmds)}"#, .badHook("session.refresh", "最少 10 秒"))
+    fails(#"{"id":"t","name":"T","panel":{"file":"a"},"tick":{"action":"h","every":10},\#(cmds)}"#, .badHook("tick.every", "最少 30 秒"))
+    fails(#"{"id":"t","name":"T","panel":{"file":"a"},"tick":{},\#(cmds)}"#, .missingField("tick.action"))
+}
+
 @Test func invocationSubstitutesAndFeedsStdin() throws {
     let t = try parse(sample)
     let status = try t.invocation(action: "status", args: [])
-    #expect(status == .init(executable: "/Users/me/.t/bin/cli", arguments: ["status", "--json"], stdin: nil, reveal: false))
+    #expect(status == .init(executable: "/Users/me/.t/bin/cli", arguments: ["status", "--json"], stdin: nil, reveal: false, directory: "/plugins/t"))
     let set = try t.invocation(action: "config.set", args: ["notify.sound", "on"])
     #expect(set.arguments == ["config", "set", "notify.sound", "on"])
     let write = try t.invocation(action: "asset.write", args: ["skills", "my-skill", "# 中文內容\n"])

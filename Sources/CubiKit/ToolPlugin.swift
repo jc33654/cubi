@@ -25,7 +25,8 @@ public struct ToolPlugin: Sendable, Equatable {
     }
 
     public struct Command: Sendable, Equatable {
-        /// argv: an absolute executable, then arguments; `$1`…`$n` stand for the caller's arguments.
+        /// argv, resolved: an absolute executable, then arguments; `$1`…`$n` stand for the caller's
+        /// arguments (`$plugin` and relative executables were resolved when the manifest was parsed).
         public var run: [String]
         public var args: [ArgType]
         /// 1-based index of the argument fed on stdin instead of argv.
@@ -39,28 +40,52 @@ public struct ToolPlugin: Sendable, Equatable {
         public var arguments: [String]
         public var stdin: String?
         public var reveal: Bool
+        /// The plugin's own directory, the command's working directory.
+        public var directory: String
+    }
+
+    /// `session.info`: the command that fills the plugin's section of a session's detail card.
+    public struct SessionHook: Sendable, Equatable {
+        public var info: String
+        /// Seconds between refreshes while the session is selected.
+        public var refresh: Int
+    }
+
+    /// `tick`: the command run every `every` seconds with all live sessions, whose output may
+    /// ask the app for things only it can do (calendar events).
+    public struct TickHook: Sendable, Equatable {
+        public var action: String
+        public var every: Int
     }
 
     public static let defaultBridge = "cubi"
     public static let textLimit = 262_144
+    public static let minRefresh = 10
+    public static let minTickInterval = 30
     /// Handled by the panel itself (native pickers); a manifest cannot take these names.
     public static let reservedActions: Set<String> = ["pick.file", "pick.dir"]
 
     public var id: String
     public var displayName: String
+    /// Where the manifest lives; `$plugin` in argv and relative executables resolve against it.
+    public var directory: String
     public var panel: Panel
     public var commands: [String: Command]
+    public var session: SessionHook?
+    public var tick: TickHook?
 
     public enum LoadError: Error, Equatable, LocalizedError {
         case badID(String)
         case missingField(String)
         case badCommand(String, String)
+        case badHook(String, String)
 
         public var errorDescription: String? {
             switch self {
             case .badID(let id): return "id「\(id)」不合法（小寫英數與 -，最多 24 字）"
             case .missingField(let f): return "缺少欄位 \(f)"
             case .badCommand(let action, let why): return "commands.\(action)：\(why)"
+            case .badHook(let field, let why): return "\(field)：\(why)"
             }
         }
     }
@@ -100,11 +125,12 @@ public struct ToolPlugin: Sendable, Equatable {
         var commands: [String: Command] = [:]
         for (action, spec) in m["commands"]?.object ?? [:] {
             if reservedActions.contains(action) { throw LoadError.badCommand(action, "保留給面板內建的選擇器，不能自己定義") }
-            guard let run = spec["run"]?.array?.compactMap(\.string), !run.isEmpty else {
+            guard let run = spec["run"]?.array?.compactMap(\.string), !run.isEmpty, !run[0].isEmpty else {
                 throw LoadError.badCommand(action, "run 要是非空的字串陣列")
             }
-            let executable = expandTilde(run[0], home: home)
-            guard executable.hasPrefix("/") else { throw LoadError.badCommand(action, "執行檔要是絕對路徑（可用 ~）") }
+            // The executable may be absolute, `~`, `$plugin/…`, or relative to the plugin directory.
+            let executable = absolutePath(pluginPath(run[0], base: baseDirectory), base: baseDirectory, home: home)
+            let argv = run.dropFirst().map { pluginPath($0, base: baseDirectory) }
             var args: [ArgType] = []
             for (i, a) in (spec["args"]?.array ?? []).enumerated() {
                 switch a.string {
@@ -125,16 +151,46 @@ public struct ToolPlugin: Sendable, Equatable {
             for (i, a) in args.enumerated() where a == .text && stdin != i + 1 {
                 throw LoadError.badCommand(action, "args[\(i)] 是 text，只能經 stdin 傳")
             }
-            for word in run.dropFirst() {
+            for word in argv {
                 if let n = placeholder(word) {
                     guard n >= 1, n <= args.count else { throw LoadError.badCommand(action, "\(word) 沒有對應的 args") }
                     if n == stdin { throw LoadError.badCommand(action, "\(word) 已經指定走 stdin") }
                 }
             }
-            commands[action] = Command(run: [executable] + run.dropFirst(), args: args, stdin: stdin,
+            commands[action] = Command(run: [executable] + argv, args: args, stdin: stdin,
                                        reveal: spec["reveal"]?.bool ?? false)
         }
-        return ToolPlugin(id: id, displayName: name, panel: panel, commands: commands)
+
+        var session: SessionHook?
+        if let s = m["session"] {
+            guard let info = s["info"]?.string else { throw LoadError.missingField("session.info") }
+            try checkHook("session.info", action: info, in: commands)
+            let refresh = Int(s["refresh"]?.double ?? 60)
+            guard refresh >= minRefresh else { throw LoadError.badHook("session.refresh", "最少 \(minRefresh) 秒") }
+            session = SessionHook(info: info, refresh: refresh)
+        }
+        var tick: TickHook?
+        if let t = m["tick"] {
+            guard let action = t["action"]?.string else { throw LoadError.missingField("tick.action") }
+            try checkHook("tick.action", action: action, in: commands)
+            let every = Int(t["every"]?.double ?? 60)
+            guard every >= minTickInterval else { throw LoadError.badHook("tick.every", "最少 \(minTickInterval) 秒") }
+            tick = TickHook(action: action, every: every)
+        }
+        return ToolPlugin(id: id, displayName: name, directory: baseDirectory, panel: panel, commands: commands,
+                          session: session, tick: tick)
+    }
+
+    /// A hook command takes exactly one `text` argument on stdin (the JSON the app feeds it) and
+    /// answers on stdout, so it cannot also be a `reveal` command.
+    static func checkHook(_ field: String, action: String, in commands: [String: Command]) throws {
+        guard let c = commands[action] else { throw LoadError.badHook(field, "沒有這個命令「\(action)」") }
+        guard c.args == [.text], c.stdin == 1 else { throw LoadError.badHook(field, "「\(action)」要宣告 args: [\"text\"], stdin: 1") }
+        guard !c.reveal else { throw LoadError.badHook(field, "「\(action)」不能同時 reveal") }
+    }
+
+    public func isHook(_ action: String) -> Bool {
+        (try? Self.checkHook("", action: action, in: commands)) != nil
     }
 
     // MARK: - Invoking
@@ -152,7 +208,7 @@ public struct ToolPlugin: Sendable, Equatable {
             return args[n - 1]
         }
         return Invocation(executable: command.run[0], arguments: Array(arguments),
-                          stdin: command.stdin.map { args[$0 - 1] }, reveal: command.reveal)
+                          stdin: command.stdin.map { args[$0 - 1] }, reveal: command.reveal, directory: directory)
     }
 
     static func problem(with value: String, as type: ArgType) -> String? {
@@ -189,5 +245,12 @@ public struct ToolPlugin: Sendable, Equatable {
     static func absolutePath(_ path: String, base: String, home: String) -> String {
         let expanded = expandTilde(path, home: home)
         return expanded.hasPrefix("/") ? expanded : base + "/" + expanded
+    }
+
+    /// `$plugin` or `$plugin/x` → the plugin directory; anything else unchanged.
+    static func pluginPath(_ word: String, base: String) -> String {
+        if word == "$plugin" { return base }
+        if word.hasPrefix("$plugin/") { return base + word.dropFirst("$plugin".count) }
+        return word
     }
 }

@@ -32,5 +32,7 @@
 	<string>NSApplication</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Cubi 需要控制 Terminal、Ghostty 或 VS Code，才能在你點小機器人時跳到對應的分頁。</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>插件可以把 session 的工作時段寫成行事曆事件；要完整存取才能列出行事曆，並查已寫過的事件以免重複。</string>
 </dict>
 </plist>

@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var coordinator: SessionCoordinator?
     private var settings: SettingsWindow?
     private var toolPanels: ToolPanels?
+    private var ticker: PluginTicker?
     private var showObserver: NSObjectProtocol?
 
     /// Posted by a second launch so the running copy reveals the island (there is no window to show).
@@ -39,8 +40,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         island.state.onOpenTool = { [toolPanels, weak coordinator] tool, session in
             toolPanels.show(tool, session: coordinator?.sessionInput(for: session))
         }
+        let calendar = SystemCalendar()
+        let ticker = PluginTicker(registry: coordinator.registry, calendar: calendar) { [weak coordinator] in coordinator?.tickInput() }
+        self.ticker = ticker
         let settings = SettingsWindow(island: island.state, notifier: coordinator.notifier, ignored: coordinator.ignored,
-                                      timing: coordinator.timing, registry: coordinator.registry,
+                                      timing: coordinator.timing, registry: coordinator.registry, calendar: calendar,
                                       openTool: { [toolPanels] in toolPanels.show($0) })
         self.settings = settings
         let newSession = NewSessionWindow(recent: coordinator.recentProjects)
@@ -52,6 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.statusBar = statusBar
         island.contextMenu = statusBar.menu
         coordinator.start()
+        ticker.start()
         // Where development left project-local hooks behind; the settings window offers to clean them.
         if UserDefaults.standard.stringArray(forKey: HookSetupModel.projectLocalKey) == nil {
             UserDefaults.standard.set(["~/Documents/cubi"], forKey: HookSetupModel.projectLocalKey)
@@ -74,6 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        ticker?.stop()
         coordinator?.stop()
         island?.shutdown()
     }

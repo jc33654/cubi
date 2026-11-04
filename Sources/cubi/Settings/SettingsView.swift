@@ -9,6 +9,7 @@ struct SettingsView: View {
     let notifier: Notifier
     let ignored: IgnoredDirectories
     @Bindable var timing: SleepTiming
+    @Bindable var calendar: SystemCalendar
     let openTool: (String) -> Void
 
     @State private var soundsOn = Sounds.enabled
@@ -26,6 +27,8 @@ struct SettingsView: View {
                 displaySection
                 Divider()
                 sleepSection
+                Divider()
+                CalendarSection(calendar: calendar)
                 Divider()
                 scopeSection
             }

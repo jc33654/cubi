@@ -10,8 +10,9 @@ public enum PluginIO {
     public static let titleLimit = 60
     public static let calendarTitleLimit = 120
     public static let maxCalendarEntries = 50
-    /// One event may not span more than a day.
+    /// One event may not span more than a day, nor start more than a year from now.
     public static let maxCalendarSpan: Double = 24 * 3600
+    public static let maxCalendarDistance: Double = 366 * 24 * 3600
 
     /// One stretch of session activity; seconds since 1970. `open` is the stretch still running.
     public struct Segment: Sendable, Equatable, Codable {
@@ -103,11 +104,13 @@ public enum PluginIO {
             self.title = title; self.start = start; self.end = end; self.notes = notes; self.marker = marker
         }
 
-        static func validate(_ v: JSONValue, index: Int) throws -> CalendarEntry {
+        static func validate(_ v: JSONValue, index: Int, now: Double) throws -> CalendarEntry {
             guard let title = v["title"]?.string, !title.isEmpty else { throw ParseError.badCalendar(index, "缺 title") }
             guard let start = v["start"]?.double, let end = v["end"]?.double, end > start, end - start <= maxCalendarSpan else {
                 throw ParseError.badCalendar(index, "start/end 不合法（要 start < end，且不超過 24 小時）")
             }
+            // Milliseconds passed as seconds would land in the year 57000 and never be found again.
+            guard abs(start - now) <= maxCalendarDistance else { throw ParseError.badCalendar(index, "start 要在現在前後一年內（秒，不是毫秒）") }
             guard let marker = v["marker"]?.string, isValidMarker(marker) else { throw ParseError.badCalendar(index, "marker 只能有英數、:._-，1–80 字") }
             return CalendarEntry(title: String(title.prefix(calendarTitleLimit)), start: start, end: end,
                                  notes: v["notes"]?.string, marker: marker)
@@ -118,11 +121,11 @@ public enum PluginIO {
     public struct TickOutput: Sendable, Equatable {
         public var calendar: [CalendarEntry]
 
-        public static func parse(_ stdout: String) throws -> TickOutput {
+        public static func parse(_ stdout: String, now: Double = Date().timeIntervalSince1970) throws -> TickOutput {
             let v = try PluginIO.decode(stdout)
             let list = v["calendar"]?.array ?? []
             guard list.count <= maxCalendarEntries else { throw ParseError.badCalendar(list.count, "一次最多 \(maxCalendarEntries) 筆") }
-            return TickOutput(calendar: try list.enumerated().map { try CalendarEntry.validate($1, index: $0 + 1) })
+            return TickOutput(calendar: try list.enumerated().map { try CalendarEntry.validate($1, index: $0 + 1, now: now) })
         }
     }
 

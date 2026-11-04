@@ -16,6 +16,24 @@ enum ToolRunner {
     /// More than this on stdout is cut; no caller wants it (PluginIO stops at 64 KB).
     static let outputLimit = 4 << 20
 
+    /// A hook command fed the JSON the app made for it, off the main actor, within `hookTimeout`.
+    /// `.failure` is one line fit for the log and the card.
+    static func hook(_ plugin: ToolPlugin, action: String, json: String) async -> Swift.Result<String, HookFailure> {
+        let invocation: ToolPlugin.Invocation
+        do {
+            invocation = try plugin.invocation(action: action, args: [json])
+        } catch {
+            return .failure(HookFailure(message: error.localizedDescription))
+        }
+        let r = await Task.detached(priority: .utility) { run(invocation, timeout: hookTimeout) }.value
+        guard r.code == 0 else {
+            return .failure(HookFailure(message: "exit \(r.code)" + (r.err.isEmpty ? "" : " " + String(r.err.prefix(200)))))
+        }
+        return .success(r.out)
+    }
+
+    struct HookFailure: Error { var message: String }
+
     static func run(_ invocation: ToolPlugin.Invocation, timeout: TimeInterval? = nil) -> Result {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: invocation.executable)

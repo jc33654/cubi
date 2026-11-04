@@ -50,41 +50,36 @@ final class PluginTicker {
         running.insert(tool.id)
         defer { running.remove(tool.id) }
         guard let input = input() else { return }
-        let invocation: ToolPlugin.Invocation
-        do {
-            invocation = try tool.invocation(action: hook.action, args: [input.json()])
-        } catch {
-            logQuietly("tick \(tool.id): \(error.localizedDescription)")
-            return
-        }
-        let r = await Task.detached(priority: .utility) { ToolRunner.run(invocation) }.value
-        guard r.code == 0 else {
-            logQuietly("tick \(tool.id): exit \(r.code) \(r.err.prefix(200))")
-            return
+        let out: String
+        switch await ToolRunner.hook(tool, action: hook.action, json: input.json()) {
+        case .success(let text): out = text
+        case .failure(let f): logQuietly(tool.id, "run", "tick \(tool.id): \(f.message)"); return
         }
         let output: PluginIO.TickOutput
         do {
-            output = try PluginIO.TickOutput.parse(r.out)
+            output = try PluginIO.TickOutput.parse(out)
         } catch {
-            logQuietly("tick \(tool.id): \(error.localizedDescription)")
+            logQuietly(tool.id, "parse", "tick \(tool.id): \(error.localizedDescription)")
             return
         }
         guard !output.calendar.isEmpty else { return }
         guard calendar.isReady else {
-            logQuietly("tick \(tool.id): 行事曆未設定，略過 \(output.calendar.count) 筆")
+            logQuietly(tool.id, "calendar", "tick \(tool.id): 行事曆未設定，略過 \(output.calendar.count) 筆")
             return
         }
         do {
             let o = try calendar.write(output.calendar)
             if o.created + o.extended > 0 { CubiLog.write("tick \(tool.id): calendar +\(o.created) ~\(o.extended) =\(o.skipped)") }
         } catch {
-            logQuietly("tick \(tool.id): 行事曆寫入失敗：\(error.localizedDescription)")
+            logQuietly(tool.id, "write", "tick \(tool.id): 行事曆寫入失敗：\(error.localizedDescription)")
         }
     }
 
-    private func logQuietly(_ message: String) {
-        if let last = lastLogged[message], Date().timeIntervalSince(last) < Self.logQuiet { return }
-        lastLogged[message] = Date()
+    /// One line per (plugin, stage) per ten minutes, whatever the numbers in it say.
+    private func logQuietly(_ tool: String, _ stage: String, _ message: String) {
+        let key = tool + "/" + stage
+        if let last = lastLogged[key], Date().timeIntervalSince(last) < Self.logQuiet { return }
+        lastLogged[key] = Date()
         CubiLog.write(message)
     }
 }

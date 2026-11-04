@@ -32,15 +32,19 @@ public enum CalendarMerge {
 
     public static func plan(_ e: PluginIO.CalendarEntry, nearby: [Existing]) -> Plan {
         guard e.end - e.start >= minDuration else { return .skip("不到 1 分鐘") }
-        if nearby.contains(where: { markers(in: $0.notes).contains(e.marker) }) { return .skip("已寫過") }
+        // Seen before: a stretch still running is reported again with a later end, so the same
+        // marker means "update", and only an entry that adds nothing is skipped.
+        if let same = nearby.first(where: { markers(in: $0.notes).contains(e.marker) }) {
+            guard e.start < same.start || e.end > same.end else { return .skip("已寫過") }
+            return .extend(id: same.id, start: min(same.start, e.start), end: max(same.end, e.end),
+                           notes: notes(body: body(of: [same], plus: e.notes), markers: markers(in: same.notes)), remove: [])
+        }
         let adjacent = nearby
             .filter { $0.title == e.title && !markers(in: $0.notes).isEmpty && $0.end >= e.start - gap && $0.start <= e.end + gap }
             .sorted { $0.start < $1.start }
-        let notes = notes(body: e.notes, markers: adjacent.flatMap { markers(in: $0.notes) } + [e.marker])
+        let notes = notes(body: body(of: adjacent, plus: e.notes), markers: adjacent.flatMap { markers(in: $0.notes) } + [e.marker])
         guard let first = adjacent.first else { return .create(title: e.title, start: e.start, end: e.end, notes: notes) }
-        return .extend(id: first.id,
-                       start: min(e.start, adjacent.map(\.start).min() ?? e.start),
-                       end: max(e.end, adjacent.map(\.end).max() ?? e.end),
+        return .extend(id: first.id, start: min(e.start, first.start), end: max(e.end, adjacent.map(\.end).max()!),
                        notes: notes, remove: adjacent.dropFirst().map(\.id))
     }
 
@@ -48,6 +52,19 @@ public enum CalendarMerge {
         (notes ?? "").split(separator: "\n")
             .filter { $0.hasPrefix(markerLinePrefix) }
             .flatMap { $0.dropFirst(markerLinePrefix.count).split(separator: " ").map(String.init) }
+    }
+
+    /// What the events said apart from their marker lines, plus the new entry's lines, each once:
+    /// a link or a note someone typed into the event is never thrown away by an extension.
+    public static func body(of events: [Existing], plus new: String?) -> String {
+        var lines: [String] = []
+        for text in events.map(\.notes) + [new] {
+            for raw in (text ?? "").split(separator: "\n", omittingEmptySubsequences: false) {
+                let line = raw.trimmingCharacters(in: .whitespaces)
+                if !line.isEmpty, !line.hasPrefix(markerLinePrefix), !lines.contains(line) { lines.append(line) }
+            }
+        }
+        return lines.joined(separator: "\n")
     }
 
     public static func notes(body: String?, markers: [String]) -> String {

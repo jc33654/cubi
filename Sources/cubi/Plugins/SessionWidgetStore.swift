@@ -51,21 +51,16 @@ final class SessionWidgetStore {
         var entry = entries[key] ?? Entry()
         entry.loading = true
         entries[key] = entry
-        let invocation: ToolPlugin.Invocation
-        do {
-            invocation = try plugin.invocation(action: action, args: [input.json()])
-        } catch {
-            finish(key, gen: gen, failure: error.localizedDescription)
-            return false
-        }
-        let r = await Task.detached(priority: .userInitiated) { ToolRunner.run(invocation, timeout: ToolRunner.hookTimeout) }.value
-        if r.code != 0 {
-            CubiLog.write("widget \(plugin.id) \(action): exit \(r.code) \(r.err.prefix(200))")
-            finish(key, gen: gen, failure: r.err.isEmpty ? "exit \(r.code)" : String(r.err.prefix(200)))
+        let out: String
+        switch await ToolRunner.hook(plugin, action: action, json: input.json()) {
+        case .success(let text): out = text
+        case .failure(let f):
+            CubiLog.write("widget \(plugin.id) \(action): \(f.message)")
+            finish(key, gen: gen, failure: f.message)
             return false
         }
         do {
-            finish(key, gen: gen, output: try PluginIO.WidgetOutput.parse(r.out, tool: plugin))
+            finish(key, gen: gen, output: try PluginIO.WidgetOutput.parse(out, tool: plugin))
             return true
         } catch {
             CubiLog.write("widget \(plugin.id) \(action): \(error.localizedDescription)")

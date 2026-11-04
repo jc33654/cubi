@@ -58,17 +58,20 @@ private func tool() throws -> ToolPlugin {
 @Test func tickOutputValidatesCalendarEntries() throws {
     let out = try PluginIO.TickOutput.parse(#"""
     {"calendar":[{"title":"PROJ-12 範例工單","start":1762218720,"end":1762228000,"notes":"https://jira/browse/PROJ-12","marker":"sprint:s1:1762218720"}]}
-    """#)
+    """#, now: 1762230000)
+    #expect(throws: PluginIO.ParseError.badCalendar(1, "start 要在現在前後一年內（秒，不是毫秒）")) {
+        try PluginIO.TickOutput.parse(#"{"calendar":[{"title":"t","start":1762218720000,"end":1762218720600,"marker":"m"}]}"#, now: 1762230000)
+    }
     #expect(out.calendar == [.init(title: "PROJ-12 範例工單", start: 1762218720, end: 1762228000, notes: "https://jira/browse/PROJ-12", marker: "sprint:s1:1762218720")])
     #expect(try PluginIO.TickOutput.parse("{}").calendar.isEmpty)
-    #expect(throws: PluginIO.ParseError.badCalendar(1, "缺 title")) { try PluginIO.TickOutput.parse(#"{"calendar":[{"start":1,"end":2,"marker":"m"}]}"#) }
+    #expect(throws: PluginIO.ParseError.badCalendar(1, "缺 title")) { try PluginIO.TickOutput.parse(#"{"calendar":[{"start":1,"end":2,"marker":"m"}]}"#, now: 0) }
     let span = "start/end 不合法（要 start < end，且不超過 24 小時）"
-    #expect(throws: PluginIO.ParseError.badCalendar(1, span)) { try PluginIO.TickOutput.parse(#"{"calendar":[{"title":"t","start":2,"end":2,"marker":"m"}]}"#) }
-    #expect(throws: PluginIO.ParseError.badCalendar(1, span)) { try PluginIO.TickOutput.parse(#"{"calendar":[{"title":"t","start":0,"end":1e12,"marker":"m"}]}"#) }
+    #expect(throws: PluginIO.ParseError.badCalendar(1, span)) { try PluginIO.TickOutput.parse(#"{"calendar":[{"title":"t","start":2,"end":2,"marker":"m"}]}"#, now: 0) }
+    #expect(throws: PluginIO.ParseError.badCalendar(1, span)) { try PluginIO.TickOutput.parse(#"{"calendar":[{"title":"t","start":0,"end":1e12,"marker":"m"}]}"#, now: 0) }
     let tooMany = (1...51).map { #"{"title":"t","start":\#($0),"end":\#($0 + 100),"marker":"m\#($0)"}"# }.joined(separator: ",")
-    #expect(throws: PluginIO.ParseError.badCalendar(51, "一次最多 50 筆")) { try PluginIO.TickOutput.parse(#"{"calendar":[\#(tooMany)]}"#) }
+    #expect(throws: PluginIO.ParseError.badCalendar(51, "一次最多 50 筆")) { try PluginIO.TickOutput.parse(#"{"calendar":[\#(tooMany)]}"#, now: 0) }
     #expect(throws: PluginIO.ParseError.badCalendar(2, "marker 只能有英數、:._-，1–80 字")) {
-        try PluginIO.TickOutput.parse(#"{"calendar":[{"title":"t","start":1,"end":2,"marker":"ok"},{"title":"t","start":1,"end":2,"marker":"有 空白"}]}"#)
+        try PluginIO.TickOutput.parse(#"{"calendar":[{"title":"t","start":1,"end":2,"marker":"ok"},{"title":"t","start":1,"end":2,"marker":"有 空白"}]}"#, now: 0)
     }
     #expect(PluginIO.isValidMarker("sprint:manual:0f3a-1") && !PluginIO.isValidMarker("") && !PluginIO.isValidMarker(String(repeating: "a", count: 81)))
 }

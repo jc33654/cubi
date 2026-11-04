@@ -21,13 +21,12 @@ final class SystemCalendar {
     }
 
     enum CalendarError: LocalizedError {
-        case notAuthorized, notConfigured, missing(String)
+        case notAuthorized, notConfigured
 
         var errorDescription: String? {
             switch self {
             case .notAuthorized: return "沒有行事曆存取權限（設定 → 行事曆）"
             case .notConfigured: return "還沒選要寫入的行事曆，或那個行事曆已不存在（設定 → 行事曆）"
-            case .missing(let id): return "要延長的事件不見了：\(id)"
             }
         }
     }
@@ -56,12 +55,18 @@ final class SystemCalendar {
     }
 
     func requestAccess() async {
-        let granted = (try? await store.requestFullAccessToEvents()) ?? false
-        CubiLog.write("calendar access \(granted ? "granted" : "denied")")
+        do {
+            let granted = try await store.requestFullAccessToEvents()
+            CubiLog.write("calendar access \(granted ? "granted" : "denied")")
+        } catch {
+            CubiLog.write("calendar access request failed: \(error)")
+        }
         refresh()
     }
 
-    /// Carries out `CalendarMerge.plan` for each entry against the events around it.
+    /// Carries out `CalendarMerge.plan` for each entry against the events around it. Each entry
+    /// is committed on its own, so the next one in the same batch sees it (an uncommitted event
+    /// is invisible to the predicate and has no identifier yet).
     func write(_ entries: [PluginIO.CalendarEntry]) throws -> Outcome {
         guard authorized else { throw CalendarError.notAuthorized }
         guard let id = calendarID, let calendar = store.calendar(withIdentifier: id) else { throw CalendarError.notConfigured }
@@ -70,28 +75,34 @@ final class SystemCalendar {
             let events = store.events(matching: store.predicateForEvents(
                 withStart: Date(timeIntervalSince1970: e.start - CalendarMerge.gap),
                 end: Date(timeIntervalSince1970: e.end + CalendarMerge.gap), calendars: [calendar]))
-            let nearby = events.map {
-                CalendarMerge.Existing(id: $0.eventIdentifier, title: $0.title ?? "", start: $0.startDate.timeIntervalSince1970,
-                                       end: $0.endDate.timeIntervalSince1970, notes: $0.notes)
+            let nearby = events.compactMap { ev -> CalendarMerge.Existing? in
+                guard let id = ev.eventIdentifier else { return nil }
+                return CalendarMerge.Existing(id: id, title: ev.title ?? "", start: ev.startDate.timeIntervalSince1970,
+                                              end: ev.endDate.timeIntervalSince1970, notes: ev.notes)
             }
-            switch CalendarMerge.plan(e, nearby: nearby) {
-            case .skip:
-                outcome.skipped += 1
-            case .create(let title, let start, let end, let notes):
-                let event = EKEvent(eventStore: store)
-                event.calendar = calendar
-                fill(event, title: title, start: start, end: end, notes: notes)
-                try store.save(event, span: .thisEvent, commit: false)
-                outcome.created += 1
-            case .extend(let eventID, let start, let end, let notes, let remove):
-                guard let event = events.first(where: { $0.eventIdentifier == eventID }) else { throw CalendarError.missing(eventID) }
-                fill(event, title: event.title, start: start, end: end, notes: notes)
-                try store.save(event, span: .thisEvent, commit: false)
-                for extra in events where remove.contains(extra.eventIdentifier) { try store.remove(extra, span: .thisEvent, commit: false) }
-                outcome.extended += 1
+            do {
+                switch CalendarMerge.plan(e, nearby: nearby) {
+                case .skip:
+                    outcome.skipped += 1
+                case .create(let title, let start, let end, let notes):
+                    let event = EKEvent(eventStore: store)
+                    event.calendar = calendar
+                    fill(event, title: title, start: start, end: end, notes: notes)
+                    try store.save(event, span: .thisEvent, commit: true)
+                    outcome.created += 1
+                case .extend(let eventID, let start, let end, let notes, let remove):
+                    guard let event = events.first(where: { $0.eventIdentifier == eventID }) else { outcome.skipped += 1; continue }
+                    fill(event, title: e.title, start: start, end: end, notes: notes)
+                    for extra in events where remove.contains(extra.eventIdentifier) { try store.remove(extra, span: .thisEvent, commit: false) }
+                    try store.save(event, span: .thisEvent, commit: true)
+                    outcome.extended += 1
+                }
+            } catch {
+                // Drop whatever this entry left half-done, so a later write does not carry it.
+                store.reset()
+                throw error
             }
         }
-        try store.commit()
         return outcome
     }
 

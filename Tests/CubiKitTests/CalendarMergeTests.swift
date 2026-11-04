@@ -38,8 +38,19 @@ private func ours(_ id: String, _ start: Double, _ end: Double, markers: [String
     let before = ours("a", 0, 800, markers: ["sprint:s1:0"])          // ends 200 s before: within the gap
     let after = ours("b", 4800, 6000, markers: ["sprint:s1:4800"])    // starts 200 s after
     let plan = CalendarMerge.plan(entry(1000, 4600), nearby: [after, before])
-    #expect(plan == .extend(id: "a", start: 0, end: 6000, notes: "https://jira/browse/PROJ-12\n\n由 Cubi 記錄 · sprint:s1:0 sprint:s1:4800 sprint:s1:1000", remove: ["b"]))
+    // The events' own notes ("x") survive; the entry's link is added once.
+    #expect(plan == .extend(id: "a", start: 0, end: 6000, notes: "x\nhttps://jira/browse/PROJ-12\n\n由 Cubi 記錄 · sprint:s1:0 sprint:s1:4800 sprint:s1:1000", remove: ["b"]))
     // Just outside the gap on both sides: a new event.
     let plan2 = CalendarMerge.plan(entry(1000, 4600), nearby: [ours("a", 0, 699, markers: ["m"]), ours("b", 4901, 6000, markers: ["n"])])
     if case .create = plan2 {} else { Issue.record("expected create, got \(plan2)") }
+}
+
+@Test func calendarGrowsAnEventReportedAgainWithTheSameMarker() {
+    // A stretch still running comes back every tick with the same marker and a later end.
+    let written = CalendarMerge.Existing(id: "e", title: "PROJ-12 範例工單", start: 1000, end: 2000,
+                                         notes: "https://jira/browse/PROJ-12\n同事加的備註\n\n由 Cubi 記錄 · sprint:s1:1000")
+    let plan = CalendarMerge.plan(entry(1000, 4600, marker: "sprint:s1:1000"), nearby: [written])
+    #expect(plan == .extend(id: "e", start: 1000, end: 4600, notes: "https://jira/browse/PROJ-12\n同事加的備註\n\n由 Cubi 記錄 · sprint:s1:1000", remove: []))
+    // Nothing new: left alone, even if an adjacent event of ours is nearby.
+    #expect(CalendarMerge.plan(entry(1000, 2000, marker: "sprint:s1:1000"), nearby: [written, ours("b", 2100, 3000, markers: ["sprint:s1:2100"])]) == .skip("已寫過"))
 }

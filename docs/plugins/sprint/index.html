@@ -6,64 +6,82 @@
 <style>
   :root {
     color-scheme: light dark;
-    --bg: #fcfcfb; --panel: #f3f2ef; --line: #e2e0da; --ink: #0b0b0b; --ink2: #52514e; --ink3: #8a8884;
-    --accent: #2a78d6; --danger: #d03b3b; --good: #0ca30c;
-    --s1: #2a78d6; --s2: #eb6834; --grid: #e2e0da;
+    --bg: #f6f5f2; --card: #ffffff; --line: #e4e2dc; --line2: #efede8; --ink: #141413; --ink2: #5a5955; --ink3: #8f8d88;
+    --accent: #2a78d6; --accent-ink: #ffffff; --danger: #d03b3b; --good: #0ca30c; --hover: #f3f2ee;
+    --c1: #1baf7a; --c2: #eda100; --c3: #2a78d6; --c4: #eb6834; --c5: #9a9893; --grid: #e4e2dc;
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #1a1a19; --panel: #242423; --line: #383835; --ink: #f0efec; --ink2: #c3c2b7; --ink3: #8a8884;
-            --accent: #3987e5; --s1: #3987e5; --s2: #d95926; --grid: #383835; }
+    :root { --bg: #19191a; --card: #232324; --line: #353537; --line2: #2c2c2e; --ink: #f0efec; --ink2: #bdbcb6; --ink3: #85847f;
+            --accent: #3987e5; --hover: #2a2a2c; --c1: #199e70; --c2: #c98500; --c3: #3987e5; --c4: #d95926; --c5: #7a7975; --grid: #353537; }
   }
   * { box-sizing: border-box; }
-  body { margin: 0; font: 13px/1.5 -apple-system, "PingFang TC", sans-serif; color: var(--ink); background: var(--bg); }
-  header { display: flex; align-items: center; gap: 4px; padding: 10px 16px 0; border-bottom: 1px solid var(--line); }
-  header button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 6px 12px; font: inherit; color: var(--ink2); cursor: pointer; }
-  header button.on { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
-  header .status { margin-left: auto; color: var(--ink3); font-size: 12px; }
-  main { padding: 14px 16px 24px; }
+  body { margin: 0; font: 12.5px/1.55 -apple-system, "PingFang TC", "Helvetica Neue", sans-serif; color: var(--ink); background: var(--bg); }
+  header { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 2px; padding: 8px 18px 0; background: var(--bg); border-bottom: 1px solid var(--line); }
+  header button.tab { background: none; border: 0; border-bottom: 2px solid transparent; padding: 7px 12px; font: inherit; font-size: 13px; color: var(--ink2); cursor: pointer; border-radius: 0; }
+  header button.tab.on { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+  header .status { margin-left: auto; color: var(--ink3); font-size: 12px; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  header .status.err { color: var(--danger); }
+  main { padding: 16px 18px 28px; max-width: 1040px; }
   section.tab { display: none; } section.tab.on { display: block; }
-  h2 { font-size: 14px; margin: 18px 0 8px; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+  h2 { font-size: 15px; margin: 0; }
+  h3 { font-size: 12px; margin: 0 0 6px; color: var(--ink2); font-weight: 600; letter-spacing: .02em; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
+  .card .head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .card .head .sp { flex: 1; }
   .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .muted { color: var(--ink3); font-size: 12px; }
-  .chip { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); border-radius: 14px; padding: 2px 8px; background: var(--bg); }
-  .chip input { width: 44px; border: 0; background: transparent; color: var(--ink); font: inherit; text-align: right; }
-  .chip .x { cursor: pointer; color: var(--ink3); }
-  input, select, textarea { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 3px 6px; }
-  input[type=number] { width: 64px; }
-  button { font: inherit; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 5px; padding: 3px 9px; cursor: pointer; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .muted { color: var(--ink3); font-size: 11.5px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px 14px; }
+  .field label { display: block; font-size: 11px; color: var(--ink3); margin-bottom: 3px; }
+  .field input, .field select, .field textarea { width: 100%; }
+  .field .hint { font-size: 11px; color: var(--ink3); margin-top: 3px; }
+  input, select, textarea { font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent); border-color: var(--accent); }
+  input[type=number] { width: 72px; }
+  button { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 6px; padding: 5px 11px; cursor: pointer; }
+  button:hover { background: var(--hover); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  button.primary:hover { filter: brightness(1.08); background: var(--accent); }
+  button.small { padding: 2px 8px; font-size: 11.5px; }
   button:disabled { opacity: .5; cursor: default; }
   table { border-collapse: collapse; width: 100%; }
-  th, td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
-  th { color: var(--ink2); font-weight: 600; font-size: 12px; }
-  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-  td input.actual { width: 52px; text-align: right; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line2); vertical-align: middle; }
+  th { color: var(--ink3); font-weight: 600; font-size: 11px; text-transform: none; }
+  tbody tr:hover { background: var(--hover); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td input.actual { width: 60px; text-align: right; padding: 3px 6px; }
+  td .auto { color: var(--ink3); font-size: 11px; }
   a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
-  .tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
-  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
-  .tile .v { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
-  .tile .l { font-size: 11px; color: var(--ink3); }
-  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .chart { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
-  .chart h3 { font-size: 12px; margin: 0 0 4px; color: var(--ink2); }
-  .legend { display: flex; gap: 12px; font-size: 11px; color: var(--ink2); margin-bottom: 4px; }
-  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  .tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 12px 0 14px; }
+  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .tile .v { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  .tile .l { font-size: 11px; color: var(--ink3); margin-top: 2px; }
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .legend { display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+  .legend button { display: flex; align-items: center; gap: 8px; border: 0; background: none; padding: 4px 6px; border-radius: 6px; text-align: left; }
+  .legend button.on, .legend button:hover { background: var(--hover); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .legend b { margin-left: auto; font-variant-numeric: tabular-nums; }
+  .legend2 { display: flex; gap: 12px; font-size: 11px; color: var(--ink2); margin-bottom: 4px; }
+  .legend2 i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  .donut { display: grid; grid-template-columns: 170px 1fr; gap: 14px; align-items: center; }
   svg { width: 100%; height: auto; display: block; }
   svg text { font: 11px -apple-system, sans-serif; fill: var(--ink2); }
-  .lists { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  textarea { width: 100%; min-height: 80px; resize: vertical; }
+  svg path.slice { cursor: pointer; stroke: var(--card); stroke-width: 2; }
+  svg path.slice.dim { opacity: .35; }
+  .lists { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  textarea { width: 100%; min-height: 84px; resize: vertical; line-height: 1.5; }
   .err { color: var(--danger); }
-  .form { display: grid; grid-template-columns: 140px 1fr; gap: 6px 10px; align-items: center; max-width: 640px; }
-  .inline-form { background: var(--bg); border: 1px dashed var(--line); border-radius: 6px; padding: 6px 8px; margin: 4px 0; }
-  details summary { cursor: pointer; color: var(--ink2); }
+  .chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 14px; padding: 2px 10px; background: var(--bg); font-size: 12px; }
+  details summary { cursor: pointer; color: var(--ink2); font-size: 12px; }
+  .inline-form { background: var(--bg); border: 1px dashed var(--line); border-radius: 8px; padding: 8px 10px; margin: 6px 0; }
+  .section-title { font-size: 11px; color: var(--ink3); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; margin: 14px 0 6px; }
 </style>
 </head>
 <body>
 <header>
-  <button data-tab="sprint" class="on">本期 sprint</button>
-  <button data-tab="review">回顧</button>
-  <button data-tab="settings">設定</button>
+  <button class="tab on" data-tab="sprint">本期 sprint</button>
+  <button class="tab" data-tab="review">回顧</button>
+  <button class="tab" data-tab="settings">設定</button>
   <span class="status" id="status"></span>
 </header>
 <main>
@@ -76,15 +94,17 @@
 const $ = (s, el = document) => el.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
 const fmtH = secs => { if (!secs || secs < 60) return "–"; const m = Math.floor(secs / 60), h = Math.floor(m / 60); return h ? `${h}h${String(m % 60).padStart(2, "0")}m` : `${m}m`; };
-const pts = v => v == null ? "–" : (Number.isInteger(v) ? String(v) : String(v));
-let state = null, session = window.cubiSession || null, pendingSprint = null;
+const pts = v => v == null ? "–" : (Number.isInteger(v) ? String(v) : String(Math.round(v * 100) / 100));
+const CAT_COLORS = ["var(--c1)", "var(--c2)", "var(--c3)", "var(--c4)", "var(--c5)"];
+let state = null, session = window.cubiSession || null, pendingSprint = null, selectedCategory = null;
 
 function status(msg, isError) { const el = $("#status"); el.textContent = msg; el.className = "status" + (isError ? " err" : ""); }
+const bridge = () => window.webkit.messageHandlers.cubi;
 
 async function call(action, payload = {}) {
   if (session && !("session" in payload)) payload.session = session;
   status("…");
-  const r = await window.webkit.messageHandlers.cubi.postMessage({ action, args: [JSON.stringify(payload)] });
+  const r = await bridge().postMessage({ action, args: [JSON.stringify(payload)] });
   if (!r.ok) { status(r.err || "失敗", true); throw new Error(r.err || "failed"); }
   if (action === "review.export") { status("已匯出 " + r.out); return r.out; }
   const data = JSON.parse(r.out);
@@ -93,10 +113,11 @@ async function call(action, payload = {}) {
   return data;
 }
 async function refresh(action = "panel.state", payload = {}) { state = await call(action, payload); render(); }
+function link(key) { return `<a href="https://${esc(state.site)}/browse/${esc(key)}">${esc(key)} ↗</a>`; }
 
 // ---------- rendering ----------
 // A re-render while the user is typing elsewhere must not eat the keystrokes: remember the
-// focused field (by its data attribute), its text and caret, and put them back afterwards.
+// focused field (by id or data attribute), its text and caret, and put them back afterwards.
 function render() {
   const a = document.activeElement, tag = a && a.tagName;
   let keep = null;
@@ -115,52 +136,63 @@ function renderSprint() {
   let html = "";
   if (state.session) {
     const b = state.session;
-    html += `<div class="card"><div class="row"><b>這個 session</b><span class="muted">${esc(b.name)} · ${esc(b.cwd || "")}</span></div>
-      <div class="row" style="margin-top:6px">綁定：
-      ${b.keys.map(k => `<span class="chip"><a href="https://${esc(state.site)}/browse/${esc(k)}">${esc(k)}</a>
-        <input type="number" min="0" max="100" value="${b.shares[k] ?? ""}" data-share="${esc(k)}" title="比例 %">%
-        <span class="x" data-unbind="${esc(k)}" title="解除">✕</span></span>`).join("")}
-      <input id="bind-key" placeholder="加單號" size="10"><button id="bind-btn">加</button>
-      ${b.keys.length > 1 ? `<button id="shares-btn">套用比例到本 sprint</button>` : ""}
-      <span class="muted">自動抓到：${esc(b.auto.join(" ") || "無")}；比例預設平分</span></div></div>`;
+    html += `<div class="card"><div class="head"><h2>這個 session</h2><span class="muted">${esc(b.name)} · ${esc(b.cwd || "")}</span><span class="sp"></span>
+        ${b.keys.length > 1 ? `<button class="small" id="shares-btn" title="把目前比例套到本 sprint 已記錄的時段">套用比例到本 sprint</button>` : ""}</div>`;
+    if (b.keys.length) {
+      html += `<table><thead><tr><th>綁定的單</th><th>摘要</th><th class="num">比例</th><th></th></tr></thead><tbody>` +
+        b.keys.map(k => { const t = (s?.tickets || []).find(x => x.key === k) || {}; return `<tr><td>${link(k)}</td><td>${esc(t.summary || "")}</td>
+          <td class="num"><input type="number" min="0" max="100" value="${b.shares[k] ?? ""}" data-share="${esc(k)}"> %</td>
+          <td><button class="small" data-unbind="${esc(k)}">解除</button></td></tr>`; }).join("") + `</tbody></table>`;
+    } else {
+      html += `<p class="muted">還沒綁定工單。</p>`;
+    }
+    html += `<div class="row" style="margin-top:10px"><input id="bind-key" placeholder="單號，可多個" size="18"><button id="bind-btn">綁定</button>
+      <span class="muted">名稱、分支、目錄裡的單號會自動綁：${esc(b.auto.join(" ") || "目前沒抓到")}；時數預設平分</span></div></div>`;
   }
-  const options = state.sprints.map(x => `<option value="${esc(x.label)}" ${x.label === state.current ? "selected" : ""}>${esc(x.name || x.label)}</option>`).join("");
-  html += `<div class="row"><select id="sprint-select">${options}<option value="__new">＋ 新 sprint…</option></select>`;
-  if (s) html += `<input id="sp-name" value="${esc(s.name || "")}" size="12" title="名稱"><input id="sp-start" type="date" value="${esc(s.start || "")}">–<input id="sp-end" type="date" value="${esc(s.end || "")}">
-    <input id="sp-goal" value="${esc(s.goal || "")}" placeholder="目標" size="24"><button id="sp-save">存</button><button id="sp-sync" class="primary">同步 Jira</button>`;
+  const options = state.sprints.map(x => `<option value="${esc(x.label)}" ${x.label === state.current ? "selected" : ""}>${esc(x.name || x.label)}${x.start ? `（${esc(x.start)} – ${esc(x.end || "?")}）` : ""}</option>`).join("");
+  html += `<div class="card"><div class="head"><select id="sprint-select">${options}</select><button class="small" id="new-btn">＋ 新 sprint</button><span class="sp"></span>`;
+  if (s) html += `<button id="sp-sync" class="primary">同步 Jira</button><button id="sp-resync" title="sprint 變成跟 Jira 查詢結果一模一樣，拿掉不在結果裡的單">重抓並清掉</button>`;
   html += `</div>`;
-  if (pendingSprint) html += `<div class="inline-form row">標籤 <input id="new-label" placeholder="Sprint7" size="8"> 名稱 <input id="new-name" size="10"> <input id="new-start" type="date"> – <input id="new-end" type="date"> <button id="new-save" class="primary">建立</button><button id="new-cancel">取消</button></div>`;
-  if (!s) { el.innerHTML = html + `<p class="muted">還沒有 sprint。建一個，標籤要跟 Jira 上的標籤一樣（例如 Sprint7），「同步 Jira」就會把那個標籤的單抓進來。</p>`; bindSprint(); return; }
+  if (pendingSprint) html += `<div class="inline-form grid"><div class="field"><label>Jira 標籤</label><input id="new-label" placeholder="Sprint7"></div><div class="field"><label>名稱</label><input id="new-name" placeholder="Sprint 7"></div>
+    <div class="field"><label>開始</label><input id="new-start" type="date"></div><div class="field"><label>結束</label><input id="new-end" type="date"></div>
+    <div class="field" style="align-self:end"><button id="new-save" class="primary">建立</button> <button id="new-cancel">取消</button></div></div>`;
+  if (s) html += `<div class="grid"><div class="field"><label>名稱</label><input id="sp-name" value="${esc(s.name || "")}"></div>
+      <div class="field"><label>開始</label><input id="sp-start" type="date" value="${esc(s.start || "")}"></div>
+      <div class="field"><label>結束</label><input id="sp-end" type="date" value="${esc(s.end || "")}"></div>
+      <div class="field" style="grid-column: span 2"><label>目標</label><input id="sp-goal" value="${esc(s.goal || "")}" placeholder="這個 sprint 想達成什麼"></div>
+      <div class="field" style="align-self:end"><button id="sp-save">儲存</button></div></div>`;
+  html += `</div>`;
+  if (!s) { el.innerHTML = html + `<p class="muted">還沒有 sprint。按「＋ 新 sprint」，標籤要跟 Jira 上的一樣（例如 Sprint7），「同步 Jira」會把那個標籤的單抓進來。</p>`; bindSprint(); return; }
   const m = s.metrics;
-  html += `<table><thead><tr><th>單號</th><th>摘要</th><th>狀態</th><th class="num">估</th><th class="num">實</th><th class="num">時數</th><th></th></tr></thead><tbody>`;
+  html += `<div class="card"><div class="head"><h2>工單</h2><span class="muted">估 ${pts(m.estimate)} · 實際 ${pts(m.actual)} · 完成 ${m.done}/${m.tickets} · 投入 ${fmtH(m.seconds)}${m.meetingSeconds ? `（會議 ${fmtH(m.meetingSeconds)}）` : ""}</span><span class="sp"></span>
+      <input id="add-key" placeholder="加單號" size="10"><button class="small" id="add-btn">加</button></div>
+    <table><thead><tr><th>單號</th><th>摘要</th><th>狀態</th><th class="num">估</th><th class="num" title="時數 ÷ ${esc(cfg.hoursPerPoint)}，可覆寫">實</th><th class="num">投入</th><th></th></tr></thead><tbody>`;
   for (const t of s.tickets) {
-    html += `<tr data-key="${esc(t.key)}"><td><a href="https://${esc(state.site)}/browse/${esc(t.key)}">${esc(t.key)} ↗</a></td>
+    html += `<tr data-key="${esc(t.key)}"><td>${link(t.key)}</td>
       <td title="${esc(t.notes)}">${esc(t.summary)}</td><td>${esc(t.status)}${t.done ? " ✓" : ""}</td>
-      <td class="num">${pts(t.estimate)}</td><td class="num"><input class="actual" type="number" step="0.5" min="0" value="${t.actual ?? ""}" data-actual="${esc(t.key)}"></td>
+      <td class="num">${pts(t.estimate)}</td>
+      <td class="num"><input class="actual" type="number" step="0.1" min="0" value="${t.override ?? ""}" placeholder="${t.autoActual ?? ""}" data-actual="${esc(t.key)}">${t.override != null && t.autoActual != null ? `<div class="auto">自動 ${pts(t.autoActual)}</div>` : ""}</td>
       <td class="num" title="session ${fmtH(t.sessionSeconds)}，手動 ${fmtH(t.manualSeconds)}">${fmtH(t.seconds)}</td>
-      <td class="row"><button data-transition="${esc(t.key)}">狀態▾</button><button data-time="${esc(t.key)}">+時數</button>${cfg.actualPointsField ? `<button data-push="${esc(t.key)}">寫回</button>` : ""}</td></tr>`;
+      <td class="row"><button class="small" data-transition="${esc(t.key)}">狀態▾</button><button class="small" data-time="${esc(t.key)}">+時數</button>${cfg.actualPointsField ? `<button class="small" data-push="${esc(t.key)}">寫回</button>` : ""}</td></tr>`;
   }
-  html += `</tbody></table>
-    <div class="row" style="margin-top:8px"><span>合計 估 ${pts(m.estimate)} · 實際 ${pts(m.actual)} · 完成 ${m.done}/${m.tickets} · 時數 ${fmtH(m.seconds)}${m.meetingSeconds ? `（會議 ${fmtH(m.meetingSeconds)}）` : ""}</span>
-    <input id="add-key" placeholder="加單號" size="10"><button id="add-btn">加</button></div>
-    <div id="inline"></div>`;
+  html += `</tbody></table><div id="inline"></div>`;
   if (s.manual.length) {
-    html += `<details><summary>手動時段 ${s.manual.length} 筆</summary><table>${s.manual.map(x => `<tr><td>${esc(x.key)}</td><td>${new Date(x.start * 1000).toLocaleString("zh-TW")}</td><td>${fmtH(x.end - x.start)}</td><td>${esc(x.kind)} ${esc(x.note)}</td><td>${x.calendar ? "📅" : ""}</td><td><button data-remove-time="${esc(x.id)}">刪</button></td></tr>`).join("")}</table></details>`;
+    html += `<details style="margin-top:8px"><summary>手動時段 ${s.manual.length} 筆</summary><table>${s.manual.map(x => `<tr><td>${esc(x.key)}</td><td>${new Date(x.start * 1000).toLocaleString("zh-TW")}</td><td>${fmtH(x.end - x.start)}</td><td>${esc(x.kind)} ${esc(x.note)}</td><td>${x.calendar ? "📅" : ""}</td><td><button class="small" data-remove-time="${esc(x.id)}">刪</button></td></tr>`).join("")}</table></details>`;
   }
+  html += `</div>`;
   el.innerHTML = html;
   bindSprint();
 }
 
 function bindSprint() {
   const el = $("#tab-sprint");
-  $("#sprint-select", el)?.addEventListener("change", async e => {
-    if (e.target.value === "__new") { pendingSprint = true; renderSprint(); return; }
-    await refresh("sprint.select", { label: e.target.value });
-  });
+  $("#sprint-select", el)?.addEventListener("change", e => refresh("sprint.select", { label: e.target.value }));
+  $("#new-btn", el)?.addEventListener("click", () => { pendingSprint = true; renderSprint(); });
   $("#new-save", el)?.addEventListener("click", () => { pendingSprint = null; refresh("sprint.new", { label: $("#new-label").value.trim(), name: $("#new-name").value, start: $("#new-start").value, end: $("#new-end").value }); });
   $("#new-cancel", el)?.addEventListener("click", () => { pendingSprint = null; renderSprint(); });
   $("#sp-save", el)?.addEventListener("click", () => refresh("sprint.update", { name: $("#sp-name").value, start: $("#sp-start").value, end: $("#sp-end").value, goal: $("#sp-goal").value }));
   $("#sp-sync", el)?.addEventListener("click", () => refresh("sprint.sync"));
+  $("#sp-resync", el)?.addEventListener("click", () => refresh("sprint.sync", { replace: true }));
   $("#add-btn", el)?.addEventListener("click", () => refresh("ticket.add", { key: $("#add-key").value }));
   $("#bind-btn", el)?.addEventListener("click", () => refresh("session.bind", { key: $("#bind-key").value }));
   $("#shares-btn", el)?.addEventListener("click", () => refresh("session.shares", { shares: currentShares(), applyToSprint: true }));
@@ -177,10 +209,10 @@ function currentShares() { const o = {}; document.querySelectorAll("[data-share]
 
 function timeForm(key) {
   const now = new Date(Date.now() - 3600 * 1000), local = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-  $("#inline").innerHTML = `<div class="inline-form row">${esc(key)} 開始 <input id="t-start" type="datetime-local" value="${local}"> 長度 <input id="t-min" type="number" value="60" min="1"> 分
+  $("#inline").innerHTML = `<div class="inline-form row"><b>${esc(key)}</b> 開始 <input id="t-start" type="datetime-local" value="${local}"> 長度 <input id="t-min" type="number" value="60" min="1"> 分
     <select id="t-kind"><option>開發</option><option>會議</option><option>討論</option><option>其他</option></select>
     <input id="t-note" placeholder="備註" size="16"> <label><input id="t-cal" type="checkbox" checked> 寫進行事曆</label>
-    <button id="t-save" class="primary">加</button><button id="t-cancel">取消</button></div>`;
+    <button id="t-save" class="primary small">加</button><button id="t-cancel" class="small">取消</button></div>`;
   $("#t-save").onclick = () => refresh("time.add", { key, start: $("#t-start").value, minutes: Number($("#t-min").value), kind: $("#t-kind").value, note: $("#t-note").value, calendar: $("#t-cal").checked });
   $("#t-cancel").onclick = () => { $("#inline").innerHTML = ""; };
 }
@@ -197,80 +229,95 @@ async function transitionMenu(key, button) {
 function renderReview() {
   const el = $("#tab-review"), s = state.sprint;
   if (!s) { el.innerHTML = `<p class="muted">還沒有 sprint。</p>`; return; }
-  const m = s.metrics, r = s.review;
+  const m = s.metrics, r = s.review, cats = s.categories;
   const tile = (v, l) => `<div class="tile"><div class="v">${v}</div><div class="l">${l}</div></div>`;
-  let html = `<div class="row"><h2 style="margin:0">${esc(s.name || s.label)} 回顧 <span class="muted">${esc(s.start || "?")} – ${esc(s.end || "?")}</span></h2><span style="flex:1"></span><button id="export">匯出 Markdown</button></div>
-    <div class="tiles" style="margin-top:10px">${tile(`${pts(m.donePoints)}/${pts(m.estimate)}`, "完成點數 / 估點")}${tile(`${m.done}/${m.tickets}`, "完成單數")}${tile(m.ratio ?? "–", "實際 / 估點")}${tile(m.hoursPerPoint ?? "–", "每點小時")}${tile(`${fmtH(m.meetingSeconds)} / ${fmtH(m.seconds)}`, "會議 / 總投入")}</div>
-    <div class="charts" style="margin-top:12px">
-      <div class="chart"><h3>估點 vs 實際（每張單）</h3><div class="legend"><span><i style="background:var(--s1)"></i>估點</span><span><i style="background:var(--s2)"></i>實際</span></div>${pairBars(s.tickets)}</div>
-      <div class="chart"><h3>剩餘點數（burndown）</h3><div class="legend"><span><i style="background:var(--s1)"></i>理想</span><span><i style="background:var(--s2)"></i>實際</span></div>${burndownChart(s.burndown)}</div>
-      <div class="chart"><h3>投入時數（每張單）</h3><div class="legend"><span><i style="background:var(--s1)"></i>開發</span><span><i style="background:var(--s2)"></i>會議／討論</span></div>${hourBars(s.tickets)}</div>
-      <div class="chart"><h3>近幾個 sprint</h3><div class="legend"><span><i style="background:var(--s1)"></i>完成點數</span><span>數字＝實際/估點</span></div>${historyChart(state.history)}</div>
-    </div>
-    <div class="lists" style="margin-top:12px">
-      <div><h2>做得好的地方</h2><textarea data-list="wentWell">${esc(r.wentWell.join("\n"))}</textarea></div>
-      <div><h2>需要改善的地方</h2><textarea data-list="toImprove">${esc(r.toImprove.join("\n"))}</textarea></div>
-      <div><h2>改善建議</h2><textarea data-list="suggestions">${esc(r.suggestions.join("\n"))}</textarea></div>
-      <div><h2>想感謝的夥伴 <span class="muted">一行一位：名字：原因</span></h2><textarea data-list="thanks">${esc(r.thanks.map(t => `${t.who}：${t.why}`).join("\n"))}</textarea></div>
-    </div><p class="muted">一行一條，離開欄位就存。</p>`;
+  const counts = cats.map(c => m.categories[c] || 0);
+  const selected = selectedCategory && cats.includes(selectedCategory) ? selectedCategory : null;
+  const group = selected ? s.tickets.filter(t => t.category === selected) : [];
+  let html = `<div class="row"><h2>${esc(s.name || s.label)} 回顧</h2><span class="muted">${esc(s.start || "?")} – ${esc(s.end || "?")}${s.goal ? " · " + esc(s.goal) : ""}</span><span style="flex:1"></span>
+      <button id="brief" class="primary">用 Claude 整理回顧</button><button id="export">匯出 Markdown</button></div>
+    <div class="tiles">${tile(`${pts(m.donePoints)}<span class="muted">/${pts(m.estimate)}</span>`, "完成點數 / 估點")}${tile(`${m.done}<span class="muted">/${m.tickets}</span>`, "完成單數")}${tile(m.ratio ?? "–", "實際 / 估點")}${tile(fmtH(m.seconds), "投入")}${tile(fmtH(m.meetingSeconds), "會議／討論")}</div>
+    <div class="charts">
+      <div class="card"><h3>任務分類 <span class="muted">點一類看單</span></h3>
+        <div class="donut">${donut(counts)}<div class="legend">${cats.map((c, i) => `<button data-cat="${esc(c)}" class="${selected === c ? "on" : ""}"><i style="background:${CAT_COLORS[i]}"></i>${esc(c)}<b>${counts[i]}</b></button>`).join("")}</div></div>
+      </div>
+      <div class="card"><h3>剩餘點數（burndown）</h3><div class="legend2"><span><i style="background:var(--c3)"></i>理想</span><span><i style="background:var(--c4)"></i>實際</span></div>${burndownChart(s.burndown)}</div>
+    </div>`;
+  if (selected) {
+    html += `<div class="card" style="margin-top:14px"><div class="head"><h3 style="margin:0">${esc(selected)} · ${group.length} 張</h3><span class="sp"></span><button class="small" id="cat-close">關閉</button></div>
+      ${group.length ? `<table><thead><tr><th>單號</th><th>摘要</th><th>狀態</th><th class="num">估 → 實</th><th class="num">投入</th></tr></thead><tbody>` +
+        group.map(t => `<tr><td>${link(t.key)}</td><td>${esc(t.summary)}</td><td>${esc(t.status)}</td><td class="num">${pts(t.estimate)} → ${pts(t.actual)}</td><td class="num">${fmtH(t.seconds)}</td></tr>`).join("") + `</tbody></table>` : `<p class="muted">沒有單。</p>`}</div>`;
+  }
+  html += `<div class="card" style="margin-top:14px"><h3>近幾個 sprint <span class="muted">長條＝完成點數，數字＝實際/估點</span></h3>${historyChart(state.history)}</div>
+    <div class="card"><div class="field"><label>總結</label><textarea data-list="summary" style="min-height:64px" placeholder="三到五句：這個 sprint 做了什麼、結果如何">${esc(r.summary || "")}</textarea></div>
+    <div class="lists" style="margin-top:10px">
+      <div class="field"><label>做得好的地方</label><textarea data-list="wentWell">${esc(r.wentWell.join("\n"))}</textarea></div>
+      <div class="field"><label>需要改善的地方</label><textarea data-list="toImprove">${esc(r.toImprove.join("\n"))}</textarea></div>
+      <div class="field"><label>改善建議</label><textarea data-list="suggestions">${esc(r.suggestions.join("\n"))}</textarea></div>
+      <div class="field"><label>想感謝的夥伴 <span class="muted">一行一位：名字：原因</span></label><textarea data-list="thanks">${esc(r.thanks.map(t => `${t.who}：${t.why}`).join("\n"))}</textarea></div>
+    </div><p class="muted" style="margin:8px 0 0">一行一條，離開欄位就存。「用 Claude 整理回顧」會開一個 Claude Code session 讀這個 sprint 的數據寫好四段並填回這裡。</p></div>`;
   el.innerHTML = html;
   $("#export").onclick = () => call("review.export");
+  $("#brief").onclick = startBrief;
+  $("#cat-close")?.addEventListener("click", () => { selectedCategory = null; renderReview(); });
+  el.querySelectorAll("[data-cat]").forEach(b => b.addEventListener("click", () => { selectedCategory = selectedCategory === b.dataset.cat ? null : b.dataset.cat; renderReview(); }));
+  el.querySelectorAll("path.slice").forEach(p => p.addEventListener("click", () => { selectedCategory = selectedCategory === p.dataset.cat ? null : p.dataset.cat; renderReview(); }));
   el.querySelectorAll("[data-list]").forEach(t => t.addEventListener("change", () => {
     const lines = t.value.split("\n").map(x => x.trim()).filter(Boolean);
-    const value = t.dataset.list === "thanks" ? lines.map(l => { const i = l.search(/[:：]/); return i < 0 ? { who: l, why: "" } : { who: l.slice(0, i).trim(), why: l.slice(i + 1).trim() }; }) : lines;
+    const value = t.dataset.list === "summary" ? t.value.trim()
+      : t.dataset.list === "thanks" ? lines.map(l => { const i = l.search(/[:：]/); return i < 0 ? { who: l, why: "" } : { who: l.slice(0, i).trim(), why: l.slice(i + 1).trim() }; }) : lines;
     refresh("review.update", { [t.dataset.list]: value });
   }));
 }
 
-// Charts: inline SVG, two series at most (blue = plan/dev, orange = actual/meeting), thin marks, labels in ink.
-const W = 440;
-function pairBars(rows) {
-  const n = rows.length; if (!n) return `<p class="muted">沒有單</p>`;
-  const max = Math.max(1, ...rows.map(r => Math.max(r.estimate || 0, r.actual || 0))), rowH = 26, left = 76, h = n * rowH + 8;
-  let g = "";
-  rows.forEach((r, i) => {
-    const y = i * rowH + 4, w1 = (r.estimate || 0) / max * (W - left - 40), w2 = (r.actual || 0) / max * (W - left - 40);
-    g += `<text x="${left - 6}" y="${y + 15}" text-anchor="end">${esc(r.key)}</text>
-      <rect x="${left}" y="${y + 2}" width="${w1}" height="8" rx="2" fill="var(--s1)"><title>${esc(r.key)} 估 ${pts(r.estimate)}</title></rect>
-      <rect x="${left}" y="${y + 12}" width="${w2}" height="8" rx="2" fill="var(--s2)"><title>${esc(r.key)} 實 ${pts(r.actual)}</title></rect>
-      <text x="${left + Math.max(w1, w2) + 6}" y="${y + 15}">${pts(r.estimate)} → ${pts(r.actual)}</text>`;
-  });
-  return `<svg viewBox="0 0 ${W} ${h}">${g}</svg>`;
+async function startBrief() {
+  const b = await call("review.brief");
+  status("正在開 Claude Code…");
+  const r = await bridge().postMessage({ action: "session.new", args: [JSON.stringify({ directory: b.directory, prompt: b.prompt })] });
+  status(r.ok ? `已在 ${b.directory} 開 session；寫好會自動填回這裡（資料檔 ${b.file}）` : (r.err || "開不了 session"), !r.ok);
 }
-function hourBars(rows) {
-  const n = rows.length; if (!n) return `<p class="muted">沒有單</p>`;
-  const max = Math.max(1, ...rows.map(r => r.seconds)), rowH = 20, left = 76, h = n * rowH + 8;
-  let g = "";
-  rows.forEach((r, i) => {
-    const y = i * rowH + 4, dev = (r.seconds - r.meetingSeconds) / max * (W - left - 60), mt = r.meetingSeconds / max * (W - left - 60);
-    g += `<text x="${left - 6}" y="${y + 12}" text-anchor="end">${esc(r.key)}</text>
-      <rect x="${left}" y="${y + 3}" width="${dev}" height="10" rx="2" fill="var(--s1)"><title>開發 ${fmtH(r.seconds - r.meetingSeconds)}</title></rect>
-      <rect x="${left + dev + (mt ? 2 : 0)}" y="${y + 3}" width="${mt}" height="10" rx="2" fill="var(--s2)"><title>會議 ${fmtH(r.meetingSeconds)}</title></rect>
-      <text x="${left + dev + mt + 6}" y="${y + 12}">${fmtH(r.seconds)}</text>`;
+
+// Charts: inline SVG. Categories get fixed colours (one per category, never cycled); the two-series
+// charts use blue for plan/ideal and orange for actual. Text stays in ink, never a series colour.
+const W = 440;
+function donut(counts) {
+  const total = counts.reduce((a, b) => a + b, 0), R = 70, r = 42, cx = 85, cy = 85;
+  if (!total) return `<svg viewBox="0 0 170 170"><circle cx="${cx}" cy="${cy}" r="${(R + r) / 2}" fill="none" stroke="var(--grid)" stroke-width="${R - r}"/><text x="${cx}" y="${cy + 4}" text-anchor="middle">沒有單</text></svg>`;
+  let a0 = -Math.PI / 2, g = "";
+  counts.forEach((n, i) => {
+    if (!n) return;
+    const a1 = a0 + n / total * 2 * Math.PI, big = a1 - a0 > Math.PI ? 1 : 0;
+    const p = (a, rad) => `${cx + rad * Math.cos(a)},${cy + rad * Math.sin(a)}`;
+    const d = n === total ? `M ${p(a0, R)} A ${R} ${R} 0 1 1 ${p(a0 + Math.PI, R)} A ${R} ${R} 0 1 1 ${p(a0, R)} M ${p(a0, r)} A ${r} ${r} 0 1 0 ${p(a0 + Math.PI, r)} A ${r} ${r} 0 1 0 ${p(a0, r)}`
+      : `M ${p(a0, R)} A ${R} ${R} 0 ${big} 1 ${p(a1, R)} L ${p(a1, r)} A ${r} ${r} 0 ${big} 0 ${p(a0, r)} Z`;
+    const dim = selectedCategory && selectedCategory !== state.sprint.categories[i] ? " dim" : "";
+    g += `<path class="slice${dim}" d="${d}" fill="${CAT_COLORS[i]}" fill-rule="evenodd" data-cat="${esc(state.sprint.categories[i])}"><title>${esc(state.sprint.categories[i])} ${n} 張</title></path>`;
+    a0 = a1;
   });
-  return `<svg viewBox="0 0 ${W} ${h}">${g}</svg>`;
+  g += `<text x="${cx}" y="${cy - 2}" text-anchor="middle" style="font-size:20px;font-weight:600;fill:var(--ink)">${total}</text><text x="${cx}" y="${cy + 14}" text-anchor="middle">張</text>`;
+  return `<svg viewBox="0 0 170 170">${g}</svg>`;
 }
 function burndownChart(b) {
-  if (!b.length) return `<p class="muted">sprint 要有起訖日期</p>`;
-  const H = 150, left = 30, bottom = 20, top = 8, max = Math.max(1, b[0].ideal, ...b.map(p => p.actual || 0));
+  if (!b.length) return `<p class="muted">sprint 要有起訖日期才畫得出來（本期 sprint 分頁）。</p>`;
+  const H = 160, left = 30, bottom = 20, top = 8, max = Math.max(1, b[0].ideal, ...b.map(p => p.actual || 0));
   const x = i => left + i / Math.max(1, b.length - 1) * (W - left - 10), y = v => top + (1 - v / max) * (H - top - bottom);
   const ideal = b.map((p, i) => `${x(i)},${y(p.ideal)}`).join(" ");
   const actualPts = b.filter(p => p.actual != null);
-  const actual = actualPts.map((p) => `${x(b.indexOf(p))},${y(p.actual)}`).join(" ");
+  const actual = actualPts.map(p => `${x(b.indexOf(p))},${y(p.actual)}`).join(" ");
   let g = `<line x1="${left}" y1="${y(0)}" x2="${W - 10}" y2="${y(0)}" stroke="var(--grid)"/><text x="${left - 4}" y="${y(max) + 4}" text-anchor="end">${max}</text><text x="${left - 4}" y="${y(0) + 4}" text-anchor="end">0</text>
-    <polyline points="${ideal}" fill="none" stroke="var(--s1)" stroke-width="2" stroke-dasharray="4 3"/>
-    <polyline points="${actual}" fill="none" stroke="var(--s2)" stroke-width="2"/>`;
-  actualPts.forEach(p => { g += `<circle cx="${x(b.indexOf(p))}" cy="${y(p.actual)}" r="3" fill="var(--s2)"><title>${p.date} 剩 ${p.actual}</title></circle>`; });
+    <polyline points="${ideal}" fill="none" stroke="var(--c3)" stroke-width="2" stroke-dasharray="4 3"/>
+    <polyline points="${actual}" fill="none" stroke="var(--c4)" stroke-width="2"/>`;
+  actualPts.forEach(p => { g += `<circle cx="${x(b.indexOf(p))}" cy="${y(p.actual)}" r="3" fill="var(--c4)"><title>${p.date} 剩 ${p.actual}</title></circle>`; });
   g += `<text x="${left}" y="${H - 4}">${b[0].date.slice(5)}</text><text x="${W - 10}" y="${H - 4}" text-anchor="end">${b[b.length - 1].date.slice(5)}</text>`;
   return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
 }
 function historyChart(hist) {
-  if (!hist.length) return `<p class="muted">還沒有別的 sprint</p>`;
-  const H = 130, max = Math.max(1, ...hist.map(h => h.donePoints)), bw = Math.min(60, (W - 20) / hist.length - 10);
+  if (hist.length < 2) return `<p class="muted">有兩個以上的 sprint 才有趨勢。</p>`;
+  const H = 130, max = Math.max(1, ...hist.map(h => h.donePoints)), slot = (W - 20) / hist.length, bw = Math.min(60, slot - 12);
   let g = "";
   hist.forEach((h, i) => {
-    const x = 10 + i * ((W - 20) / hist.length), bh = h.donePoints / max * 80, y = 100 - bh;
-    g += `<rect x="${x}" y="${y}" width="${bw}" height="${bh}" rx="2" fill="var(--s1)"><title>${esc(h.label)} 完成 ${pts(h.donePoints)} 點</title></rect>
+    const x = 10 + i * slot + (slot - bw) / 2, bh = h.donePoints / max * 80, y = 100 - bh;
+    g += `<rect x="${x}" y="${y}" width="${bw}" height="${bh}" rx="3" fill="var(--c3)"><title>${esc(h.label)} 完成 ${pts(h.donePoints)} 點</title></rect>
       <text x="${x + bw / 2}" y="${y - 4}" text-anchor="middle">${pts(h.donePoints)}</text>
       <text x="${x + bw / 2}" y="114" text-anchor="middle">${esc(h.label)}</text><text x="${x + bw / 2}" y="127" text-anchor="middle">${h.ratio ?? "–"}</text>`;
   });
@@ -280,22 +327,29 @@ function historyChart(hist) {
 // ---------- settings ----------
 function renderSettings() {
   const el = $("#tab-settings"), c = state.config;
-  const field = (k, label, hint) => `<label for="c-${k}">${label}</label><div><input id="c-${k}" value="${esc(c[k] ?? "")}" style="width:100%">${hint ? `<div class="muted">${hint}</div>` : ""}</div>`;
-  el.innerHTML = `<div class="form">
-    ${field("site", "Jira 站台", "例如 example.atlassian.net")}
-    ${field("netrc", "netrc 路徑", `帳號與 API token 放這裡（machine &lt;站台&gt; login &lt;email&gt; password &lt;token&gt;）；${state.netrcFound ? "<span style='color:var(--good)'>找到檔案</span>" : "<span class='err'>找不到檔案</span>"}`)}
-    ${field("projectKey", "專案 key", "單號前綴，例如 PROJ")}
-    ${field("jql", "同步用 JQL", "{project}、{label} 會代入；想只抓自己的加 AND assignee = currentUser()")}
-    ${field("pointsField", "估點欄位 id", "Story point estimate 通常是 customfield_10016")}
-    ${field("actualPointsField", "實際點數欄位 id", "留空就只存本機；填了表格才有「寫回」")}
-    ${field("reviewDir", "回顧 Markdown 資料夾", "匯出到 <資料夾>/<sprint 標籤>.md")}
-    <span></span><div><button id="c-save" class="primary">儲存</button></div></div>`;
-  $("#c-save").onclick = () => { const p = {}; ["site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "reviewDir"].forEach(k => { p[k] = $("#c-" + k).value; }); refresh("config.set", p); };
+  const field = (k, label, hint, type = "text") => `<div class="field"><label for="c-${k}">${label}</label><input id="c-${k}" type="${type}" value="${esc(c[k] ?? "")}">${hint ? `<div class="hint">${hint}</div>` : ""}</div>`;
+  el.innerHTML = `<div class="card"><div class="section-title" style="margin-top:0">Jira</div><div class="grid">
+      ${field("site", "站台", "例如 example.atlassian.net")}
+      ${field("netrc", "帳密檔（netrc）", `一行 <code>machine &lt;站台&gt; login &lt;email&gt; password &lt;API token&gt;</code>；${state.netrcFound ? "<span style='color:var(--good)'>找到檔案</span>" : "<span class='err'>找不到檔案</span>"}`)}
+      ${field("projectKey", "專案 key", "可多個，逗號分開；單號比對認這些")}
+      ${field("pointsField", "估點欄位 id", "Story point estimate 通常是 customfield_10016")}
+      ${field("actualPointsField", "實際點數欄位 id", "留空就只存本機；填了表格才有「寫回」")}
+    </div>
+    <div class="section-title">同步</div><div class="grid">
+      <div class="field" style="grid-column: 1 / -1"><label for="c-jql">抓單用的 JQL</label><input id="c-jql" value="${esc(c.jql ?? "")}"><div class="hint">{projects}、{project}、{label} 會代入。現在的意思：${esc(c.jql ?? "")}</div></div>
+      ${field("hoursPerPoint", "每點小時數", "實際點數＝投入時數 ÷ 這個數", "number")}
+    </div>
+    <div class="section-title">回顧</div><div class="grid">
+      ${field("reviewDir", "Markdown 資料夾", "匯出到 <資料夾>/<sprint 標籤>.md；資料檔 <標籤>-data.md 也在這")}
+      ${field("reviewSessionDir", "整理回顧的 session 開在", "「用 Claude 整理回顧」在這個資料夾開 Claude Code")}
+    </div>
+    <div class="row" style="margin-top:14px"><button id="c-save" class="primary">儲存設定</button></div></div>`;
+  $("#c-save").onclick = () => { const p = {}; ["site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "hoursPerPoint", "reviewDir", "reviewSessionDir"].forEach(k => { p[k] = $("#c-" + k).value; }); refresh("config.set", p); };
 }
 
 // ---------- boot ----------
-document.querySelectorAll("header button").forEach(b => b.addEventListener("click", () => {
-  document.querySelectorAll("header button").forEach(x => x.classList.toggle("on", x === b));
+document.querySelectorAll("header button.tab").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("header button.tab").forEach(x => x.classList.toggle("on", x === b));
   document.querySelectorAll("section.tab").forEach(s => s.classList.toggle("on", s.id === "tab-" + b.dataset.tab));
 }));
 window.addEventListener("cubisession", () => { session = window.cubiSession || null; refresh(); });

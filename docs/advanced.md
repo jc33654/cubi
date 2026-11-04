@@ -81,7 +81,7 @@ window.cubiSession   // {id, name, cwd, projectDirectory, agent, segments}；之
 規則：
 
 - action 不在表裡、參數數量或型別不符 → 不執行，JS 收到 reject（錯誤訊息是中文的原因）；每次執行與拒絕都寫 `~/Library/Logs/cubi.log`。
-- `pick.file`／`pick.dir`（原生選擇器）與 `session.new`（開 Claude Code session：目錄要存在，prompt 選填）是內建的，不用宣告，也是保留字（manifest 裡定義會被拒載）。
+- `pick.file`／`pick.dir`（原生選擇器）與 `session.new`（開 Claude Code session）是內建的，不用當命令宣告，也是保留字（manifest 裡定義會被拒載）。`session.new` 會把一段文字交給一個 agent，所以 manifest 要先寫 `"builtins": ["session.new"]` 才能用，而且每次都會跳確認框列出目錄與第一句話；目錄要存在，prompt 選填；失敗回 `{ok:false, err}`，取消回 `{ok:false, cancelled:true}`。
 - 面板裡任何離開已載入 HTML 的導頁（連結、`location.href`、表單、meta refresh、`target=_blank`）一律取消；主頁面的 http(s) 目標改用系統瀏覽器開，iframe 裡的只取消。bridge 永遠只給面板自己的頁面用。
 - 設定頁關掉工具後，已開著的面板送來的請求也會被拒；資訊窗區塊與 tick 也停。
 - manifest 是使用者自己放進 `plugins/` 的，跟 agent manifest 一樣信任它；安全邊界在「面板的 JS 只能叫到表裡的指令、參數過型別檢查、不經 shell」。
@@ -106,7 +106,7 @@ stdout：
 ```
 
 - `rows[]`：`[label, value]` 或 `{label, value, url?}`。最多 10 列、value 最多 200 字；`url` 只收 http(s)，有的話 label 帶 `↗`、點了用系統瀏覽器開。
-- `actions[]`（最多 5 個）：按鈕；`action` 必須是同一個插件的 hook 命令，按了以同一份 stdin 執行，成功才重抓 `session.info`，失敗訊息留在區塊上。加 `"input": "提示文字"` 的按鈕會先跳系統對話框問一行字，cubi 洗掉控制字元、截到 512 字後放進 stdin JSON 的 `input` 欄；按取消就不執行。
+- `actions[]`（最多 5 個）：按鈕；`action` 必須是同一個插件的 hook 命令，按了以同一份 stdin 執行，成功才重抓 `session.info`，失敗訊息留在區塊上。加 `"input": "提示文字"` 的按鈕會先跳系統對話框問一行字，cubi 把 tab／換行換成空白、洗掉控制字元、截到 512 字後放進 stdin JSON 的 `input` 欄；按取消就不執行。加 `"arg": "值"` 的按鈕不問人，直接把那個值當 `input` 送（例如「解除 PROJ-1」帶 `PROJ-1`）。
 - 區塊固定多一顆「開面板」。
 - stdout 超過 64 KB、不是 JSON 物件、列形狀不對、action 不合規 → 區塊顯示錯誤。
 - 活動時段的切法：真事件（statusline 不算）延長當前段；與上一個事件相隔 ≥ 設定頁「多久沒動靜進入沉睡」就收段、開新段；沉默到門檻也收段（結束點是最後一個事件，不含閒置尾巴）；SessionEnd 收段；點機器人叫醒不算事件。

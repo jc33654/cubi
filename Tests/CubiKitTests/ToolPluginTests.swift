@@ -53,7 +53,9 @@ private let sample = #"""
     fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"x":{"run":["/c"],"args":["name"],"stdin":2}}}"#, .badCommand("x", "stdin 要在 1…1"))
     fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"x":{"run":["/c","$1"],"args":["text"],"stdin":1}}}"#, .badCommand("x", "$1 已經指定走 stdin"))
     fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"x":{"run":["/c"],"args":["path"]}}}"#, .badCommand("x", "args[0] 不認得的型別「path」"))
-    fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"pick.file":{"run":["/c"]}}}"#, .badCommand("pick.file", "保留給面板內建的選擇器，不能自己定義"))
+    fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"pick.file":{"run":["/c"]}}}"#, .badCommand("pick.file", "是面板內建的動作名稱，不能自己定義"))
+    fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"session.new":{"run":["/c"]}}}"#, .badCommand("session.new", "是面板內建的動作名稱，不能自己定義"))
+    fails(#"{"id":"t","name":"T","panel":{"file":"a"},"builtins":["pick.file"],"commands":{}}"#, .badHook("builtins", "只能是 session.new"))
 }
 
 @Test func toolManifestResolvesPluginRelativeCommands() throws {
@@ -90,7 +92,8 @@ private let hooked = #"""
     #expect(t.tick == .init(action: "tick", every: 60))
     #expect(t.isHook("sync") && !t.isHook("open") && !t.isHook("plain") && !t.isHook("missing"))
     let plain = try parse(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{}}"#)
-    #expect(plain.session == nil && plain.tick == nil)
+    #expect(plain.session == nil && plain.tick == nil && plain.builtins.isEmpty)
+    #expect(try parse(#"{"id":"t","name":"T","panel":{"file":"a"},"builtins":["session.new"],"commands":{}}"#).builtins == ["session.new"])
 }
 
 @Test func toolManifestRejectsBadHooks() {

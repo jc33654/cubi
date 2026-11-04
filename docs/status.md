@@ -43,8 +43,8 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 10. 資訊窗：選一個名字帶單號的 session，底下有「Sprint · Sprint6」區塊，單號列可點開瀏覽器，「同步 Jira」「開面板」有反應；example-tool 的區塊也在。
 11. 設定頁「行事曆」：允許存取 → 選一本行事曆；一分鐘後綁了單的 session 收掉的段出現在行事曆（標題＝單號＋session 名、標空閒、備註最後一行有記號）；重啟 Cubi 不重複；前後 5 分鐘內的段合成一筆。
 12. Sprint 面板：Sprint6 已用新 JQL 重抓（25 張受託人是你的單，沒填起訖）——填起訖日期、改一個「實」（自動值＝時數÷8）、+時數一筆會議勾行事曆、換一個狀態（會真的送 Jira）、回顧分頁點甜甜圈的一類看單、匯出 Markdown 到 Finder。
-13. 資訊窗 Sprint 區塊：「綁單號…」跳輸入框、打 `DDP-xxxx` 綁上；「解除 X」拿掉；沒有 Example Tool 區塊了。
-14. 回顧分頁「用 Claude 整理回顧」：應在 `~/Documents/project_note` 開一個 Claude Code 分頁、第一句話叫它讀 `08-project-Dot../10-sprint-review/Sprint6-data.md`；它跑 `cubi --tool-run sprint review.update -` 時在終端批准；一分鐘內面板的總結與四段出現。
+13. 資訊窗 Sprint 區塊：「綁單號…」跳輸入框、打 `PROJ-xxxx` 綁上；「解除 X」拿掉；沒有 Example Tool 區塊了。
+14. 回顧分頁「用 Claude 整理回顧」：先跳確認框（目錄與第一句話）→ 在設定的資料夾開一個 Claude Code 分頁、第一句話叫它讀 `<reviewDir>/Sprint6-data.md`；它跑 `cubi --tool-run sprint review.update -` 時在終端批准；面板每 30 秒查一次，寫好就出現。
 15. 浮動視窗拖到外接螢幕：島應跟著過去（拖的時候視窗縮成島大小），放開後再拖回瀏海能 dock。
 16. 右鍵選單沒有「Demo 狀態」了。
 

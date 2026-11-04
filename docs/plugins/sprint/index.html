@@ -262,7 +262,11 @@ function renderReview() {
   $("#cat-close")?.addEventListener("click", () => { selectedCategory = null; renderReview(); });
   el.querySelectorAll("[data-cat]").forEach(b => b.addEventListener("click", () => { selectedCategory = selectedCategory === b.dataset.cat ? null : b.dataset.cat; renderReview(); }));
   el.querySelectorAll("path.slice").forEach(p => p.addEventListener("click", () => { selectedCategory = selectedCategory === p.dataset.cat ? null : p.dataset.cat; renderReview(); }));
+  // A field only writes back what the user changed: a blur on an untouched textarea after a
+  // refresh must not overwrite what Claude (or another window) just saved.
+  el.querySelectorAll("[data-list]").forEach(t => { t.dataset.orig = t.value; });
   el.querySelectorAll("[data-list]").forEach(t => t.addEventListener("change", () => {
+    if (t.value === t.dataset.orig) return;
     const lines = t.value.split("\n").map(x => x.trim()).filter(Boolean);
     const value = t.dataset.list === "summary" ? t.value.trim()
       : t.dataset.list === "thanks" ? lines.map(l => { const i = l.search(/[:：]/); return i < 0 ? { who: l, why: "" } : { who: l.slice(0, i).trim(), why: l.slice(i + 1).trim() }; }) : lines;
@@ -270,11 +274,24 @@ function renderReview() {
   }));
 }
 
+let briefPoll = null;
 async function startBrief() {
-  const b = await call("review.brief");
+  let b;
+  try { b = await call("review.brief"); } catch (_) { return; }
   status("正在開 Claude Code…");
-  const r = await bridge().postMessage({ action: "session.new", args: [JSON.stringify({ directory: b.directory, prompt: b.prompt })] });
-  status(r.ok ? `已在 ${b.directory} 開 session；寫好會自動填回這裡（資料檔 ${b.file}）` : (r.err || "開不了 session"), !r.ok);
+  let r;
+  try { r = await bridge().postMessage({ action: "session.new", args: [JSON.stringify({ directory: b.directory, prompt: b.prompt })] }); }
+  catch (e) { status(String(e.message || e), true); return; }
+  if (!r.ok) { status(r.cancelled ? "" : (r.err || "開不了 session"), !r.cancelled); return; }
+  status(`已在 ${b.directory} 開 session；每 30 秒看一次，寫好就出現（資料檔 ${b.file}）`);
+  // Watch for the review to land, for up to an hour.
+  const before = JSON.stringify(state.sprint?.review), started = Date.now();
+  clearInterval(briefPoll);
+  briefPoll = setInterval(async () => {
+    try { await refresh(); } catch (_) { return; }
+    if (JSON.stringify(state.sprint?.review) !== before) { clearInterval(briefPoll); status("Claude 寫回來了"); }
+    else if (Date.now() - started > 3600 * 1000) { clearInterval(briefPoll); }
+  }, 30000);
 }
 
 // Charts: inline SVG. Categories get fixed colours (one per category, never cycled); the two-series
@@ -336,7 +353,7 @@ function renderSettings() {
       ${field("actualPointsField", "實際點數欄位 id", "留空就只存本機；填了表格才有「寫回」")}
     </div>
     <div class="section-title">同步</div><div class="grid">
-      <div class="field" style="grid-column: 1 / -1"><label for="c-jql">抓單用的 JQL</label><input id="c-jql" value="${esc(c.jql ?? "")}"><div class="hint">{projects}、{project}、{label} 會代入。現在的意思：${esc(c.jql ?? "")}</div></div>
+      <div class="field" style="grid-column: 1 / -1"><label for="c-jql">抓單用的 JQL</label><input id="c-jql" value="${esc(c.jql ?? "")}"><div class="hint">{projects}、{project}、{label} 會代入；本期會送出：${esc(String(c.jql ?? "").replace("{projects}", String(c.projectKey ?? "").split(/[,\s]+/).filter(Boolean).join(", ")).replace("{project}", String(c.projectKey ?? "").split(/[,\s]+/)[0] || "").replace("{label}", state.current || "…"))}</div></div>
       ${field("hoursPerPoint", "每點小時數", "實際點數＝投入時數 ÷ 這個數", "number")}
     </div>
     <div class="section-title">回顧</div><div class="grid">

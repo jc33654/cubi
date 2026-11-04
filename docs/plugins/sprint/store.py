@@ -91,8 +91,13 @@ class Store:
             return
         for name, data in zip(FILES, (self.config, self.sprints, self.tickets, self.bindings, self.segments)):
             self._write(name, data)
-        fcntl.flock(self._lock, fcntl.LOCK_UN)
-        self._lock.close()
+        self.close()
+
+    def close(self):
+        """Release the lock without writing (after a failed action)."""
+        if not self._lock.closed:
+            fcntl.flock(self._lock, fcntl.LOCK_UN)
+            self._lock.close()
 
     # ---------- sprints and tickets ----------
 
@@ -126,8 +131,6 @@ class Store:
         s = self.sprint(label)
         if s is not None:
             s["keys"] = list(dict.fromkeys(keys))
-            for key in s["keys"]:
-                self.ticket(key)
 
     def browse_url(self, key):
         return f"https://{self.config['site']}/browse/{key}"

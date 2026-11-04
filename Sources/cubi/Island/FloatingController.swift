@@ -101,9 +101,10 @@ final class FloatingController {
         return false
     }
 
-    /// Keeps the island's top strip on some screen after displays change.
+    /// Keeps the island's top strip on some screen after displays change (not mid-drag: the
+    /// window is island-sized then and `clamped` assumes the full frame).
     func clampToScreens() {
-        guard let p = panel, p.isVisible else { return }
+        guard let p = panel, p.isVisible, !isDragging else { return }
         let o = clamped(p.frame.origin)
         if o != p.frame.origin { p.setFrameOrigin(o) }
         remember(p)

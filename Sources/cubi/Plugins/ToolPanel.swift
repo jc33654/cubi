@@ -112,6 +112,17 @@ private final class ToolBridge: NSObject, WKScriptMessageHandlerWithReply {
 
     init(isEnabled: @escaping () -> Bool) { self.isEnabled = isEnabled }
 
+    static func confirmSession(tool: String, directory: String, prompt: String?) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = "\(tool) 想開一個 Claude Code session"
+        let first = prompt?.split(separator: "\n").first.map { String($0.prefix(160)) } ?? "（沒有第一句話）"
+        alert.informativeText = "目錄：\(directory)\n第一句話：\(first)"
+        alert.addButton(withTitle: "開啟")
+        alert.addButton(withTitle: "取消").keyEquivalent = "\u{1b}"
+        NSApp.activate(ignoringOtherApps: true)
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
     func userContentController(_ ucc: WKUserContentController, didReceive message: WKScriptMessage,
                                replyHandler: @escaping @MainActor (Any?, String?) -> Void) {
         guard let tool, let body = message.body as? [String: Any], let action = body["action"] as? String else {
@@ -124,24 +135,35 @@ private final class ToolBridge: NSObject, WKScriptMessageHandlerWithReply {
         }
         // Built in: start a Claude Code session in a directory with a first prompt, the way the
         // 開新 session dialog does. `{action:"session.new", args:["{\"directory\":…,\"prompt\":…}"]}`.
+        // The manifest must ask for it (`"builtins": ["session.new"]`), and the user confirms
+        // every time: a panel page can load outside scripts, and this hands a prompt to an agent.
+        // Answers `{ok:false, err}` on failure like a command, never a reject.
         if action == "session.new" {
+            guard tool.builtins.contains("session.new") else {
+                replyHandler(["ok": false, "err": "manifest 沒有宣告 builtins: [\"session.new\"]"], nil)
+                return
+            }
             guard let raw = (body["args"] as? [String])?.first, let data = raw.data(using: .utf8),
                   let spec = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let dir = spec["directory"] as? String, !dir.isEmpty else {
-                replyHandler(nil, "session.new 要 args[0] 是 {\"directory\", \"prompt\"} 的 JSON")
+                replyHandler(["ok": false, "err": "session.new 要 args[0] 是 {\"directory\", \"prompt\"} 的 JSON"], nil)
                 return
             }
-            let directory = (dir as NSString).expandingTildeInPath
+            let directory = ((dir as NSString).expandingTildeInPath as NSString).standardizingPath
             var isDir: ObjCBool = false
-            guard FileManager.default.fileExists(atPath: directory, isDirectory: &isDir), isDir.boolValue else {
-                replyHandler(nil, "找不到目錄 \(directory)")
+            guard directory.hasPrefix("/"), FileManager.default.fileExists(atPath: directory, isDirectory: &isDir), isDir.boolValue else {
+                replyHandler(["ok": false, "err": "找不到目錄 \(directory)"], nil)
                 return
             }
             let prompt = (spec["prompt"] as? String).flatMap { $0.isEmpty ? nil : String($0.prefix(ToolPlugin.textLimit)) }
+            guard Self.confirmSession(tool: tool.displayName, directory: directory, prompt: prompt) else {
+                replyHandler(["ok": false, "err": "已取消", "cancelled": true], nil)
+                return
+            }
             CubiLog.write("tool \(tool.id) session.new in \(directory)")
             Task { @MainActor in
                 let error = await SessionLauncher.launch(LaunchRequest(directory: directory, prompt: prompt, resume: .none, terminal: .automatic))
-                if let error { replyHandler(nil, error) } else { replyHandler(["ok": true], nil) }
+                replyHandler(error.map { ["ok": false, "err": $0] } ?? ["ok": true], nil)
             }
             return
         }

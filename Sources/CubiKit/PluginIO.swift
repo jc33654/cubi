@@ -72,6 +72,9 @@ public enum PluginIO {
             /// When set, the app asks the user for a line of text (this is the prompt) and passes
             /// it as `input`; the action is not run when the user cancels.
             public var input: String?
+            /// A value the plugin chose for this button (say, the ticket a 解除 button is for),
+            /// passed as `input` without asking anyone. Ignored when `input` is set.
+            public var arg: String?
         }
 
         public var title: String?
@@ -91,8 +94,9 @@ public enum PluginIO {
             for a in (v["actions"]?.array ?? []).prefix(maxActions) {
                 guard let label = a["label"]?.string, let action = a["action"]?.string else { throw ParseError.badAction("缺 label 或 action") }
                 guard tool.isHook(action) else { throw ParseError.badAction("「\(action)」不是這個插件的 hook 命令") }
-                actions.append(Action(label: String(label.prefix(titleLimit)), action: action,
-                                      input: a["input"]?.string.map { String($0.prefix(titleLimit)) }))
+                let prompt = a["input"]?.string.flatMap { $0.isEmpty ? nil : String($0.prefix(titleLimit)) }
+                actions.append(Action(label: String(label.prefix(titleLimit)), action: action, input: prompt,
+                                      arg: prompt == nil ? a["arg"]?.string.flatMap(cleanInput) : nil))
             }
             return WidgetOutput(title: v["title"]?.string.map { String($0.prefix(titleLimit)) }, rows: rows, actions: actions,
                                 error: v["error"]?.string)
@@ -162,9 +166,13 @@ public enum PluginIO {
         }
     }
 
-    /// What the user typed, trimmed and cut to `inputLimit`; nil when nothing printable is left.
+    /// What the user typed: tabs and line breaks become spaces (two keys pasted on two lines stay
+    /// two keys), other control characters go, trimmed, cut to `inputLimit`; nil when nothing is left.
     public static func cleanInput(_ s: String) -> String? {
-        let kept = String(s.unicodeScalars.filter { $0.value >= 0x20 && $0.value != 0x7f }).trimmingCharacters(in: .whitespaces)
+        let kept = String(String.UnicodeScalarView(s.unicodeScalars.compactMap { c in
+            if c == "\t" || c == "\n" || c == "\r" { return " " }
+            return c.value >= 0x20 && c.value != 0x7f ? c : nil
+        })).trimmingCharacters(in: .whitespaces)
         return kept.isEmpty ? nil : String(kept.prefix(inputLimit))
     }
 

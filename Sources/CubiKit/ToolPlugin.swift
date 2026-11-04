@@ -65,6 +65,8 @@ public struct ToolPlugin: Sendable, Equatable {
     /// Handled by the panel itself (native pickers, starting a Claude Code session); a manifest
     /// cannot take these names.
     public static let reservedActions: Set<String> = ["pick.file", "pick.dir", "session.new"]
+    /// Built-ins a manifest has to ask for (`"builtins": […]`) because they reach outside the panel.
+    public static let optionalBuiltins: Set<String> = ["session.new"]
 
     public var id: String
     public var displayName: String
@@ -74,6 +76,8 @@ public struct ToolPlugin: Sendable, Equatable {
     public var commands: [String: Command]
     public var session: SessionHook?
     public var tick: TickHook?
+    /// Optional built-ins the manifest asked for (see `optionalBuiltins`).
+    public var builtins: Set<String> = []
 
     public enum LoadError: Error, Equatable, LocalizedError {
         case badID(String)
@@ -124,8 +128,15 @@ public struct ToolPlugin: Sendable, Equatable {
                           bridge: m["panel"]?["bridge"]?.string ?? defaultBridge)
 
         var commands: [String: Command] = [:]
+        var builtins: Set<String> = []
+        for b in m["builtins"]?.array ?? [] {
+            guard let name = b.string, optionalBuiltins.contains(name) else {
+                throw LoadError.badHook("builtins", "只能是 \(optionalBuiltins.sorted().joined(separator: "、"))")
+            }
+            builtins.insert(name)
+        }
         for (action, spec) in m["commands"]?.object ?? [:] {
-            if reservedActions.contains(action) { throw LoadError.badCommand(action, "保留給面板內建的選擇器，不能自己定義") }
+            if reservedActions.contains(action) { throw LoadError.badCommand(action, "是面板內建的動作名稱，不能自己定義") }
             guard let run = spec["run"]?.array?.compactMap(\.string), !run.isEmpty, !run[0].isEmpty else {
                 throw LoadError.badCommand(action, "run 要是非空的字串陣列")
             }
@@ -178,7 +189,7 @@ public struct ToolPlugin: Sendable, Equatable {
             tick = TickHook(action: action, every: try seconds(t["every"], field: "tick.every", least: minTickInterval))
         }
         return ToolPlugin(id: id, displayName: name, directory: baseDirectory, panel: panel, commands: commands,
-                          session: session, tick: tick)
+                          session: session, tick: tick, builtins: builtins)
     }
 
     /// An interval in whole seconds, `least` or more; absent means 60. A huge or fractional number is

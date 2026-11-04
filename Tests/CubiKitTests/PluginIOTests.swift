@@ -37,10 +37,13 @@ private func tool() throws -> ToolPlugin {
     #expect(bare.rows.isEmpty && bare.actions.isEmpty && bare.title == nil)
     // An action that wants a line from the user carries the prompt to show.
     let asking = try PluginIO.WidgetOutput.parse(#"{"actions":[{"label":"綁單號…","action":"sync","input":"單號（可多個，用空白隔開）"}]}"#, tool: try tool())
-    #expect(asking.actions == [.init(label: "綁單號…", action: "sync", input: "單號（可多個，用空白隔開）")])
+    #expect(asking.actions == [.init(label: "綁單號…", action: "sync", input: "單號（可多個，用空白隔開）", arg: nil)])
+    // A button with a value of its own: passed as input, nobody is asked; an empty prompt is no prompt.
+    let fixed = try PluginIO.WidgetOutput.parse(#"{"actions":[{"label":"解除 PROJ-1","action":"sync","arg":"PROJ-1","input":""}]}"#, tool: try tool())
+    #expect(fixed.actions == [.init(label: "解除 PROJ-1", action: "sync", input: nil, arg: "PROJ-1")])
     #expect(PluginIO.SessionInput(id: "s", name: "n", cwd: nil, projectDirectory: nil, agent: "a", segments: [], input: "PROJ-1 PROJ-2").json()
             == #"{"agent":"a","id":"s","input":"PROJ-1 PROJ-2","name":"n","segments":[]}"#)
-    #expect(PluginIO.cleanInput("  PROJ-1 x\u{7}\t ") == "PROJ-1 x" && PluginIO.cleanInput(" \n ") == nil)
+    #expect(PluginIO.cleanInput("  PROJ-1\tPROJ-2\nPROJ-3\u{7} ") == "PROJ-1 PROJ-2 PROJ-3" && PluginIO.cleanInput(" \n ") == nil)
     #expect(PluginIO.cleanInput(String(repeating: "a", count: 600))?.count == PluginIO.inputLimit)
 }
 

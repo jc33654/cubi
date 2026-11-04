@@ -124,8 +124,7 @@ def session_info(store, p, sync=False):
     for key in keys:
         t = store.tickets.get(key, {})
         secs = hours.get(key, {}).get("total", 0)
-        auto = round(secs / 3600 / hpp, 2)
-        actual = t.get("actual") if t.get("actual") is not None else (auto if auto >= 0.05 else None)
+        actual = review.actual_points(t.get("actual"), secs, hpp)
         rows.append({"label": key, "url": store.browse_url(key),
                      "value": " · ".join(x for x in [t.get("summary") or ("Jira 查不到這張單" if t.get("notFound") else "（還沒從 Jira 讀到）"), t.get("status"),
                                                       f"估 {pts(t.get('estimate'))} 實 {pts(actual)}", review.fmt_hours(secs)] if x)})
@@ -137,7 +136,7 @@ def session_info(store, p, sync=False):
         rows.append(["今日", review.fmt_hours(today_secs) + split])
     sprint = store.current_sprint()
     actions = [{"label": "綁單號…", "action": "session.bind", "input": "要綁的單號（可多個，用空白隔開）"}]
-    actions += [{"label": f"解除 {k}", "action": f"session.unbind{i + 1}"} for i, k in enumerate(keys[:MAX_UNBIND_BUTTONS])]
+    actions += [{"label": f"解除 {k}", "action": "session.unbind", "arg": k} for k in keys[:MAX_UNBIND_BUTTONS]]
     if keys:
         actions.append({"label": "同步 Jira", "action": "session.sync"})
     out = {"title": f"Sprint · {sprint['label']}" if sprint else "Sprint", "rows": rows, "actions": actions[:5]}
@@ -287,14 +286,13 @@ def session_bind(store, p):
     return panel_state(store, p) if "session" in p else session_info(store, s)
 
 
-def session_unbind(store, p, index=None):
-    """From the panel: `key`; from the card's 解除 buttons: the n-th bound key."""
+def session_unbind(store, p):
+    """From the panel: `key`; from the card's 解除 buttons: the key cubi passes back as `input`."""
     s = session_of(p)
-    key = p.get("key", "")
-    if index is not None:
-        bound = store.bound_keys(store.binding(s))
-        key = bound[index] if index < len(bound) else ""
-    store.unbind(s["id"], key)
+    keys = store.extract_keys(p.get("key", ""), p.get("input", ""))
+    if not keys:
+        raise ValueError("要解除哪張單？")
+    store.unbind(s["id"], keys[0])
     return panel_state(store, p) if "session" in p else session_info(store, s)
 
 
@@ -336,33 +334,37 @@ def review_brief(store, p):
     """Write the data file for a Claude Code session and say where to open it; the panel then
     asks cubi (built-in session.new) to open the session with `prompt`."""
     s = target_sprint(store, p)
+    directory = os.path.expanduser(store.config["reviewSessionDir"])
+    if not os.path.isdir(directory):
+        raise ValueError(f"回顧 session 的資料夾不存在：{directory}（設定分頁可改）")
     rows = rows_for(store, s)
     folder = review_dir(store)
     data_path = os.path.join(folder, f"{s['label']}-data.md")
     with open(data_path, "w", encoding="utf-8") as f:
         f.write(review.brief(s, rows, review.metrics(rows), CUBI, os.path.join(folder, f"{s['label']}.md")))
-    directory = os.path.expanduser(store.config["reviewSessionDir"])
-    if not os.path.isdir(directory):
-        raise ValueError(f"回顧 session 的資料夾不存在：{directory}（設定分頁可改）")
     return {"directory": directory, "prompt": review.brief_prompt(s, data_path), "file": data_path}
 
 
 def config_set(store, p):
+    """Everything is checked before anything is stored, so a bad value leaves the file as it was."""
+    new = {}
     for k in CONFIG_KEYS:
         if k in p:
-            store.config[k] = str(p[k]).strip()
-    if "hoursPerPoint" in p:
+            new[k] = str(p[k]).strip()
+    if "hoursPerPoint" in new:
         try:
-            store.config["hoursPerPoint"] = max(0.1, float(p["hoursPerPoint"]))
-        except (TypeError, ValueError):
+            new["hoursPerPoint"] = max(0.1, float(new["hoursPerPoint"]))
+        except ValueError:
             raise ValueError("每點小時數要是數字")
+    if "projectKey" in new and not new["projectKey"]:
+        raise ValueError("專案 key 不能空白")
+    store.config.update(new)
     return panel_state(store, p)
 
 
 ACTIONS = {
     "session.info": session_info, "session.sync": lambda s, p: session_info(s, p, sync=True),
     "session.bind": session_bind, "session.unbind": session_unbind, "session.shares": session_shares,
-    **{f"session.unbind{i + 1}": (lambda i: lambda s, p: session_unbind(s, p, index=i))(i) for i in range(MAX_UNBIND_BUTTONS)},
     "review.brief": review_brief,
     "tick": tick, "panel.state": panel_state,
     "sprint.new": sprint_new, "sprint.update": sprint_update, "sprint.select": sprint_select, "sprint.sync": sprint_sync,
@@ -388,6 +390,8 @@ def main(argv):
     store = Store()
     try:
         result = ACTIONS[argv[1]](store, payload)
+        # Only a run that got through writes anything: a half-done action leaves the files alone.
+        store.save()
     except (JiraError, ValueError) as e:
         result = {"error": str(e)}
     except KeyError as e:
@@ -396,7 +400,7 @@ def main(argv):
         traceback.print_exc(file=sys.stderr)
         result = {"error": f"{type(e).__name__}: {e}"}
     finally:
-        store.save()
+        store.close()
     if argv[1] in RAW_ACTIONS:
         if "error" in result:
             print(result["error"], file=sys.stderr)

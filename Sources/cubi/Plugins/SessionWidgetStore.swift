@@ -41,7 +41,7 @@ final class SessionWidgetStore {
     /// user for a line; cancelling runs nothing.
     func act(_ action: PluginIO.WidgetOutput.Action, session: String, plugin: ToolPlugin) async {
         guard plugin.isHook(action.action) else { return }
-        var typed: String?
+        var typed = action.arg
         if let prompt = action.input {
             guard let line = promptForInput(prompt).flatMap(PluginIO.cleanInput) else { return }
             typed = line

@@ -78,8 +78,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let alert = NSAlert()
         alert.messageText = prompt
         alert.addButton(withTitle: "確定")
-        alert.addButton(withTitle: "取消")
-        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+        alert.addButton(withTitle: "取消").keyEquivalent = "\u{1b}"
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+        field.usesSingleLineMode = true
+        field.cell?.isScrollable = true
         alert.accessoryView = field
         alert.window.initialFirstResponder = field
         NSApp.activate(ignoringOtherApps: true)

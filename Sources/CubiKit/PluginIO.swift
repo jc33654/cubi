@@ -5,9 +5,13 @@ import Foundation
 public enum PluginIO {
     public static let stdoutLimit = 65_536
     public static let maxRows = 10
+    public static let maxActions = 5
     public static let valueLimit = 200
     public static let titleLimit = 60
     public static let calendarTitleLimit = 120
+    public static let maxCalendarEntries = 50
+    /// One event may not span more than a day.
+    public static let maxCalendarSpan: Double = 24 * 3600
 
     /// One stretch of session activity; seconds since 1970. `open` is the stretch still running.
     public struct Segment: Sendable, Equatable, Codable {
@@ -76,7 +80,7 @@ public enum PluginIO {
                 rows.append(row)
             }
             var actions: [Action] = []
-            for a in v["actions"]?.array ?? [] {
+            for a in (v["actions"]?.array ?? []).prefix(maxActions) {
                 guard let label = a["label"]?.string, let action = a["action"]?.string else { throw ParseError.badAction("缺 label 或 action") }
                 guard tool.isHook(action) else { throw ParseError.badAction("「\(action)」不是這個插件的 hook 命令") }
                 actions.append(Action(label: String(label.prefix(titleLimit)), action: action))
@@ -101,7 +105,9 @@ public enum PluginIO {
 
         static func validate(_ v: JSONValue, index: Int) throws -> CalendarEntry {
             guard let title = v["title"]?.string, !title.isEmpty else { throw ParseError.badCalendar(index, "缺 title") }
-            guard let start = v["start"]?.double, let end = v["end"]?.double, end > start else { throw ParseError.badCalendar(index, "start/end 不合法") }
+            guard let start = v["start"]?.double, let end = v["end"]?.double, end > start, end - start <= maxCalendarSpan else {
+                throw ParseError.badCalendar(index, "start/end 不合法（要 start < end，且不超過 24 小時）")
+            }
             guard let marker = v["marker"]?.string, isValidMarker(marker) else { throw ParseError.badCalendar(index, "marker 只能有英數、:._-，1–80 字") }
             return CalendarEntry(title: String(title.prefix(calendarTitleLimit)), start: start, end: end,
                                  notes: v["notes"]?.string, marker: marker)
@@ -114,8 +120,9 @@ public enum PluginIO {
 
         public static func parse(_ stdout: String) throws -> TickOutput {
             let v = try PluginIO.decode(stdout)
-            let entries = try (v["calendar"]?.array ?? []).enumerated().map { try CalendarEntry.validate($1, index: $0 + 1) }
-            return TickOutput(calendar: entries)
+            let list = v["calendar"]?.array ?? []
+            guard list.count <= maxCalendarEntries else { throw ParseError.badCalendar(list.count, "一次最多 \(maxCalendarEntries) 筆") }
+            return TickOutput(calendar: try list.enumerated().map { try CalendarEntry.validate($1, index: $0 + 1) })
         }
     }
 

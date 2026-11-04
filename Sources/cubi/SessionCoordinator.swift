@@ -6,6 +6,8 @@ import CubiKit
 @MainActor
 final class SessionCoordinator {
     var store = SessionStore()
+    /// Sessions gone from the store whose last stretch of work no tick has carried yet.
+    var retiredForPlugins: [PluginIO.SessionInput] = []
     let island: IslandController
     let notifier = Notifier()
     let ignored = IgnoredDirectories()
@@ -36,6 +38,7 @@ final class SessionCoordinator {
             case .wake: store.wake(id, now: Date().timeIntervalSinceReferenceDate, leavingRest: true)
             case .dismiss:
                 withdraw(sessionID: id, outcome: .handledElsewhere)
+                if let info = store.sessions[id] { retireForPlugins(info) }
                 store.dismiss(id)
             }
             sync()
@@ -351,8 +354,9 @@ final class SessionCoordinator {
             case .removeLater(let id, let after):
                 DispatchQueue.main.asyncAfter(deadline: .now() + after) { [weak self] in
                     MainActor.assumeIsolated {
-                        guard let self, self.store.sessions[id]?.ended == true else { return }
+                        guard let self, let info = self.store.sessions[id], info.ended else { return }
                         self.withdraw(sessionID: id, outcome: .handledElsewhere)
+                        self.retireForPlugins(info)
                         self.store.forget(id)
                         self.sync()
                     }

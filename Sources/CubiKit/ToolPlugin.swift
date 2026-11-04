@@ -128,7 +128,9 @@ public struct ToolPlugin: Sendable, Equatable {
             guard let run = spec["run"]?.array?.compactMap(\.string), !run.isEmpty, !run[0].isEmpty else {
                 throw LoadError.badCommand(action, "run 要是非空的字串陣列")
             }
-            // The executable may be absolute, `~`, `$plugin/…`, or relative to the plugin directory.
+            // The executable may be absolute, `~`, `$plugin/…`, or a path relative to the plugin
+            // directory; a bare name is not looked up on PATH (no shell), so it is refused.
+            guard run[0].contains("/") || run[0] == "~" else { throw LoadError.badCommand(action, "執行檔要是路徑（絕對、~ 或相對插件目錄，不能只寫名字）") }
             let executable = absolutePath(pluginPath(run[0], base: baseDirectory), base: baseDirectory, home: home)
             let argv = run.dropFirst().map { pluginPath($0, base: baseDirectory) }
             var args: [ArgType] = []
@@ -146,7 +148,8 @@ public struct ToolPlugin: Sendable, Equatable {
                     throw LoadError.badCommand(action, "args[\(i)] 不認得的型別「\(other)」")
                 }
             }
-            let stdin = spec["stdin"]?.double.map { Int($0) }
+            if let raw = spec["stdin"], raw.double.flatMap(Int.init(exactly:)) == nil { throw LoadError.badCommand(action, "stdin 要是整數") }
+            let stdin = spec["stdin"]?.double.flatMap(Int.init(exactly:))
             if let s = stdin, s < 1 || s > args.count { throw LoadError.badCommand(action, "stdin 要在 1…\(args.count)") }
             for (i, a) in args.enumerated() where a == .text && stdin != i + 1 {
                 throw LoadError.badCommand(action, "args[\(i)] 是 text，只能經 stdin 傳")
@@ -165,20 +168,25 @@ public struct ToolPlugin: Sendable, Equatable {
         if let s = m["session"] {
             guard let info = s["info"]?.string else { throw LoadError.missingField("session.info") }
             try checkHook("session.info", action: info, in: commands)
-            let refresh = Int(s["refresh"]?.double ?? 60)
-            guard refresh >= minRefresh else { throw LoadError.badHook("session.refresh", "最少 \(minRefresh) 秒") }
-            session = SessionHook(info: info, refresh: refresh)
+            session = SessionHook(info: info, refresh: try seconds(s["refresh"], field: "session.refresh", least: minRefresh))
         }
         var tick: TickHook?
         if let t = m["tick"] {
             guard let action = t["action"]?.string else { throw LoadError.missingField("tick.action") }
             try checkHook("tick.action", action: action, in: commands)
-            let every = Int(t["every"]?.double ?? 60)
-            guard every >= minTickInterval else { throw LoadError.badHook("tick.every", "最少 \(minTickInterval) 秒") }
-            tick = TickHook(action: action, every: every)
+            tick = TickHook(action: action, every: try seconds(t["every"], field: "tick.every", least: minTickInterval))
         }
         return ToolPlugin(id: id, displayName: name, directory: baseDirectory, panel: panel, commands: commands,
                           session: session, tick: tick)
+    }
+
+    /// An interval in whole seconds, `least` or more; absent means 60. A huge or fractional number is
+    /// an error, not a crash (`Int(Double)` traps on 1e300).
+    static func seconds(_ v: JSONValue?, field: String, least: Int) throws -> Int {
+        guard let v else { return 60 }
+        guard let n = v.double.flatMap(Int.init(exactly:)) else { throw LoadError.badHook(field, "要是整數秒") }
+        guard n >= least else { throw LoadError.badHook(field, "最少 \(least) 秒") }
+        return n
     }
 
     /// A hook command takes exactly one `text` argument on stdin (the JSON the app feeds it) and

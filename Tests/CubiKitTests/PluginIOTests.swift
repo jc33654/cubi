@@ -14,9 +14,9 @@ private func tool() throws -> ToolPlugin {
 }
 
 @Test func sessionInputEncodesSortedAndOmitsMissingPaths() {
-    let s = PluginIO.SessionInput(id: "s1", name: "退款優化", cwd: "/Users/me/DDPAY", projectDirectory: nil, agent: "claude-code",
+    let s = PluginIO.SessionInput(id: "s1", name: "範例工單", cwd: "/Users/me/proj", projectDirectory: nil, agent: "claude-code",
                                   segments: [.init(start: 100, end: 200, open: false), .init(start: 300, end: 330, open: true)])
-    #expect(s.json() == #"{"agent":"claude-code","cwd":"/Users/me/DDPAY","id":"s1","name":"退款優化","segments":[{"end":200,"open":false,"start":100},{"end":330,"open":true,"start":300}]}"#)
+    #expect(s.json() == #"{"agent":"claude-code","cwd":"/Users/me/proj","id":"s1","name":"範例工單","segments":[{"end":200,"open":false,"start":100},{"end":330,"open":true,"start":300}]}"#)
     let t = PluginIO.TickInput(now: 400, sessions: [s])
     #expect(t.json().hasPrefix(#"{"now":400,"sessions":[{"agent""#))
 }
@@ -24,13 +24,13 @@ private func tool() throws -> ToolPlugin {
 @Test func widgetOutputParsesRowsActionsAndLinks() throws {
     let out = try PluginIO.WidgetOutput.parse(#"""
     {"title":"Sprint",
-     "rows":[["今日","2h 35m"],{"label":"DDP-6532","value":"退款優化 v3 入口","url":"https://jira.example/browse/DDP-6532"},{"label":"x","value":"y"}],
+     "rows":[["今日","2h 35m"],{"label":"PROJ-12","value":"範例工單 甲","url":"https://jira.example/browse/PROJ-12"},{"label":"x","value":"y"}],
      "actions":[{"label":"同步 Jira","action":"sync"}],
      "error":"Jira 認證失敗"}
     """#, tool: try tool())
     #expect(out.title == "Sprint" && out.error == "Jira 認證失敗")
     #expect(out.rows == [.init(label: "今日", value: "2h 35m", url: nil),
-                         .init(label: "DDP-6532", value: "退款優化 v3 入口", url: "https://jira.example/browse/DDP-6532"),
+                         .init(label: "PROJ-12", value: "範例工單 甲", url: "https://jira.example/browse/PROJ-12"),
                          .init(label: "x", value: "y", url: nil)])
     #expect(out.actions == [.init(label: "同步 Jira", action: "sync")])
     let bare = try PluginIO.WidgetOutput.parse(#"{"rows":[]}"#, tool: try tool())
@@ -51,16 +51,22 @@ private func tool() throws -> ToolPlugin {
     #expect(throws: PluginIO.ParseError.badAction("「plain」不是這個插件的 hook 命令")) { try PluginIO.WidgetOutput.parse(#"{"actions":[{"label":"x","action":"plain"}]}"#, tool: t) }
     #expect(throws: PluginIO.ParseError.badAction("「reveal」不是這個插件的 hook 命令")) { try PluginIO.WidgetOutput.parse(#"{"actions":[{"label":"x","action":"reveal"}]}"#, tool: t) }
     #expect(throws: PluginIO.ParseError.badAction("缺 label 或 action")) { try PluginIO.WidgetOutput.parse(#"{"actions":[{"label":"x"}]}"#, tool: t) }
+    let manyActions = (1...8).map { #"{"label":"a\#($0)","action":"sync"}"# }.joined(separator: ",")
+    #expect(try PluginIO.WidgetOutput.parse(#"{"actions":[\#(manyActions)]}"#, tool: t).actions.count == PluginIO.maxActions)
 }
 
 @Test func tickOutputValidatesCalendarEntries() throws {
     let out = try PluginIO.TickOutput.parse(#"""
-    {"calendar":[{"title":"DDP-6532 退款優化","start":1762218720,"end":1762228000,"notes":"https://jira/browse/DDP-6532","marker":"sprint:3d22:1762218720"}]}
+    {"calendar":[{"title":"PROJ-12 範例工單","start":1762218720,"end":1762228000,"notes":"https://jira/browse/PROJ-12","marker":"sprint:s1:1762218720"}]}
     """#)
-    #expect(out.calendar == [.init(title: "DDP-6532 退款優化", start: 1762218720, end: 1762228000, notes: "https://jira/browse/DDP-6532", marker: "sprint:3d22:1762218720")])
+    #expect(out.calendar == [.init(title: "PROJ-12 範例工單", start: 1762218720, end: 1762228000, notes: "https://jira/browse/PROJ-12", marker: "sprint:s1:1762218720")])
     #expect(try PluginIO.TickOutput.parse("{}").calendar.isEmpty)
     #expect(throws: PluginIO.ParseError.badCalendar(1, "缺 title")) { try PluginIO.TickOutput.parse(#"{"calendar":[{"start":1,"end":2,"marker":"m"}]}"#) }
-    #expect(throws: PluginIO.ParseError.badCalendar(1, "start/end 不合法")) { try PluginIO.TickOutput.parse(#"{"calendar":[{"title":"t","start":2,"end":2,"marker":"m"}]}"#) }
+    let span = "start/end 不合法（要 start < end，且不超過 24 小時）"
+    #expect(throws: PluginIO.ParseError.badCalendar(1, span)) { try PluginIO.TickOutput.parse(#"{"calendar":[{"title":"t","start":2,"end":2,"marker":"m"}]}"#) }
+    #expect(throws: PluginIO.ParseError.badCalendar(1, span)) { try PluginIO.TickOutput.parse(#"{"calendar":[{"title":"t","start":0,"end":1e12,"marker":"m"}]}"#) }
+    let tooMany = (1...51).map { #"{"title":"t","start":\#($0),"end":\#($0 + 100),"marker":"m\#($0)"}"# }.joined(separator: ",")
+    #expect(throws: PluginIO.ParseError.badCalendar(51, "一次最多 50 筆")) { try PluginIO.TickOutput.parse(#"{"calendar":[\#(tooMany)]}"#) }
     #expect(throws: PluginIO.ParseError.badCalendar(2, "marker 只能有英數、:._-，1–80 字")) {
         try PluginIO.TickOutput.parse(#"{"calendar":[{"title":"t","start":1,"end":2,"marker":"ok"},{"title":"t","start":1,"end":2,"marker":"有 空白"}]}"#)
     }

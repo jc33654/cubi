@@ -58,7 +58,7 @@ public struct SessionInfo: Sendable, Equatable, Identifiable {
         }
     }
 
-    mutating func closeSegment(at end: Double) {
+    public mutating func closeSegment(at end: Double) {
         if let start = segmentStart, end > start { segments.append(ActivitySegment(start: start, end: end)) }
         segmentStart = nil
     }
@@ -70,7 +70,6 @@ public struct ActivitySegment: Sendable, Equatable {
     public var end: Double
 
     public init(start: Double, end: Double) { self.start = start; self.end = end }
-    public var duration: Double { end - start }
 }
 
 /// Side effects the store cannot perform itself (timers, notifications, usage display).

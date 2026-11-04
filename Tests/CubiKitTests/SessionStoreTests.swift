@@ -92,7 +92,7 @@ private func hook(_ id: String, _ event: CanonicalEvent, cwd: String? = "/Users/
     var store = SessionStore()
     _ = store.apply(hook("s", .sessionStart(source: nil)), now: 1000)
     #expect(store.sessions["s"]?.segmentStart == 1000 && store.sessions["s"]?.segments.isEmpty == true)
-    _ = store.apply(hook("s", .prompt("改退款流程")), now: 1100)
+    _ = store.apply(hook("s", .prompt("改一個流程")), now: 1100)
     _ = store.apply(hook("s", .toolStart(tool: "Edit", input: .null)), now: 1400)
     // The status line is not activity: it neither extends nor opens a stretch.
     _ = store.apply(hook("s", .statusline(StatuslineInfo())), now: 1500)
@@ -131,6 +131,17 @@ private func hook(_ id: String, _ event: CanonicalEvent, cwd: String? = "/Users/
     #expect(store.sessions["s"]?.segmentStart == nil && store.sessions["s"]?.botState == .waiting)
     store.tick(now: 1700 + SessionStore.segmentRetention + 1)
     #expect(store.sessions["s"]?.segments.isEmpty == true)
+}
+
+@Test func wakingARobotDoesNotStretchItsWork() {
+    var store = SessionStore()
+    _ = store.apply(hook("s", .sessionStart(source: nil)), now: 0)
+    _ = store.apply(hook("s", .stop(lastMessage: nil)), now: 100)
+    store.rest("s")   // 去睡覺 right away: asleep with the stretch still open
+    #expect(store.sessions["s"]?.botState == .sleeping && store.sessions["s"]?.segmentStart == 0)
+    store.wake("s", now: 650, leavingRest: true)
+    #expect(store.sessions["s"]?.segments == [ActivitySegment(start: 0, end: 100)] && store.sessions["s"]?.segmentStart == nil)
+    #expect(store.sessions["s"]?.lastEventAt == 650)
 }
 
 @Test func sessionEndForUnknownSessionIsIgnored() {

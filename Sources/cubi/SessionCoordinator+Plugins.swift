@@ -7,9 +7,21 @@ extension SessionCoordinator {
         store.sessions[id].map(Self.input(for:))
     }
 
-    /// Every live session, for a plugin's `tick`.
+    /// Every session the store has (ended ones linger a few seconds), plus the ones that were
+    /// removed since the last tick, so their final stretch is reported once.
     func tickInput(now: Date = Date()) -> PluginIO.TickInput {
-        PluginIO.TickInput(now: now.timeIntervalSince1970, sessions: store.ordered.filter { !$0.ended }.map(Self.input(for:)))
+        let retired = retiredForPlugins
+        retiredForPlugins = []
+        return PluginIO.TickInput(now: now.timeIntervalSince1970, sessions: store.ordered.map(Self.input(for:)) + retired)
+    }
+
+    /// The session is about to leave the store: close its stretch now and keep it for the next tick.
+    func retireForPlugins(_ info: SessionInfo) {
+        var s = info
+        s.closeSegment(at: s.lastEventAt)
+        guard !s.segments.isEmpty else { return }
+        retiredForPlugins.removeAll { $0.id == s.id }
+        retiredForPlugins.append(Self.input(for: s))
     }
 
     static func input(for s: SessionInfo) -> PluginIO.SessionInput {

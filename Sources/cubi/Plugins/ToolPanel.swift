@@ -90,15 +90,17 @@ final class ToolPanel: NSObject, NSWindowDelegate, WKNavigationDelegate {
         web = nil
     }
 
+    /// Any navigation away from the loaded HTML (a link, `location.href`, a form, a meta refresh)
+    /// is refused: the bridge belongs to this web view, and a remote page must never get to use
+    /// it. http(s) targets open in the browser instead.
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
                  decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void) {
-        if action.navigationType == .linkActivated, let url = action.request.url,
-           ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
-            NSWorkspace.shared.open(url)
-            decisionHandler(.cancel)
+        guard let url = action.request.url, url.scheme?.lowercased() != "about" else {
+            decisionHandler(.allow)
             return
         }
-        decisionHandler(.allow)
+        if ["http", "https"].contains(url.scheme?.lowercased() ?? "") { NSWorkspace.shared.open(url) }
+        decisionHandler(.cancel)
     }
 }
 

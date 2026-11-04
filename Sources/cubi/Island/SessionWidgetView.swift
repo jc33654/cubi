@@ -56,7 +56,7 @@ private struct WidgetSection: View {
                 }
             }
             HStack(spacing: 6) {
-                ForEach(entry?.output?.actions ?? [], id: \.action) { action in
+                ForEach(Array((entry?.output?.actions ?? []).enumerated()), id: \.offset) { _, action in
                     CardButton(title: action.label, role: .quiet) {
                         Task { await store.act(action.action, session: bot.id, plugin: tool) }
                     }

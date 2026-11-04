@@ -12,7 +12,6 @@ final class SessionWidgetStore {
         /// A failure of the command itself (not the plugin's own `error` field).
         var failure: String?
         var loading = false
-        var at: Date?
     }
 
     private let registry: PluginRegistry
@@ -32,19 +31,21 @@ final class SessionWidgetStore {
 
     func refresh(session: String, plugin: ToolPlugin) async {
         guard let hook = plugin.session else { return }
-        await run(hook.info, session: session, plugin: plugin, log: false)
+        await run(hook.info, session: session, plugin: plugin)
     }
 
-    /// A button in the card: run that command, then ask `session.info` again.
+    /// A button in the card: run that command, then ask `session.info` again. A failed action
+    /// stays on screen (no refresh) until the next one.
     func act(_ action: String, session: String, plugin: ToolPlugin) async {
         guard plugin.isHook(action) else { return }
-        await run(action, session: session, plugin: plugin, log: true)
-        await refresh(session: session, plugin: plugin)
+        CubiLog.write("widget \(plugin.id) \(action) session=\(session.prefix(8))")
+        if await run(action, session: session, plugin: plugin) { await refresh(session: session, plugin: plugin) }
     }
 
-    private func run(_ action: String, session: String, plugin: ToolPlugin, log: Bool) async {
+    @discardableResult
+    private func run(_ action: String, session: String, plugin: ToolPlugin) async -> Bool {
         let key = Self.key(session, plugin.id)
-        guard registry.isEnabled(plugin.id), let input = input(session) else { return }
+        guard registry.isEnabled(plugin.id), let input = input(session) else { return false }
         let gen = (generation[key] ?? 0) + 1
         generation[key] = gen
         var entry = entries[key] ?? Entry()
@@ -55,20 +56,21 @@ final class SessionWidgetStore {
             invocation = try plugin.invocation(action: action, args: [input.json()])
         } catch {
             finish(key, gen: gen, failure: error.localizedDescription)
-            return
+            return false
         }
-        if log { CubiLog.write("widget \(plugin.id) \(action) session=\(session.prefix(8))") }
-        let r = await Task.detached(priority: .userInitiated) { ToolRunner.run(invocation) }.value
+        let r = await Task.detached(priority: .userInitiated) { ToolRunner.run(invocation, timeout: ToolRunner.hookTimeout) }.value
         if r.code != 0 {
             CubiLog.write("widget \(plugin.id) \(action): exit \(r.code) \(r.err.prefix(200))")
             finish(key, gen: gen, failure: r.err.isEmpty ? "exit \(r.code)" : String(r.err.prefix(200)))
-            return
+            return false
         }
         do {
             finish(key, gen: gen, output: try PluginIO.WidgetOutput.parse(r.out, tool: plugin))
+            return true
         } catch {
             CubiLog.write("widget \(plugin.id) \(action): \(error.localizedDescription)")
             finish(key, gen: gen, failure: error.localizedDescription)
+            return false
         }
     }
 
@@ -77,7 +79,6 @@ final class SessionWidgetStore {
         guard generation[key] == gen else { return }
         var entry = entries[key] ?? Entry()
         entry.loading = false
-        entry.at = Date()
         if let output { entry.output = output; entry.failure = nil } else { entry.failure = failure }
         entries[key] = entry
     }

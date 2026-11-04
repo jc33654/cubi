@@ -64,9 +64,11 @@ public struct SessionStore: Sendable {
             }
         }
         var s = sessions[id]!
-        // The status line keeps running for a short while after SessionEnd; it must not resurrect.
+        // The status line keeps running for a short while after SessionEnd; it must not resurrect,
+        // and it is not activity either (neither for the sleep clock nor for the work stretches).
         if case .statusline = hook.event {} else {
             s.noteActivity(now: now, gap: sleepAfter)
+            s.lastEventAt = now
             s.ended = false
             // Auto-rested: anything happening brings it back. Manually rested: only the user does.
             if s.rest == .auto || (s.rest == .manual && hook.event.needsTheUser) {
@@ -74,7 +76,6 @@ public struct SessionStore: Sendable {
                 manuallyRested.remove(id)
             }
         }
-        s.lastEventAt = now
         if s.cwd == nil { s.cwd = hook.session.cwd }
         if s.client.tty == nil { s.client = hook.session.client }
         if let t = hook.session.transcriptPath { s.transcriptPath = t }
@@ -173,8 +174,6 @@ public struct SessionStore: Sendable {
                 if c >= 80, s.pending == nil, s.botState == .idle || s.botState == .tired { s.botState = .tired }
             }
             if let merged = mergeUsage(info, from: id) { effects.append(.usage(merged)) }
-            // Status line runs constantly; it is not "activity" for the sleep timer.
-            s.lastEventAt = sessions[id]!.lastEventAt
         }
         sessions[id] = s
         return effects
@@ -213,6 +212,8 @@ public struct SessionStore: Sendable {
             s.rest = .none
             manuallyRested.remove(id)
         }
+        // A click is not work: a stretch still open ends at the last real event, not now.
+        s.closeSegment(at: s.lastEventAt)
         s.lastEventAt = now
         s.ticker = "醒了"
         sessions[id] = s

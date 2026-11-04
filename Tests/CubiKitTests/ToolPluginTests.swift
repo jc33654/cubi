@@ -45,6 +45,9 @@ private let sample = #"""
     fails(#"{"id":"t","name":"T"}"#, .missingField("panel.file"))
     fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"x":{"run":[]}}}"#, .badCommand("x", "run 要是非空的字串陣列"))
     fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"x":{"run":[""]}}}"#, .badCommand("x", "run 要是非空的字串陣列"))
+    fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"x":{"run":["python3","a"]}}}"#, .badCommand("x", "執行檔要是路徑（絕對、~ 或相對插件目錄，不能只寫名字）"))
+    fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"x":{"run":["/c"],"args":["name"],"stdin":1.5}}}"#, .badCommand("x", "stdin 要是整數"))
+    fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"x":{"run":["/c"],"args":["name"],"stdin":1e300}}}"#, .badCommand("x", "stdin 要是整數"))
     fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"x":{"run":["/c","$3"],"args":["name"]}}}"#, .badCommand("x", "$3 沒有對應的 args"))
     fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"x":{"run":["/c","$1"],"args":["text"]}}}"#, .badCommand("x", "args[0] 是 text，只能經 stdin 傳"))
     fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"x":{"run":["/c"],"args":["name"],"stdin":2}}}"#, .badCommand("x", "stdin 要在 1…1"))
@@ -56,13 +59,13 @@ private let sample = #"""
 @Test func toolManifestResolvesPluginRelativeCommands() throws {
     let t = try parse(#"""
     {"id":"t","name":"T","panel":{"file":"a"},"commands":{
-      "a": {"run": ["cli", "x"]},
+      "a": {"run": ["bin/cli", "x"]},
       "b": {"run": ["/usr/bin/python3", "$plugin/tool.py", "run", "$plugin"]},
       "c": {"run": ["$plugin/bin/cli"]}
     }}
     """#)
     #expect(t.directory == "/plugins/t")
-    #expect(t.commands["a"]?.run == ["/plugins/t/cli", "x"])
+    #expect(t.commands["a"]?.run == ["/plugins/t/bin/cli", "x"])
     #expect(t.commands["b"]?.run == ["/usr/bin/python3", "/plugins/t/tool.py", "run", "/plugins/t"])
     #expect(t.commands["c"]?.run == ["/plugins/t/bin/cli"])
     #expect(try t.invocation(action: "a", args: []).directory == "/plugins/t")
@@ -100,6 +103,10 @@ private let hooked = #"""
     fails(#"{"id":"t","name":"T","panel":{"file":"a"},"session":{"info":"p"},\#(cmds)}"#, .badHook("session.info", "「p」要宣告 args: [\"text\"], stdin: 1"))
     fails(#"{"id":"t","name":"T","panel":{"file":"a"},"session":{"info":"r"},\#(cmds)}"#, .badHook("session.info", "「r」不能同時 reveal"))
     fails(#"{"id":"t","name":"T","panel":{"file":"a"},"session":{"info":"h","refresh":5},\#(cmds)}"#, .badHook("session.refresh", "最少 10 秒"))
+    // Would trap in Int(Double) and take the whole app down at plugin load.
+    fails(#"{"id":"t","name":"T","panel":{"file":"a"},"session":{"info":"h","refresh":1e300},\#(cmds)}"#, .badHook("session.refresh", "要是整數秒"))
+    fails(#"{"id":"t","name":"T","panel":{"file":"a"},"session":{"info":"h","refresh":"60"},\#(cmds)}"#, .badHook("session.refresh", "要是整數秒"))
+    fails(#"{"id":"t","name":"T","panel":{"file":"a"},"tick":{"action":"h","every":60.5},\#(cmds)}"#, .badHook("tick.every", "要是整數秒"))
     fails(#"{"id":"t","name":"T","panel":{"file":"a"},"tick":{"action":"h","every":10},\#(cmds)}"#, .badHook("tick.every", "最少 30 秒"))
     fails(#"{"id":"t","name":"T","panel":{"file":"a"},"tick":{},\#(cmds)}"#, .missingField("tick.action"))
 }

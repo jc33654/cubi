@@ -1,4 +1,4 @@
-.PHONY: build release test clean bundle dist icon install run cert hook-test
+.PHONY: build release test plugin-test clean bundle dist icon install run cert hook-test
 
 APP_DEST := $(HOME)/Applications/Cubi.app
 IDENTITY ?= $(or $(CUBI_SIGN_IDENTITY),cubi-dev)
@@ -16,6 +16,10 @@ TEST_FLAGS := -Xswiftc -F$(CLT_FW) -Xlinker -F$(CLT_FW) -Xlinker -rpath -Xlinker
 
 test:
 	swift test $(TEST_FLAGS)
+
+# The sample plugins' own tests (Python, stdlib only).
+plugin-test:
+	cd docs/plugins/sprint && /usr/bin/python3 -I -m unittest discover -s tests -t .
 
 clean:
 	rm -rf .build build

@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "kind": "tool",
+  "id": "sprint",
+  "name": "Sprint",
+  "panel": { "file": "index.html", "width": 980, "height": 700 },
+  "session": { "info": "session.info", "refresh": 60 },
+  "tick": { "action": "tick", "every": 60 },
+  "commands": {
+    "session.info":      { "run": ["/usr/bin/python3", "$plugin/sprint.py", "session.info"],      "args": ["text"], "stdin": 1 },
+    "session.sync":      { "run": ["/usr/bin/python3", "$plugin/sprint.py", "session.sync"],      "args": ["text"], "stdin": 1 },
+    "session.bind":      { "run": ["/usr/bin/python3", "$plugin/sprint.py", "session.bind"],      "args": ["text"], "stdin": 1 },
+    "session.unbind":    { "run": ["/usr/bin/python3", "$plugin/sprint.py", "session.unbind"],    "args": ["text"], "stdin": 1 },
+    "session.shares":    { "run": ["/usr/bin/python3", "$plugin/sprint.py", "session.shares"],    "args": ["text"], "stdin": 1 },
+    "tick":              { "run": ["/usr/bin/python3", "$plugin/sprint.py", "tick"],              "args": ["text"], "stdin": 1 },
+    "panel.state":       { "run": ["/usr/bin/python3", "$plugin/sprint.py", "panel.state"],       "args": ["text"], "stdin": 1 },
+    "sprint.new":        { "run": ["/usr/bin/python3", "$plugin/sprint.py", "sprint.new"],        "args": ["text"], "stdin": 1 },
+    "sprint.update":     { "run": ["/usr/bin/python3", "$plugin/sprint.py", "sprint.update"],     "args": ["text"], "stdin": 1 },
+    "sprint.select":     { "run": ["/usr/bin/python3", "$plugin/sprint.py", "sprint.select"],     "args": ["text"], "stdin": 1 },
+    "sprint.sync":       { "run": ["/usr/bin/python3", "$plugin/sprint.py", "sprint.sync"],       "args": ["text"], "stdin": 1 },
+    "ticket.add":        { "run": ["/usr/bin/python3", "$plugin/sprint.py", "ticket.add"],        "args": ["text"], "stdin": 1 },
+    "ticket.update":     { "run": ["/usr/bin/python3", "$plugin/sprint.py", "ticket.update"],     "args": ["text"], "stdin": 1 },
+    "ticket.transition": { "run": ["/usr/bin/python3", "$plugin/sprint.py", "ticket.transition"], "args": ["text"], "stdin": 1 },
+    "points.push":       { "run": ["/usr/bin/python3", "$plugin/sprint.py", "points.push"],       "args": ["text"], "stdin": 1 },
+    "time.add":          { "run": ["/usr/bin/python3", "$plugin/sprint.py", "time.add"],          "args": ["text"], "stdin": 1 },
+    "time.remove":       { "run": ["/usr/bin/python3", "$plugin/sprint.py", "time.remove"],       "args": ["text"], "stdin": 1 },
+    "review.update":     { "run": ["/usr/bin/python3", "$plugin/sprint.py", "review.update"],     "args": ["text"], "stdin": 1 },
+    "review.export":     { "run": ["/usr/bin/python3", "$plugin/sprint.py", "review.export"],     "args": ["text"], "stdin": 1, "reveal": true },
+    "config.get":        { "run": ["/usr/bin/python3", "$plugin/sprint.py", "config.get"],        "args": ["text"], "stdin": 1 },
+    "config.set":        { "run": ["/usr/bin/python3", "$plugin/sprint.py", "config.set"],        "args": ["text"], "stdin": 1 }
+  }
+}

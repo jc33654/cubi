@@ -330,7 +330,7 @@ def main(argv):
     store = Store()
     try:
         result = ACTIONS[argv[1]](store, payload)
-    except JiraError as e:
+    except (JiraError, ValueError) as e:
         result = {"error": str(e)}
     except KeyError as e:
         result = {"error": f"缺少欄位 {e}"}

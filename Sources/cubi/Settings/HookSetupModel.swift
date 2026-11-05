@@ -16,6 +16,8 @@ final class HookSetupModel {
     var projectLocalFiles: [URL] = []
     /// After a write: hooks are read when a session starts.
     var needsRestart = false
+    /// Bumped by every write, so views holding their own install status read it again.
+    var revision = 0
 
     static let projectLocalKey = "projectLocalHookDirs"
 
@@ -64,10 +66,17 @@ final class HookSetupModel {
             self.error = error.localizedDescription
         }
         pending = nil
+        revision += 1
         refresh()
     }
 
     func cancelPending() { pending = nil }
+
+    /// Leaving a settings page: what the last action said belonged to that page.
+    func clearFeedback() {
+        message = nil
+        refresh()
+    }
 
     func stripProjectLocal(_ url: URL) {
         do {

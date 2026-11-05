@@ -6,16 +6,19 @@ import CubiKit
 struct DisplaySection: View {
     @Bindable var island: IslandState
     let notifications: Binding<Bool>
+    let notificationsDenied: () async -> Bool
 
     @State private var soundsOn = Sounds.enabled
     @State private var notificationsOn: Bool
+    @State private var denied = false
     @State private var loginOn = SMAppService.mainApp.status == .enabled
 
     // Starting values come in here, not in onAppear: setting them there would count as a change and
     // write back (and ask for notification permission again) on every visit to this page.
-    init(island: IslandState, notifications: Binding<Bool>) {
+    init(island: IslandState, notifications: Binding<Bool>, notificationsDenied: @escaping () async -> Bool) {
         self.island = island
         self.notifications = notifications
+        self.notificationsDenied = notificationsDenied
         _notificationsOn = State(initialValue: notifications.wrappedValue)
     }
 
@@ -40,8 +43,15 @@ struct DisplaySection: View {
                     switchToggle($soundsOn).onChange(of: soundsOn) { _, v in Sounds.enabled = v }
                 }
                 SettingRow(title: "系統通知", help: "需要通知權限，預設關") {
+                    if notificationsOn && denied {
+                        StatusPill(text: "沒有權限", tone: .danger)
+                        Button("打開系統設定") {
+                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!)
+                        }
+                    }
                     switchToggle($notificationsOn).onChange(of: notificationsOn) { _, v in notifications.wrappedValue = v }
                 }
+                .task(id: notificationsOn) { denied = await notificationsDenied() }
                 SettingRow(title: "登入時啟動") {
                     switchToggle($loginOn).onChange(of: loginOn) { _, v in
                         // Writing the real status back below triggers this again (say, register

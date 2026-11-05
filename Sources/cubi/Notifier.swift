@@ -34,6 +34,11 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
+    /// The user said no in System Settings: notifications stay silent whatever the switch says.
+    func isDenied() async -> Bool {
+        await UNUserNotificationCenter.current().notificationSettings().authorizationStatus == .denied
+    }
+
     func notify(title: String, body: String, thread: String) {
         guard enabled else { return }
         let content = UNMutableNotificationContent()

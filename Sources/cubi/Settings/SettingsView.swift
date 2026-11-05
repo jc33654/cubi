@@ -33,6 +33,7 @@ struct SettingsView: View {
     @Bindable var registry: PluginRegistry
     /// 系統通知 on or off (the window passes the Notifier's; an offline render, a constant).
     let notifications: Binding<Bool>
+    let notificationsDenied: () async -> Bool
     let ignored: IgnoredDirectories
     @Bindable var timing: SleepTiming
     @Bindable var calendar: SystemCalendar
@@ -55,6 +56,7 @@ struct SettingsView: View {
         }
         .frame(minWidth: 720, minHeight: 480)
         .onAppear { hooks.refresh() }
+        .onChange(of: page) { hooks.clearFeedback() }
         .sheet(item: Binding(get: { hooks.pending.map { PreviewBox(preview: $0) } }, set: { if $0 == nil { hooks.cancelPending() } })) { box in
             DiffSheet(title: hooks.pendingIsUninstall ? "解除安裝 Claude Code hooks" : "安裝 Claude Code hooks",
                       diff: box.preview.plan.diff, path: box.preview.url.path,
@@ -88,7 +90,7 @@ struct SettingsView: View {
     private var content: some View {
         switch page {
         case .claude: ClaudeSection(hooks: hooks)
-        case .display: DisplaySection(island: island, notifications: notifications)
+        case .display: DisplaySection(island: island, notifications: notifications, notificationsDenied: notificationsDenied)
         case .sleep: SleepSection(timing: timing)
         case .calendar: CalendarSection(calendar: calendar)
         case .plugins: PluginsSection(registry: registry, hooks: hooks, openTool: openTool)

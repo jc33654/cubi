@@ -92,7 +92,7 @@ private struct AgentCard: View {
                 }
             }
         }
-        .onAppear { status = try? HookSetup.status(plugin: plugin) }
+        .task(id: hooks.revision) { status = try? HookSetup.status(plugin: plugin) }
     }
 
     @ViewBuilder

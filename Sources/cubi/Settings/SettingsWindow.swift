@@ -33,7 +33,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         }
         let notifier = notifier
         let view = SettingsView(hooks: model, island: island, registry: registry,
-                                notifications: Binding(get: { notifier.enabled }, set: { notifier.enabled = $0 }), ignored: ignored, timing: timing,
+                                notifications: Binding(get: { notifier.enabled }, set: { notifier.enabled = $0 }),
+                                notificationsDenied: { await notifier.isDenied() }, ignored: ignored, timing: timing,
                                 calendar: calendar, openTool: openTool)
         let w = NSWindow(contentRect: NSRect(origin: .zero, size: Self.size),
                          styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -68,6 +69,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         island.persists = false
         let view = SettingsView(hooks: HookSetupModel(), island: island, registry: PluginRegistry(),
                                 notifications: .constant(UserDefaults.standard.bool(forKey: Notifier.enabledKey)),
+                                notificationsDenied: { false },
                                 ignored: IgnoredDirectories(), timing: SleepTiming(), calendar: SystemCalendar(),
                                 openTool: { _ in }, page: page)
         let w = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled], backing: .buffered, defer: false)

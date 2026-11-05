@@ -36,6 +36,7 @@ private let sample = #"""
     #expect(t.panel.file == "/plugins/t/index.html")
     #expect(t.panel.bridge == "cubi" && t.panel.width == 900 && t.panel.height == 640 && t.panel.style == nil)
     #expect(try parse(#"{"id":"t","name":"T","panel":{"file":"a","style":"cubi"},"commands":{}}"#).panel.style == .cubi)
+    #expect(try parse(#"{"id":"t","name":"T","panel":{"file":"a","style":null},"commands":{}}"#).panel.style == nil)
     #expect(throws: ToolPlugin.LoadError.badField("panel.style", "只能是 cubi")) { try parse(#"{"id":"t","name":"T","panel":{"file":"a","style":"fancy"},"commands":{}}"#) }
     #expect(throws: ToolPlugin.LoadError.badField("panel.style", "只能是 cubi")) { try parse(#"{"id":"t","name":"T","panel":{"file":"a","style":true},"commands":{}}"#) }
 }

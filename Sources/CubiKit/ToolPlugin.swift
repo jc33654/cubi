@@ -129,7 +129,7 @@ public struct ToolPlugin: Sendable, Equatable {
         guard let name = m["name"]?.string else { throw LoadError.missingField("name") }
         guard let file = m["panel"]?["file"]?.string else { throw LoadError.missingField("panel.file") }
         var style: PanelStyle?
-        if let raw = m["panel"]?["style"] {
+        if let raw = m["panel"]?["style"], !raw.isNull {
             guard let s = raw.string.flatMap(PanelStyle.init(rawValue:)) else {
                 throw LoadError.badField("panel.style", "只能是 \(PanelStyle.allCases.map(\.rawValue).joined(separator: "、"))")
             }

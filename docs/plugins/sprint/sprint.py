@@ -17,11 +17,12 @@ from datetime import date, datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import review  # noqa: E402
 from jira import TICKET_FIELDS, Jira, JiraError, parse_issue  # noqa: E402
-from store import Store, empty_review  # noqa: E402
+from store import ORPHAN_AFTER, Store, empty_review, remaining_seconds, tone_for  # noqa: E402
 
 CONFIG_KEYS = ("site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "hoursPerPoint", "reviewDir", "reviewSessionDir")
 CUBI = "~/Applications/Cubi.app/Contents/MacOS/cubi"
-MAX_UNBIND_BUTTONS = 3
+# A timer running longer than this is probably forgotten: the card shows it in red.
+LONG_TIMER = 8 * 3600
 
 
 def jira(store):
@@ -61,7 +62,7 @@ def fetch_tickets(store, keys):
 def apply_issue(store, parsed):
     t = store.ticket(parsed["key"])
     was_done = t.get("done")
-    t.update({k: parsed[k] for k in ("summary", "status", "done", "resolutionDate")})
+    t.update({k: parsed[k] for k in ("summary", "status", "statusCategory", "done", "resolutionDate")})
     t.pop("notFound", None)
     if parsed["estimate"] is not None:
         t["estimate"] = parsed["estimate"]
@@ -89,17 +90,12 @@ def target_sprint(store, p):
     return s
 
 
-def current_range(store):
-    s = store.current_sprint()
-    return review.sprint_range(s) if s else (time.time() - 14 * 86400, None)
-
-
 pts = review.pts
 
 
 def rows_for(store, sprint):
     since, until = review.sprint_range(sprint)
-    return review.ticket_rows(sprint, store.tickets, store.hours_by_key(since, until), store.hours_per_point())
+    return review.ticket_rows(sprint, store.tickets, store.hours_by_key(since, until), store.hours_per_point(), store.hours_by_key())
 
 
 # ---------- session hook ----------
@@ -116,40 +112,90 @@ def session_info(store, p, sync=False):
             fetch_tickets(store, keys if sync else missing)
         except JiraError as e:
             error = str(e)
-    since, until = current_range(store)
-    hours = store.hours_by_key(since, until)
-    today = store.hours_by_key(datetime.combine(date.today(), datetime.min.time()).timestamp(), None)
+    worked = store.hours_by_key()
     hpp = store.hours_per_point()
+    timer = store.timer(p["id"])
+    now = time.time()
     rows = []
     for key in keys:
         t = store.tickets.get(key, {})
-        secs = hours.get(key, {}).get("total", 0)
-        actual = review.actual_points(t.get("actual"), secs, hpp)
-        rows.append({"label": key, "url": store.browse_url(key),
-                     "value": " · ".join(x for x in [t.get("summary") or ("Jira 查不到這張單" if t.get("notFound") else "（還沒從 Jira 讀到）"), t.get("status"),
-                                                      f"估 {pts(t.get('estimate'))} 實 {pts(actual)}", review.fmt_hours(secs)] if x)})
+        secs = worked.get(key, {}).get("total", 0)
+        summary = t.get("summary") or ("Jira 查不到這張單" if t.get("notFound") else "（還沒從 Jira 讀到）")
+        row = {"label": key, "url": store.browse_url(key)}
+        budget = (t.get("estimate") or 0) * hpp * 3600
+        left = remaining_seconds(t.get("estimate"), secs, hpp)
+        if left is None:
+            row["value"] = f"{summary} · 未估點 · 已投入 {review.fmt_hours(secs)}"
+        else:
+            row.update(tone=tone_for(left, budget), progress=round(min(1.0, max(0.0, secs / budget)), 3))
+            if timer is not None and timer["shares"].get(key, 0) >= 99.5:
+                # The running timer burns this ticket's time live: cubi counts it down every second
+                # from the timer's start, so this session's own minutes since then are added back
+                # (they are the same minutes, and booking the timer will count them once).
+                again = store.session_seconds(p["id"], since=timer["start"])
+                row.update(value=summary, clock={"since": timer["start"], "offset": left + again, "down": True})
+            else:
+                row["value"] = f"{remaining_text(left)} · {summary}"
+        rows.append(row)
     if not keys:
-        rows.append(["工單", "未綁定；按「綁單號…」"])
+        rows.append(["工單", "未綁定；按 ＋ 綁單號"])
     else:
-        today_secs = sum(today.get(k, {}).get("session", 0) for k in keys)
-        split = f"（{len(keys)} 張單依比例分）" if len(keys) > 1 else ""
-        rows.append(["今日", review.fmt_hours(today_secs) + split])
+        midnight = datetime.combine(date.today(), datetime.min.time()).timestamp()
+        today_secs = store.session_seconds(p["id"], since=midnight)
+        rows.append({"label": "今日", "value": review.fmt_hours(today_secs) + (f"（{len(keys)} 張單依比例分）" if len(keys) > 1 else "")})
+    if timer:
+        long_run = now - timer["start"] > LONG_TIMER
+        rows.append({"label": "計時中", "value": "超過 8 小時，忘了停？" if long_run else "",
+                     "tone": "danger" if long_run else "info",
+                     "clock": {"since": timer["start"], "offset": 0, "down": False}})
     sprint = store.current_sprint()
-    actions = [{"label": "綁單號…", "action": "session.bind", "input": "要綁的單號（可多個，用空白隔開）"}]
-    actions += [{"label": f"解除 {k}", "action": "session.unbind", "arg": k} for k in keys[:MAX_UNBIND_BUTTONS]]
+    actions = [{"label": "綁單號", "action": "session.bind", "input": "要綁的單號（可多個，用空白隔開）", "icon": "link.badge.plus"}]
     if keys:
-        actions.append({"label": "同步 Jira", "action": "session.sync"})
+        # Room for two 解除 buttons under the five-button cap; more tickets than that, the panel.
+        actions += [{"label": f"解除 {k}", "action": "session.unbind", "arg": k, "icon": "minus.circle"} for k in keys[:2]]
+        actions.append({"label": "停止計時並記下" if timer else "開始計時（會議、離開電腦的討論）",
+                        "action": "timer.stop" if timer else "timer.start", "icon": "pause.fill" if timer else "play.fill"})
+        actions.append({"label": "同步 Jira", "action": "session.sync", "icon": "arrow.triangle.2.circlepath"})
     out = {"title": f"Sprint · {sprint['label']}" if sprint else "Sprint", "rows": rows, "actions": actions[:5]}
     if error:
         out["error"] = error
     return out
 
 
+def remaining_text(left):
+    return f"剩 {review.fmt_hours(left)}" if left >= 60 else (f"超 {review.fmt_hours(-left)}" if left <= -60 else "剩 0m")
+
+
 def tick(store, p):
+    now = p.get("now") or time.time()
     for session in p.get("sessions", []):
         rec = store.binding(session)
         store.record_segments(session, store.shares(rec))
-    return {"calendar": store.calendar_entries(p.get("now") or time.time())}
+    for sid, entry in store.stop_orphan_timers({s["id"] for s in p.get("sessions", [])}, now):
+        print(f"timer of session {sid[:8]} stopped: session gone for {ORPHAN_AFTER // 60} min"
+              + (f", booked {review.fmt_hours(entry['end'] - entry['start'])}" if entry else ", under a minute, dropped"), file=sys.stderr)
+    return {"calendar": store.calendar_entries(now)}
+
+
+def timer_start(store, p):
+    s = session_of(p)
+    store.timer_start(s["id"], store.shares(store.binding(s)), time.time())
+    return session_info(store, s)
+
+
+def timer_stop(store, p):
+    """From the card (the session itself) or the panel (`sid` of any running timer)."""
+    sid = p.get("sid") or session_of(p).get("id", "")
+    _, note = store.timer_stop(sid, time.time())
+    if "session" in p or p.get("sid"):
+        state = panel_state(store, p)
+        if note:
+            state["warnings"] = state.get("warnings", []) + [note]
+        return state
+    out = session_info(store, session_of(p))
+    if note:
+        out["error"] = note
+    return out
 
 
 # ---------- panel ----------
@@ -166,13 +212,15 @@ def panel_state(store, p):
              "sprints": [{"label": s["label"], "name": s.get("name"), "start": s.get("start"), "end": s.get("end")}
                          for s in sorted(store.sprints["sprints"].values(), key=lambda s: (s.get("start") or "", s["label"]))],
              "current": store.sprints.get("current"), "session": binding, "history": review.history(store),
-             "today": date.today().isoformat(), "site": store.config["site"], "warnings": store.warnings}
+             "today": date.today().isoformat(), "site": store.config["site"], "warnings": list(store.warnings),
+             "timers": [{"sid": sid, "name": store.bindings.get(sid, {}).get("name", sid[:8]), "start": t["start"],
+                         "keys": list(t["shares"])} for sid, t in store.segments["timers"].items()]}
     if sprint:
         rows = rows_for(store, sprint)
         state["sprint"] = {**{k: sprint.get(k) for k in ("label", "name", "start", "end", "goal")}, "review": {**empty_review(), **(sprint.get("review") or {})},
                            "tickets": rows, "metrics": review.metrics(rows), "burndown": review.burndown(sprint, rows),
                            "categories": list(review.CATEGORIES),
-                           "manual": [m for m in store.segments["manual"] if m["key"] in sprint["keys"]]}
+                           "manual": [m for m in store.segments["manual"] if set(m.get("shares") or [m["key"]]) & set(sprint["keys"])]}
     return state
 
 
@@ -365,7 +413,7 @@ def config_set(store, p):
 ACTIONS = {
     "session.info": session_info, "session.sync": lambda s, p: session_info(s, p, sync=True),
     "session.bind": session_bind, "session.unbind": session_unbind, "session.shares": session_shares,
-    "review.brief": review_brief,
+    "review.brief": review_brief, "timer.start": timer_start, "timer.stop": timer_stop,
     "tick": tick, "panel.state": panel_state,
     "sprint.new": sprint_new, "sprint.update": sprint_update, "sprint.select": sprint_select, "sprint.sync": sprint_sync,
     "ticket.add": ticket_add, "ticket.update": ticket_update, "ticket.transition": ticket_transition, "points.push": points_push,

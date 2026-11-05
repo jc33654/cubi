@@ -86,6 +86,8 @@ def parse_issue(issue, points_field):
         "summary": f.get("summary") or "",
         "status": status.get("name") or "",
         "done": (status.get("statusCategory") or {}).get("key") == "done",
+        # new / indeterminate / done: what the panel colours the status by.
+        "statusCategory": (status.get("statusCategory") or {}).get("key") or "",
         "estimate": float(points) if isinstance(points, (int, float)) else None,
         "resolutionDate": (f.get("resolutiondate") or "")[:10] or None,
     }

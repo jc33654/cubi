@@ -19,6 +19,10 @@ KEY_RE = re.compile(r"[A-Z][A-Z0-9_]+-[0-9]+")
 LABEL_RE = re.compile(r"[A-Za-z0-9_-]{1,32}")
 MEETING_KINDS = ("會議", "討論")
 MAX_ENTRY = 24 * 3600
+TIMER_KIND = "計時"
+# A timer whose session cubi has not reported for this long is stopped (the session ended or was
+# let go, so its card and ⏸ button are gone). Long enough to ride out a cubi restart.
+ORPHAN_AFTER = 15 * 60
 FILES = ("config.json", "sprints.json", "tickets.json", "bindings.json", "segments.json")
 
 DEFAULT_CONFIG = {
@@ -56,6 +60,7 @@ class Store:
         self.tickets = self._read("tickets.json", {})
         self.bindings = self._read("bindings.json", {})
         self.segments = self._read("segments.json", {"sessions": {}, "manual": []})
+        self.segments.setdefault("timers", {})
 
     # ---------- files ----------
 
@@ -215,7 +220,10 @@ class Store:
             if not entry.get("shares"):
                 entry["shares"] = shares
 
-    def add_manual(self, key, start, minutes, kind="開發", note="", calendar=False):
+    def add_manual(self, key, start, minutes, kind="開發", note="", calendar=False, shares=None, session=None):
+        """One stretch of work cubi did not see. `shares` splits it over several tickets (`key` is
+        then the first); `session` marks a timer started from that session's card, whose own
+        stretches over the same minutes are not counted twice."""
         try:
             start, minutes = float(start), float(minutes)
         except (TypeError, ValueError):
@@ -224,13 +232,73 @@ class Store:
             raise ValueError("長度要在 1 分鐘到 24 小時之間")
         entry = {"id": uuid.uuid4().hex[:12], "key": key, "start": start, "end": start + minutes * 60,
                  "kind": kind, "note": note, "calendar": bool(calendar)}
+        if shares:
+            entry["shares"] = shares
+        if session:
+            entry["session"] = session
         self.segments["manual"].append(entry)
         return entry
+
+    # ---------- timers ----------
+
+    def timer(self, sid):
+        return self.segments["timers"].get(sid)
+
+    def timer_start(self, sid, shares, now):
+        if not shares:
+            raise ValueError("這個 session 還沒綁單，先綁單再計時")
+        if sid not in self.segments["timers"]:
+            self.segments["timers"][sid] = {"start": float(now), "shares": shares, "seen": float(now)}
+        return self.segments["timers"][sid]
+
+    def timer_stop(self, sid, now, reason=""):
+        """Ends the timer and books it as one manual stretch. Over 24 h (forgotten overnight) it is
+        cut at 24 h; under a minute it is dropped. Returns (entry or None, note)."""
+        t = self.segments["timers"].pop(sid, None)
+        if t is None:
+            return None, "沒有在計時"
+        end = min(float(now), t["start"] + MAX_ENTRY)
+        note = "超過 24 小時，只記 24 小時" if now - t["start"] > MAX_ENTRY else ""
+        minutes = (end - t["start"]) / 60
+        if minutes < 1:
+            return None, "不到 1 分鐘，沒有記"
+        keys = list(t["shares"])
+        entry = self.add_manual(keys[0], t["start"], minutes, TIMER_KIND, reason or note, True, shares=t["shares"], session=sid)
+        return entry, note
+
+    def stop_orphan_timers(self, live_ids, now):
+        """Timers whose session cubi stopped reporting: stopped at the session's last activity."""
+        stopped = []
+        for sid, t in list(self.segments["timers"].items()):
+            if sid in live_ids:
+                t["seen"] = float(now)
+                continue
+            if now - t.get("seen", t["start"]) < ORPHAN_AFTER:
+                continue
+            # The last time anyone could still have been working: the session's last stretch, or the
+            # last tick that saw it (a meeting with the session idle but open counts).
+            ends = [seg["end"] for seg in self.segments["sessions"].get(sid, {}).values()]
+            last = max([t.get("seen", t["start"])] + [e for e in ends if e > t["start"]])
+            entry, _ = self.timer_stop(sid, last, "session 結束，自動停止")
+            stopped.append((sid, entry))
+        return stopped
 
     def remove_manual(self, entry_id):
         before = len(self.segments["manual"])
         self.segments["manual"] = [m for m in self.segments["manual"] if m["id"] != entry_id]
         return len(self.segments["manual"]) < before
+
+    def session_seconds(self, sid, since=None, until=None):
+        """This session's own work in [since, until]: its stretches, plus its booked timers minus
+        the minutes those stretches already cover."""
+        own = self.segments["sessions"].get(sid, {})
+        secs = sum(overlap(float(start), seg["end"], since, until) for start, seg in own.items())
+        for m in self.segments["manual"]:
+            if m.get("session") == sid:
+                extra = overlap(m["start"], m["end"], since, until)
+                extra -= sum(overlap(max(m["start"], float(st)), min(m["end"], seg["end"]), since, until) for st, seg in own.items())
+                secs += max(0.0, extra)
+        return secs
 
     def hours_by_key(self, since=None, until=None):
         """Seconds per key within [since, until]: session stretches split by their shares, manual
@@ -247,9 +315,15 @@ class Store:
                     bucket(key)["session"] += secs * pct / 100
         for m in self.segments["manual"]:
             secs = overlap(m["start"], m["end"], since, until)
-            bucket(m["key"])["manual"] += secs
-            if m.get("kind") in MEETING_KINDS:
-                bucket(m["key"])["meeting"] += secs
+            # A timer from a session's card: the minutes that session was also active are already
+            # counted as its own stretches, so only the rest is added.
+            for start, seg in self.segments["sessions"].get(m.get("session") or "", {}).items():
+                secs -= overlap(max(m["start"], float(start)), min(m["end"], seg["end"]), since, until)
+            secs = max(0.0, secs)
+            for key, pct in (m.get("shares") or {m["key"]: 100}).items():
+                bucket(key)["manual"] += secs * pct / 100
+                if m.get("kind") in MEETING_KINDS:
+                    bucket(key)["meeting"] += secs * pct / 100
         for b in out.values():
             b["total"] = b["session"] + b["manual"]
         return out
@@ -260,10 +334,11 @@ class Store:
         entries = []
         for m in self.segments["manual"]:
             if m.get("calendar") and m["end"] >= now - window and 60 <= m["end"] - m["start"] <= MAX_ENTRY:
+                keys = list(m.get("shares") or [m["key"]])
                 entries.append({
-                    "title": f"{m['key']} {m.get('note') or ''}（{m.get('kind', '')}）".replace("  ", " "),
+                    "title": f"{' '.join(keys)} {m.get('note') or ''}（{m.get('kind', '')}）".replace("  ", " "),
                     "start": m["start"], "end": m["end"],
-                    "notes": self.browse_url(m["key"]),
+                    "notes": "\n".join(self.browse_url(k) for k in keys),
                     "marker": f"sprint:manual:{m['id']}",
                 })
         for sid, sess in self.segments["sessions"].items():
@@ -287,6 +362,21 @@ class Store:
 
 def empty_review():
     return {"summary": "", "wentWell": [], "toImprove": [], "suggestions": [], "thanks": []}
+
+
+def remaining_seconds(estimate, worked, hours_per_point):
+    """Estimate in seconds minus what was worked; None without an estimate."""
+    if not estimate:
+        return None
+    return estimate * hours_per_point * 3600 - worked
+
+
+def tone_for(remaining, budget):
+    """good while more than half is left, warning down to a fifth, danger below (and overtime)."""
+    if remaining is None or not budget:
+        return None
+    left = remaining / budget
+    return "good" if left > 0.5 else ("warning" if left > 0.2 else "danger")
 
 
 def overlap(start, end, since, until):

@@ -3,6 +3,8 @@ burndown, history, the Markdown export, and the brief handed to a Claude Code se
 import json
 from datetime import date, datetime, timedelta
 
+from store import remaining_seconds
+
 CATEGORIES = ("提早／準時完成", "超時完成", "未完成", "超時未完成", "未估點")
 REVIEW_FIELDS = ("summary", "wentWell", "toImprove", "suggestions", "thanks")
 
@@ -56,7 +58,7 @@ def category(done, estimate, actual):
     return CATEGORIES[3] if over else CATEGORIES[2]
 
 
-def ticket_rows(sprint, tickets, hours, hours_per_point=8.0):
+def ticket_rows(sprint, tickets, hours, hours_per_point=8.0, totals=None):
     """One row per ticket. `actual` is the user's override when set, else hours ÷ hours-per-point
     (None while nothing was worked)."""
     rows = []
@@ -69,6 +71,9 @@ def ticket_rows(sprint, tickets, hours, hours_per_point=8.0):
         actual = actual_points(override, seconds, hours_per_point)
         rows.append({
             "key": key, "summary": t.get("summary", ""), "status": t.get("status", ""), "done": bool(t.get("done")),
+            "statusCategory": t.get("statusCategory") or ("done" if t.get("done") else ""),
+            # Left of the whole estimate: against every hour ever worked on it, not just this sprint's.
+            "remaining": remaining_seconds(t.get("estimate"), (totals or hours).get(key, {}).get("total", 0.0), hours_per_point),
             "estimate": t.get("estimate"), "actual": actual, "autoActual": auto, "override": override, "notes": t.get("notes", ""),
             "doneAt": done_on(t).isoformat() if done_on(t) else None,
             "category": category(bool(t.get("done")), t.get("estimate"), actual),

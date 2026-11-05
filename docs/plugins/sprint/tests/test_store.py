@@ -141,5 +141,80 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(again.config["site"], "jira.example")
 
 
+
+class TimerTests(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.store = Store(self.dir.name)
+        self.store.config["projectKey"] = "PROJ"
+
+    def tearDown(self):
+        self.store.save()
+        self.dir.cleanup()
+
+    def test_start_stop_books_a_manual_stretch_split_by_shares(self):
+        from store import TIMER_KIND
+        self.store.timer_start("s1", {"PROJ-1": 75.0, "PROJ-2": 25.0}, 1000)
+        self.store.timer_start("s1", {"PROJ-9": 100.0}, 2000)          # already running: unchanged
+        self.assertEqual(self.store.timer("s1")["start"], 1000)
+        entry, note = self.store.timer_stop("s1", 1000 + 3600)
+        self.assertEqual((entry["kind"], entry["calendar"], entry["session"], note), (TIMER_KIND, True, "s1", ""))
+        hours = self.store.hours_by_key()
+        self.assertEqual((hours["PROJ-1"]["manual"], hours["PROJ-2"]["manual"]), (2700.0, 900.0))
+        self.assertIsNone(self.store.timer("s1"))
+        self.assertEqual(self.store.timer_stop("s1", 9999), (None, "沒有在計時"))
+        with self.assertRaises(ValueError):
+            self.store.timer_start("s2", {}, 0)
+
+    def test_short_dropped_and_overnight_cut_at_a_day(self):
+        self.store.timer_start("s1", {"PROJ-1": 100.0}, 0)
+        self.assertEqual(self.store.timer_stop("s1", 59), (None, "不到 1 分鐘，沒有記"))
+        self.store.timer_start("s1", {"PROJ-1": 100.0}, 0)
+        entry, note = self.store.timer_stop("s1", 30 * 3600)
+        self.assertEqual((entry["end"], note), (24 * 3600, "超過 24 小時，只記 24 小時"))
+
+    def test_timer_overlapping_its_own_session_counts_once(self):
+        s = {"id": "s1", "name": "PROJ-1", "cwd": None, "segments": [{"start": 1000, "end": 2800, "open": False}]}
+        self.store.record_segments(s, {"PROJ-1": 100.0})
+        self.store.timer_start("s1", {"PROJ-1": 100.0}, 2000)
+        self.store.timer_stop("s1", 5600)                               # 2000–5600, of which 2000–2800 the session saw
+        h = self.store.hours_by_key()["PROJ-1"]
+        self.assertEqual((h["session"], h["manual"], h["total"]), (1800.0, 2800.0, 4600.0))   # 1000–5600 once
+        # Another session's stretch over the same minutes is a different piece of work: not subtracted.
+        self.store.record_segments({"id": "s2", "segments": [{"start": 3000, "end": 4000, "open": False}]}, {"PROJ-1": 100.0})
+        self.assertEqual(self.store.hours_by_key()["PROJ-1"]["manual"], 2800.0)
+
+    def test_orphan_timer_stops_at_the_sessions_last_activity(self):
+        from store import ORPHAN_AFTER
+        self.store.record_segments({"id": "gone", "segments": [{"start": 100, "end": 4000, "open": False}]}, {"PROJ-1": 100.0})
+        self.store.timer_start("gone", {"PROJ-1": 100.0}, 1000)
+        self.store.timer_start("live", {"PROJ-2": 100.0}, 1000)
+        # Still reported, or missing for less than the grace: nothing stops (a cubi restart).
+        self.assertEqual(self.store.stop_orphan_timers({"gone", "live"}, 5000), [])
+        self.assertEqual(self.store.stop_orphan_timers({"live"}, 5000 + ORPHAN_AFTER - 1), [])
+        stopped = self.store.stop_orphan_timers({"live"}, 5000 + ORPHAN_AFTER)
+        # Last seen at 5000 (a meeting with the session idle but open), later than its last stretch at 4000.
+        self.assertEqual([(sid, e["start"], e["end"]) for sid, e in stopped], [("gone", 1000, 5000)])
+        self.assertIsNotNone(self.store.timer("live"))
+
+    def test_session_seconds_counts_its_own_stretches_and_timers_once(self):
+        self.store.record_segments({"id": "s1", "segments": [{"start": 0, "end": 1000, "open": False}]}, {"PROJ-1": 100.0})
+        self.store.record_segments({"id": "s2", "segments": [{"start": 0, "end": 5000, "open": False}]}, {"PROJ-1": 100.0})
+        self.store.timer_start("s1", {"PROJ-1": 100.0}, 500)
+        self.store.timer_stop("s1", 2500)                                  # 500–2500, 500–1000 already s1's
+        self.store.add_manual("PROJ-1", 0, 30, "會議")                      # someone else's entry: not this session's
+        self.assertEqual(self.store.session_seconds("s1"), 2500.0)
+        self.assertEqual(self.store.session_seconds("s1", since=2000), 500.0)
+
+    def test_remaining_and_tone(self):
+        from store import remaining_seconds, tone_for
+        self.assertIsNone(remaining_seconds(None, 100, 8))
+        self.assertIsNone(remaining_seconds(0, 100, 8))
+        self.assertEqual(remaining_seconds(1, 3600, 8), 7 * 3600)
+        budget = 8 * 3600
+        self.assertEqual([tone_for(budget * f, budget) for f in (0.9, 0.5, 0.21, 0.2, 0, -0.1)], ["good", "warning", "warning", "danger", "danger", "danger"])
+        self.assertIsNone(tone_for(None, budget))
+
+
 if __name__ == "__main__":
     unittest.main()

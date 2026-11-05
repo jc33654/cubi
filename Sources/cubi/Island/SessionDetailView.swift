@@ -53,9 +53,10 @@ struct SessionDetailView: View {
                 GridRow {
                     label("回合")
                     HStack(spacing: 6) {
-                        // Counted only from when Cubi saw the session: ≈ unless it saw the very start.
-                        value((start?.approximate == false ? "≈" : "") + "\(bot.prompts) · 工具 \(bot.toolCalls)" + (bot.costUSD.map { String(format: " · $%.2f", $0) } ?? ""))
-                            .help(start?.approximate == false ? "回合與工具次數只算 Cubi 看到之後（session 更早就開了）" : "")
+                        // Counted only from when Cubi saw the session: ≈ when the transcript is clearly older.
+                        let partial = bot.transcriptCreatedAt.map { bot.startedAt - $0.timeIntervalSinceReferenceDate > 10 } ?? false
+                        value((partial ? "≈" : "") + "\(bot.prompts) · 工具 \(bot.toolCalls)" + (bot.costUSD.map { String(format: " · $%.2f", $0) } ?? ""))
+                            .help(partial ? "回合與工具次數只算 Cubi 看到之後（session 更早就開了）" : "")
                         if let a = bot.stats.linesAdded, let r = bot.stats.linesRemoved {
                             Text("+\(a)").font(.system(size: 11, design: .monospaced)).foregroundStyle(StatusStyle.good)
                             Text("−\(r)").font(.system(size: 11, design: .monospaced)).foregroundStyle(StatusStyle.danger)

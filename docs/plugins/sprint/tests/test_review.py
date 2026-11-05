@@ -61,7 +61,7 @@ class ReviewTests(unittest.TestCase):
 
     def test_parse_issue_reads_points_status_and_done(self):
         t = parse_issue(ISSUE, "customfield_10016")
-        self.assertEqual(t, {"key": "PROJ-12", "summary": "範例工單 甲", "status": "處理完畢", "done": True, "estimate": 3.5, "resolutionDate": "2026-11-05"})
+        self.assertEqual(t, {"key": "PROJ-12", "summary": "範例工單 甲", "status": "處理完畢", "done": True, "statusCategory": "done", "estimate": 3.5, "resolutionDate": "2026-11-05"})
         self.assertIsNone(parse_issue({"key": "X-1", "fields": {}}, "customfield_10016")["estimate"])
 
     def test_metrics(self):

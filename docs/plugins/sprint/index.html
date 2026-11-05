@@ -69,48 +69,78 @@ async function call(action, payload = {}) {
   return data;
 }
 // Never rejects: a failure is already on screen (status); the result says whether it worked.
-// `sent`: the fields this call saved; on success they show the saved value, not what was typed.
+// `sent`: the fields this call saves. On success their drafts go, unless typed over meanwhile.
+// A reply older than one already drawn is dropped (its action still happened; the newer state has it
+// or the next refresh will).
+let asked = 0, drawn = 0;
 async function refresh(action = "panel.state", payload = {}, sent = []) {
-  sent = [...sent].map(f => [fieldSel(f), fieldValue(f)]);   // by selector: a re-render meanwhile replaces the elements
-  try { state = await call(action, payload); } catch (_) { return false; }
-  render(sent);
+  sent = [...sent].map(f => [fieldSel(f), fieldValue(f)]);
+  const n = ++asked;
+  let data;
+  try { data = await call(action, payload); } catch (_) { return false; }
+  for (const [sel, value] of sent) if (drafts.get(sel)?.value === value) drafts.delete(sel);
+  if (n < drawn) return true;
+  drawn = n;
+  state = data;
+  render();
   return true;
 }
 const link = key => `<a href="https://${esc(state.site)}/browse/${esc(key)}" title="在 Jira 開">${esc(key)}</a>`;
 const tip = text => `<span class="cubi-tip" title="${esc(text)}">${ic("info", 13)}</span>`;
 
 // ---------- render ----------
-// A re-render must not eat what the user is typing: the focused field always comes back with its
-// caret, and so does every field edited but not saved (or edited again since it was sent). Drafts
-// belong to one sprint and session, except the settings, which are global; the ＋時數 form keeps
-// its own (pendingTime).
+// What the user typed and has not saved lives in `drafts` (by field selector), noted as they type;
+// a re-render draws the data and puts the drafts back on top. Drafts belong to one sprint and
+// session, except the settings, which are global, and the field being typed in. The ＋時數 form
+// keeps its own (pendingTime).
 const fieldSel = a => a.id ? "#" + CSS.escape(a.id)
   : Object.keys(a.dataset).length ? `[data-${Object.keys(a.dataset)[0].replace(/[A-Z]/g, c => "-" + c.toLowerCase())}="${CSS.escape(Object.values(a.dataset)[0])}"]` : null;
 const isBox = f => f.type === "checkbox";
 const fieldValue = f => isBox(f) ? f.checked : f.value;
-const edited = f => isBox(f) ? f.checked !== f.defaultChecked
-  : f.tagName === "SELECT" ? f.selectedIndex !== Math.max(0, [...f.options].findIndex(o => o.defaultSelected)) : f.value !== f.defaultValue;
-let drawnFor = null;
-function render(sent = []) {
+const isField = f => f?.matches?.("input, textarea, select");
+const drafts = new Map();
+let draftsFor = null, composing = false, renderLater = false;
+function noteDraft(e) {
+  const f = e.target, sel = isField(f) && !e.isComposing && !f.closest("[data-time-form]") && fieldSel(f);
+  if (sel) drafts.set(sel, { value: fieldValue(f), global: !!f.closest("#tab-settings") });
+}
+document.addEventListener("input", noteDraft);
+document.addEventListener("change", noteDraft);
+// Rebuilding the field mid-IME (注音 not yet turned into characters) would cut the composition off:
+// a re-render waits for it to end.
+document.addEventListener("compositionstart", () => { composing = true; });
+document.addEventListener("compositionend", e => { composing = false; noteDraft(e); if (renderLater) render(); });
+// A field that saves on change and got its draft back from a re-render: the browser takes the draft
+// as the value it had on focus, so leaving it fires no change. Send it on the way out instead.
+const restored = new WeakSet();
+document.addEventListener("change", e => restored.delete(e.target), true);
+document.addEventListener("focusout", e => {
+  if (restored.delete(e.target) && fieldValue(e.target) !== e.target.defaultValue) e.target.dispatchEvent(new Event("change"));
+});
+
+function render() {
+  if (composing) { renderLater = true; return; }
+  renderLater = false;
   keepTimeForm();
-  const a = document.activeElement, ident = `${state.current}|${state.session?.id ?? ""}`, saved = new Map(sent);
-  const keep = [...document.querySelectorAll(":is(input, textarea, select)")]
-    .map(f => [f, fieldSel(f)])
-    .map(([f, sel]) => [f, sel, edited(f) && saved.get(sel) !== fieldValue(f)
-      && (f === a || (!f.closest("[data-time-form]") && (ident === drawnFor || f.closest("#tab-settings"))))])
-    .filter(([f, sel, draft]) => sel && (draft || f === a))
-    .map(([f, sel, draft]) => [sel, draft ? fieldValue(f) : undefined, f === a ? a.selectionStart ?? null : false]);
-  renderOverview(); renderReview(); renderSettings();
-  drawnFor = ident;
-  if (state.warnings && state.warnings.length) status(state.warnings.join("；"), true);
-  for (const [sel, value, pos] of keep) {
-    const el = document.querySelector(sel);
-    if (!el) continue;
-    if (value !== undefined) { if (isBox(el)) el.checked = value; else el.value = value; }
-    if (pos === false) continue;
-    el.focus();
-    if (pos !== null) el.setSelectionRange(pos, pos);
+  const a = document.activeElement, ident = `${state.current}|${state.session?.id ?? ""}`;
+  const focus = isField(a) ? fieldSel(a) : null, pos = a?.selectionStart ?? null;
+  const moved = ident !== draftsFor;
+  if (moved) {
+    for (const [sel, d] of drafts) if (!d.global && sel !== focus) drafts.delete(sel);
+    draftsFor = ident;
   }
+  const open = [...document.querySelectorAll("details[id][open]")].map(d => d.id);
+  renderOverview(); renderReview(); renderSettings();
+  for (const id of open) document.getElementById(id)?.setAttribute("open", "");
+  if (state.warnings && state.warnings.length) status(state.warnings.join("；"), true);
+  for (const [sel, d] of drafts) {
+    const el = document.querySelector(sel);
+    if (!el || fieldValue(el) === d.value) { drafts.delete(sel); continue; }
+    if (isBox(el)) el.checked = d.value; else el.value = d.value;
+    if (sel === focus && !moved) restored.add(el);   // a draft carried over from another sprint or session is not sent by itself
+  }
+  const el = focus && document.querySelector(focus);
+  if (el) { el.focus(); if (pos !== null) el.setSelectionRange(pos, pos); }
 }
 
 function kpi(title, icon, value, sub, delta) {
@@ -136,9 +166,16 @@ function header(title) {
 }
 
 function bindHeader(el) {
-  $("#sprint-select", el)?.addEventListener("change", async e => { if (!await refresh("sprint.select", { label: e.target.value }, [e.target])) e.target.value = state.current; });
+  $("#sprint-select", el)?.addEventListener("change", async e => {
+    if (await refresh("sprint.select", { label: e.target.value }, [e.target])) return;
+    drafts.delete("#sprint-select");
+    const sel = $("#sprint-select"); if (sel) sel.value = state.current;
+  });
   $("#new-btn", el)?.addEventListener("click", () => { pendingSprint = !pendingSprint; render(); });
-  $("#new-save", el)?.addEventListener("click", () => { pendingSprint = false; refresh("sprint.new", { label: $("#new-label").value.trim(), name: $("#new-name").value, start: $("#new-start").value, end: $("#new-end").value }); });
+  $("#new-save", el)?.addEventListener("click", async () => {
+    pendingSprint = false;
+    if (!await refresh("sprint.new", { label: $("#new-label").value.trim(), name: $("#new-name").value, start: $("#new-start").value, end: $("#new-end").value }, el.querySelectorAll("[id^=new-]"))) { pendingSprint = true; render(); }
+  });
   $("#new-cancel", el)?.addEventListener("click", () => { pendingSprint = false; render(); });
   $("#sp-sync", el)?.addEventListener("click", () => refresh("sprint.sync"));
 }
@@ -209,7 +246,7 @@ function sessionCard() {
 }
 
 function sprintInfoCard(s) {
-  return `<details class="cubi-card"><summary class="cubi-card-title" style="cursor:pointer">Sprint 資訊</summary><div class="cubi-form" style="margin-top:12px">
+  return `<details class="cubi-card" id="sprint-info"><summary class="cubi-card-title" style="cursor:pointer">Sprint 資訊</summary><div class="cubi-form" style="margin-top:12px">
       <div class="cubi-field"><label>名稱</label><input id="sp-name" value="${esc(s.name || "")}"></div>
       <div class="cubi-field"><label>開始</label><input id="sp-start" type="date" value="${esc(s.start || "")}"></div>
       <div class="cubi-field"><label>結束</label><input id="sp-end" type="date" value="${esc(s.end || "")}"></div>
@@ -220,7 +257,7 @@ function sprintInfoCard(s) {
 
 function manualCard(s) {
   if (!s.manual.length) return "";
-  return `<details class="cubi-card"><summary class="cubi-card-title" style="cursor:pointer">手動時段 ${s.manual.length} 筆</summary><table class="cubi-table tight" style="margin-top:8px"><tbody>` +
+  return `<details class="cubi-card" id="manual-times"><summary class="cubi-card-title" style="cursor:pointer">手動時段 ${s.manual.length} 筆</summary><table class="cubi-table tight" style="margin-top:8px"><tbody>` +
     s.manual.map(x => `<tr><td>${(Object.keys(x.shares || { [x.key]: 100 })).map(esc).join(" ")}</td><td>${new Date(x.start * 1000).toLocaleString("zh-TW")}</td><td class="num">${fmtH(x.end - x.start)}</td>
       <td><span class="cubi-pill">${esc(x.kind)}</span> ${esc(x.note || x.reason || "")}</td><td>${x.calendar ? ic("clock", 13) : ""}</td>
       <td class="num"><button class="cubi-btn icon" data-remove-time="${esc(x.id)}" title="刪除">${ic("x", 14)}</button></td></tr>`).join("") + `</tbody></table></details>`;
@@ -322,9 +359,8 @@ function renderReview() {
   bindCategories(el);
   // A field only writes back what the user changed: a blur on an untouched textarea after a
   // refresh must not overwrite what Claude (or another window) just saved.
-  el.querySelectorAll("[data-list]").forEach(t => { t.dataset.orig = t.value; });
   el.querySelectorAll("[data-list]").forEach(t => t.addEventListener("change", () => {
-    if (t.value === t.dataset.orig) return;
+    if (t.value === t.defaultValue) return;
     const lines = t.value.split("\n").map(x => x.trim()).filter(Boolean);
     const value = t.dataset.list === "summary" ? t.value.trim()
       : t.dataset.list === "thanks" ? lines.map(l => { const i = l.search(/[:：]/); return i < 0 ? { who: l, why: "" } : { who: l.slice(0, i).trim(), why: l.slice(i + 1).trim() }; }) : lines;

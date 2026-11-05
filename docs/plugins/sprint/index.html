@@ -71,7 +71,7 @@ async function call(action, payload = {}) {
 // Never rejects: a failure is already on screen (status); the result says whether it worked.
 // `sent`: the fields this call saved; on success they show the saved value, not what was typed.
 async function refresh(action = "panel.state", payload = {}, sent = []) {
-  sent = [...sent].map(fieldSel);   // by selector: another re-render may replace the elements meanwhile
+  sent = [...sent].map(f => [fieldSel(f), fieldValue(f)]);   // by selector: a re-render meanwhile replaces the elements
   try { state = await call(action, payload); } catch (_) { return false; }
   render(sent);
   return true;
@@ -80,22 +80,25 @@ const link = key => `<a href="https://${esc(state.site)}/browse/${esc(key)}" tit
 const tip = text => `<span class="cubi-tip" title="${esc(text)}">${ic("info", 13)}</span>`;
 
 // ---------- render ----------
-// A re-render must not eat what the user is typing: every field edited but not saved is put back
-// (and the focused one keeps its caret). Drafts belong to one sprint and session, except the
-// settings, which are global; the ＋時數 form keeps its own (pendingTime).
+// A re-render must not eat what the user is typing: the focused field always comes back with its
+// caret, and so does every field edited but not saved (or edited again since it was sent). Drafts
+// belong to one sprint and session, except the settings, which are global; the ＋時數 form keeps
+// its own (pendingTime).
 const fieldSel = a => a.id ? "#" + CSS.escape(a.id)
   : Object.keys(a.dataset).length ? `[data-${Object.keys(a.dataset)[0].replace(/[A-Z]/g, c => "-" + c.toLowerCase())}="${CSS.escape(Object.values(a.dataset)[0])}"]` : null;
-const isBox = f => f.type === "checkbox" || f.type === "radio";
+const isBox = f => f.type === "checkbox";
+const fieldValue = f => isBox(f) ? f.checked : f.value;
 const edited = f => isBox(f) ? f.checked !== f.defaultChecked
   : f.tagName === "SELECT" ? f.selectedIndex !== Math.max(0, [...f.options].findIndex(o => o.defaultSelected)) : f.value !== f.defaultValue;
 let drawnFor = null;
 function render(sent = []) {
   keepTimeForm();
-  const a = document.activeElement, ident = `${state.current}|${state.session?.id ?? ""}`, done = new Set(sent);
+  const a = document.activeElement, ident = `${state.current}|${state.session?.id ?? ""}`, saved = new Map(sent);
   const keep = [...document.querySelectorAll(":is(input, textarea, select)")]
     .map(f => [f, fieldSel(f)])
-    .filter(([f, sel]) => sel && !done.has(sel) && !f.closest("[data-time-form]") && (ident === drawnFor || f.closest("#tab-settings")) && (f === a || edited(f)))
-    .map(([f, sel]) => [sel, isBox(f) ? f.checked : f.value, f === a ? a.selectionStart ?? null : false]);
+    .filter(([f, sel]) => sel && (f === a || (edited(f) && !f.closest("[data-time-form]")
+      && (ident === drawnFor || f.closest("#tab-settings")) && saved.get(sel) !== fieldValue(f))))
+    .map(([f, sel]) => [sel, fieldValue(f), f === a ? a.selectionStart ?? null : false]);
   renderOverview(); renderReview(); renderSettings();
   drawnFor = ident;
   if (state.warnings && state.warnings.length) status(state.warnings.join("；"), true);
@@ -132,7 +135,7 @@ function header(title) {
 }
 
 function bindHeader(el) {
-  $("#sprint-select", el)?.addEventListener("change", e => refresh("sprint.select", { label: e.target.value }, [e.target]));
+  $("#sprint-select", el)?.addEventListener("change", async e => { if (!await refresh("sprint.select", { label: e.target.value }, [e.target])) e.target.value = state.current; });
   $("#new-btn", el)?.addEventListener("click", () => { pendingSprint = !pendingSprint; render(); });
   $("#new-save", el)?.addEventListener("click", () => { pendingSprint = false; refresh("sprint.new", { label: $("#new-label").value.trim(), name: $("#new-name").value, start: $("#new-start").value, end: $("#new-end").value }); });
   $("#new-cancel", el)?.addEventListener("click", () => { pendingSprint = false; render(); });

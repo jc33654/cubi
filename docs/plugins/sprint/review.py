@@ -3,10 +3,24 @@ burndown, history, the Markdown export, and the brief handed to a Claude Code se
 import json
 from datetime import date, datetime, timedelta
 
-from store import remaining_seconds
 
 CATEGORIES = ("提早／準時完成", "超時完成", "未完成", "超時未完成", "未估點")
 REVIEW_FIELDS = ("summary", "wentWell", "toImprove", "suggestions", "thanks")
+
+
+def remaining_seconds(estimate, worked, hours_per_point):
+    """Estimate in seconds minus what was worked; None without an estimate."""
+    if not estimate:
+        return None
+    return estimate * hours_per_point * 3600 - worked
+
+
+def tone_for(remaining, budget):
+    """good while more than half is left, warning down to a fifth, danger below (and overtime)."""
+    if remaining is None or not budget:
+        return None
+    left = remaining / budget
+    return "good" if left > 0.5 else ("warning" if left > 0.2 else "danger")
 
 
 def fmt_hours(secs):

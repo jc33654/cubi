@@ -220,10 +220,10 @@ class Store:
             if not entry.get("shares"):
                 entry["shares"] = shares
 
-    def add_manual(self, key, start, minutes, kind="開發", note="", calendar=False, shares=None, session=None):
-        """One stretch of work cubi did not see. `shares` splits it over several tickets (`key` is
-        then the first); `session` marks a timer started from that session's card, whose own
-        stretches over the same minutes are not counted twice."""
+    def add_manual(self, key, start, minutes, kind="開發", note="", calendar=False):
+        """One stretch of work cubi did not see. A timer's entry also carries `shares` (split over
+        several tickets, `key` the first) and `session` (its own stretches over the same minutes
+        are not counted twice)."""
         try:
             start, minutes = float(start), float(minutes)
         except (TypeError, ValueError):
@@ -232,10 +232,6 @@ class Store:
             raise ValueError("長度要在 1 分鐘到 24 小時之間")
         entry = {"id": uuid.uuid4().hex[:12], "key": key, "start": start, "end": start + minutes * 60,
                  "kind": kind, "note": note, "calendar": bool(calendar)}
-        if shares:
-            entry["shares"] = shares
-        if session:
-            entry["session"] = session
         self.segments["manual"].append(entry)
         return entry
 
@@ -262,15 +258,17 @@ class Store:
         minutes = (end - t["start"]) / 60
         if minutes < 1:
             return None, "不到 1 分鐘，沒有記"
-        keys = list(t["shares"])
-        entry = self.add_manual(keys[0], t["start"], minutes, TIMER_KIND, reason or note, True, shares=t["shares"], session=sid)
+        entry = self.add_manual(next(iter(t["shares"])), t["start"], minutes, TIMER_KIND, "", True)
+        entry.update(shares=t["shares"], session=sid, reason=reason or note)
         return entry, note
 
-    def stop_orphan_timers(self, live_ids, now):
-        """Timers whose session cubi stopped reporting: stopped at the session's last activity."""
+    def stop_orphan_timers(self, live_ids, now, still_open=frozenset()):
+        """Timers whose session cubi stopped reporting: stopped at the session's last activity.
+        `still_open` are the sessions Claude Code itself still lists: after a cubi restart an idle
+        session (say, during the very meeting being timed) is not reported until its next event."""
         stopped = []
         for sid, t in list(self.segments["timers"].items()):
-            if sid in live_ids:
+            if sid in live_ids or sid in still_open:
                 t["seen"] = float(now)
                 continue
             if now - t.get("seen", t["start"]) < ORPHAN_AFTER:
@@ -288,16 +286,24 @@ class Store:
         self.segments["manual"] = [m for m in self.segments["manual"] if m["id"] != entry_id]
         return len(self.segments["manual"]) < before
 
-    def session_seconds(self, sid, since=None, until=None):
-        """This session's own work in [since, until]: its stretches, plus its booked timers minus
-        the minutes those stretches already cover."""
+    def _timer_extra(self, m, since, until):
+        """A booked timer's seconds in [since, until] that its own session's stretches do not
+        already cover (those minutes are counted as the stretches)."""
+        own = self.segments["sessions"].get(m.get("session") or "", {})
+        secs = overlap(m["start"], m["end"], since, until)
+        secs -= sum(overlap(max(m["start"], float(st)), min(m["end"], seg["end"]), since, until) for st, seg in own.items())
+        return max(0.0, secs)
+
+    def session_seconds(self, sid, since=None, until=None, key=None):
+        """This session's own work in [since, until]: its stretches plus its booked timers, each
+        minute once. With `key`, only that ticket's share of it."""
+        def part(shares):
+            return 1.0 if key is None else (shares or {}).get(key, 0) / 100
         own = self.segments["sessions"].get(sid, {})
-        secs = sum(overlap(float(start), seg["end"], since, until) for start, seg in own.items())
+        secs = sum(overlap(float(start), seg["end"], since, until) * part(seg.get("shares")) for start, seg in own.items())
         for m in self.segments["manual"]:
             if m.get("session") == sid:
-                extra = overlap(m["start"], m["end"], since, until)
-                extra -= sum(overlap(max(m["start"], float(st)), min(m["end"], seg["end"]), since, until) for st, seg in own.items())
-                secs += max(0.0, extra)
+                secs += self._timer_extra(m, since, until) * part(m.get("shares") or {m["key"]: 100})
         return secs
 
     def hours_by_key(self, since=None, until=None):
@@ -314,12 +320,7 @@ class Store:
                 for key, pct in (seg.get("shares") or {}).items():
                     bucket(key)["session"] += secs * pct / 100
         for m in self.segments["manual"]:
-            secs = overlap(m["start"], m["end"], since, until)
-            # A timer from a session's card: the minutes that session was also active are already
-            # counted as its own stretches, so only the rest is added.
-            for start, seg in self.segments["sessions"].get(m.get("session") or "", {}).items():
-                secs -= overlap(max(m["start"], float(start)), min(m["end"], seg["end"]), since, until)
-            secs = max(0.0, secs)
+            secs = self._timer_extra(m, since, until)
             for key, pct in (m.get("shares") or {m["key"]: 100}).items():
                 bucket(key)["manual"] += secs * pct / 100
                 if m.get("kind") in MEETING_KINDS:
@@ -338,7 +339,7 @@ class Store:
                 entries.append({
                     "title": f"{' '.join(keys)} {m.get('note') or ''}（{m.get('kind', '')}）".replace("  ", " "),
                     "start": m["start"], "end": m["end"],
-                    "notes": "\n".join(self.browse_url(k) for k in keys),
+                    "notes": "\n".join(([m["reason"]] if m.get("reason") else []) + [self.browse_url(k) for k in keys]),
                     "marker": f"sprint:manual:{m['id']}",
                 })
         for sid, sess in self.segments["sessions"].items():
@@ -346,6 +347,9 @@ class Store:
                 keys = list((seg.get("shares") or {}).keys())
                 length = seg["end"] - float(start)
                 if seg.get("open") or not keys or seg["end"] < now - window or not 60 <= length <= MAX_ENTRY:
+                    continue
+                # Wholly inside a timer from this same session: that event already shows these minutes.
+                if any(m.get("session") == sid and m["start"] <= float(start) and seg["end"] <= m["end"] for m in self.segments["manual"]):
                     continue
                 # The session name often starts with the keys themselves; say each once.
                 name = " ".join(w for w in (seg.get("name") or "").split() if w.upper() not in keys)

@@ -128,11 +128,11 @@ def session_info(store, p, sync=False):
             row["value"] = f"{summary} · 未估點 · 已投入 {review.fmt_hours(secs)}"
         else:
             row.update(tone=tone_for(left, budget), progress=round(min(1.0, max(0.0, secs / budget)), 3))
-            if timer is not None and timer["shares"].get(key, 0) >= 99.5:
+            if timer is not None and len(timer["shares"]) == 1 and key in timer["shares"]:
                 # The running timer burns this ticket's time live: cubi counts it down every second
                 # from the timer's start, so this session's own minutes since then are added back
                 # (they are the same minutes, and booking the timer will count them once).
-                again = store.session_seconds(p["id"], since=timer["start"])
+                again = store.session_seconds(p["id"], since=timer["start"], key=key)
                 row.update(value=summary, clock={"since": timer["start"], "offset": left + again, "down": True})
             else:
                 row["value"] = f"{remaining_text(left)} · {summary}"
@@ -153,8 +153,11 @@ def session_info(store, p, sync=False):
     if keys:
         # Room for two 解除 buttons under the five-button cap; more tickets than that, the panel.
         actions += [{"label": f"解除 {k}", "action": "session.unbind", "arg": k, "icon": "minus.circle"} for k in keys[:2]]
+    # ⏸ whenever a timer runs, bound tickets or not (unbinding the last one must not strand it).
+    if timer or keys:
         actions.append({"label": "停止計時並記下" if timer else "開始計時（會議、離開電腦的討論）",
                         "action": "timer.stop" if timer else "timer.start", "icon": "pause.fill" if timer else "play.fill"})
+    if keys:
         actions.append({"label": "同步 Jira", "action": "session.sync", "icon": "arrow.triangle.2.circlepath"})
     out = {"title": f"Sprint · {sprint['label']}" if sprint else "Sprint", "rows": rows, "actions": actions[:5]}
     if error:
@@ -163,7 +166,7 @@ def session_info(store, p, sync=False):
 
 
 def remaining_text(left):
-    return f"剩 {review.fmt_hours(left)}" if left >= 60 else (f"超 {review.fmt_hours(-left)}" if left <= -60 else "剩 0m")
+    return f"剩 {review.fmt_hours(left)}" if left >= 0 else f"超 {review.fmt_hours(-left)}"
 
 
 def tick(store, p):
@@ -171,10 +174,32 @@ def tick(store, p):
     for session in p.get("sessions", []):
         rec = store.binding(session)
         store.record_segments(session, store.shares(rec))
-    for sid, entry in store.stop_orphan_timers({s["id"] for s in p.get("sessions", [])}, now):
+    for sid, entry in store.stop_orphan_timers({s["id"] for s in p.get("sessions", [])}, now, claude_session_ids()):
         print(f"timer of session {sid[:8]} stopped: session gone for {ORPHAN_AFTER // 60} min"
               + (f", booked {review.fmt_hours(entry['end'] - entry['start'])}" if entry else ", under a minute, dropped"), file=sys.stderr)
     return {"calendar": store.calendar_entries(now)}
+
+
+def claude_session_ids():
+    """Session ids Claude Code lists as running (~/.claude/sessions/<pid>.json; read only, the
+    .key files next to them are never opened). Unreadable means none, never an error."""
+    folder = os.path.expanduser(os.environ.get("CUBI_CLAUDE_SESSIONS") or "~/.claude/sessions")
+    ids = set()
+    try:
+        names = os.listdir(folder)
+    except OSError:
+        return ids
+    for name in names:
+        if not name.endswith(".json"):
+            continue
+        try:
+            with open(os.path.join(folder, name), encoding="utf-8") as f:
+                sid = json.load(f).get("sessionId")
+        except (OSError, ValueError, AttributeError):
+            continue
+        if isinstance(sid, str) and sid:
+            ids.add(sid)
+    return ids
 
 
 def timer_start(store, p):
@@ -185,9 +210,10 @@ def timer_start(store, p):
 
 def timer_stop(store, p):
     """From the card (the session itself) or the panel (`sid` of any running timer)."""
+    from_panel = "session" in p or "sid" in p or "id" not in p
     sid = p.get("sid") or session_of(p).get("id", "")
-    _, note = store.timer_stop(sid, time.time())
-    if "session" in p or p.get("sid"):
+    _, note = store.timer_stop(sid, time.time()) if sid else (None, "要停哪個計時？")
+    if from_panel:
         state = panel_state(store, p)
         if note:
             state["warnings"] = state.get("warnings", []) + [note]

@@ -206,6 +206,39 @@ class TimerTests(unittest.TestCase):
         self.assertEqual(self.store.session_seconds("s1"), 2500.0)
         self.assertEqual(self.store.session_seconds("s1", since=2000), 500.0)
 
+    def test_a_session_claude_code_still_lists_is_not_an_orphan(self):
+        from store import ORPHAN_AFTER
+        self.store.timer_start("idle", {"PROJ-1": 100.0}, 1000)          # never seen by a tick (cubi restarted)
+        self.assertEqual(self.store.stop_orphan_timers(set(), 1000 + ORPHAN_AFTER + 1, still_open={"idle"}), [])
+        self.assertIsNotNone(self.store.timer("idle"))
+
+    def test_calendar_does_not_show_a_stretch_twice_inside_its_own_timer(self):
+        self.store.record_segments({"id": "s1", "name": "PROJ-1", "segments": [{"start": 1000, "end": 3400, "open": False},
+                                                                             {"start": 5000, "end": 9000, "open": False}]}, {"PROJ-1": 100.0})
+        self.store.timer_start("s1", {"PROJ-1": 100.0}, 1000)
+        self.store.timer_stop("s1", 4600)
+        entries = self.store.calendar_entries(9000, window=10_000)
+        spans = sorted((e["start"], e["end"]) for e in entries)
+        self.assertEqual(spans, [(1000, 4600), (5000, 9000)])           # 1000–3400 folded into the timer's event
+        timer_event = next(e for e in entries if e["marker"].startswith("sprint:manual:"))
+        self.assertEqual(timer_event["title"], "PROJ-1 （計時）".replace("  ", " "))
+
+    def test_orphan_reason_goes_to_notes_not_title(self):
+        from store import ORPHAN_AFTER
+        self.store.timer_start("gone", {"PROJ-1": 100.0}, 1000)
+        self.store.stop_orphan_timers(set(), 1000 + 3600)                 # seen at start only → stops at start? no: seen=1000
+        self.store.timer_start("gone2", {"PROJ-1": 100.0}, 1000)
+        self.store.stop_orphan_timers({"gone2"}, 5000)                     # seen at 5000
+        self.store.stop_orphan_timers(set(), 5000 + ORPHAN_AFTER)
+        e = next(x for x in self.store.calendar_entries(9000, window=10_000) if x["marker"].startswith("sprint:manual:"))
+        self.assertNotIn("自動停止", e["title"])
+        self.assertTrue(e["notes"].startswith("session 結束，自動停止"))
+
+    def test_session_seconds_by_ticket_share(self):
+        self.store.record_segments({"id": "s1", "segments": [{"start": 0, "end": 1000, "open": False}]}, {"PROJ-1": 50.0, "PROJ-2": 50.0})
+        self.assertEqual(self.store.session_seconds("s1", key="PROJ-1"), 500.0)
+        self.assertEqual(self.store.session_seconds("s1"), 1000.0)
+
     def test_remaining_and_tone(self):
         from store import remaining_seconds, tone_for
         self.assertIsNone(remaining_seconds(None, 100, 8))

@@ -251,6 +251,25 @@ class TimerTests(unittest.TestCase):
         self.assertEqual([(a, b) for a, b, _ in spans], [(35400, 36000), (36000, 39600)])
         self.assertEqual(spans[0][2], "sprint:s1:35400")
 
+    def test_calendar_holds_back_stretches_inside_a_running_timer(self):
+        # ▶ at 36000; the session works 35400–38400 and 39000–39300 while the timer is still running.
+        self.store.record_segments({"id": "s1", "name": "PROJ-1", "segments": [{"start": 35400, "end": 38400, "open": False},
+                                                                             {"start": 39000, "end": 39300, "open": False}]}, {"PROJ-1": 100.0})
+        self.store.timer_start("s1", {"PROJ-1": 100.0}, 36000)
+        running = sorted((e["start"], e["end"], e["marker"]) for e in self.store.calendar_entries(39600, window=10_000))
+        self.assertEqual(running, [(35400, 36000, "sprint:s1:35400")])
+        self.store.timer_stop("s1", 39600)
+        stopped = sorted((e["start"], e["end"], e["marker"]) for e in self.store.calendar_entries(40000, window=10_000))
+        self.assertEqual([(a, b) for a, b, _ in stopped], [(35400, 36000), (36000, 39600)])
+        self.assertEqual(stopped[0][2], running[0][2])                     # same piece, same marker: cubi writes it once
+
+    def test_calendar_sends_stretches_past_a_forgotten_timers_24_hours(self):
+        from store import MAX_ENTRY
+        self.store.timer_start("s1", {"PROJ-1": 100.0}, 0)
+        self.store.record_segments({"id": "s1", "name": "PROJ-1", "segments": [{"start": MAX_ENTRY + 600, "end": MAX_ENTRY + 4200, "open": False}]}, {"PROJ-1": 100.0})
+        spans = [(e["start"], e["end"]) for e in self.store.calendar_entries(MAX_ENTRY + 5000)]
+        self.assertEqual(spans, [(MAX_ENTRY + 600, MAX_ENTRY + 4200)])  # past the 24 h the timer will book
+
     def test_remaining_and_tone(self):
         from store import remaining_seconds, tone_for
         self.assertIsNone(remaining_seconds(None, 100, 8))

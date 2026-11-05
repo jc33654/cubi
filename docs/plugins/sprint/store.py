@@ -295,6 +295,12 @@ class Store(TimerMixin):
                     "marker": f"sprint:manual:{m['id']}",
                 })
         for sid, sess in self.segments["sessions"].items():
+            # Minutes a timer from this same session covers are on its event already, or will be
+            # once it stops: send only the pieces outside it (a piece keeps a stable marker: its start).
+            timers = [(m["start"], m["end"]) for m in self.segments["manual"] if m.get("session") == sid]
+            if sid in self.segments["timers"]:
+                t0 = self.segments["timers"][sid]["start"]
+                timers.append((t0, min(now, t0 + MAX_ENTRY)))    # what timer_stop will book
             for start, seg in sess.items():
                 keys = list((seg.get("shares") or {}).keys())
                 length = seg["end"] - float(start)
@@ -302,9 +308,6 @@ class Store(TimerMixin):
                     continue
                 # The session name often starts with the keys themselves; say each once.
                 name = " ".join(w for w in (seg.get("name") or "").split() if w.upper() not in keys)
-                # Minutes a timer from this same session covers are on its event already: send only
-                # the pieces outside it (a piece keeps a stable marker: its own start).
-                timers = [(m["start"], m["end"]) for m in self.segments["manual"] if m.get("session") == sid]
                 for lo, hi in subtract((float(start), seg["end"]), timers):
                     if hi - lo < 60:
                         continue

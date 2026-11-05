@@ -51,7 +51,7 @@ const clock = secs => { const s = Math.max(0, Math.floor(secs)); return [s / 360
 const pts = v => v == null ? "–" : String(Math.round(v * 100) / 100);
 const CAT_COLORS = ["var(--cubi-c2)", "var(--cubi-c4)", "var(--cubi-c1)", "var(--cubi-c3)", "var(--cubi-c5)"];
 const TABS = { overview: ["dashboard", "總覽"], review: ["review", "回顧"], settings: ["settings", "設定"] };
-let state = null, session = window.cubiSession || null, tab = "overview";
+let state = null, session = window.cubiSession || null;
 let pendingSprint = false, selectedCategory = null, pendingTime = null, briefPoll = null;
 
 function status(msg, isError) { const el = $("#status"); el.textContent = msg || ""; el.className = "cubi-status" + (isError ? " err" : ""); if (msg && !isError) setTimeout(() => { if (el.textContent === msg) el.textContent = ""; }, 4000); }
@@ -79,21 +79,26 @@ const link = key => `<a href="https://${esc(state.site)}/browse/${esc(key)}" tit
 const tip = text => `<span class="cubi-tip" title="${esc(text)}">${ic("info", 13)}</span>`;
 
 // ---------- render ----------
-// A re-render must not eat what the user is typing: remember the focused field and its caret.
+// A re-render must not eat what the user is typing: the focused field (with its caret), and on
+// the tabs out of sight whatever was edited but not saved. Fields that save on change already
+// went out when the user left the tab; drafts belong to one sprint and session.
+const AUTOSAVED = "[data-share], [data-actual], [data-list]";
+const fieldSel = a => a.id ? "#" + CSS.escape(a.id)
+  : Object.keys(a.dataset).length ? `[data-${Object.keys(a.dataset)[0].replace(/[A-Z]/g, c => "-" + c.toLowerCase())}="${CSS.escape(Object.values(a.dataset)[0])}"]` : null;
+let drawnFor = null;
 function render() {
-  const a = document.activeElement, tag = a && a.tagName;
-  let keep = null;
-  if (tag === "INPUT" || tag === "TEXTAREA") {
-    const sel = a.id ? "#" + CSS.escape(a.id)
-      : Object.keys(a.dataset).length ? `[data-${Object.keys(a.dataset)[0].replace(/[A-Z]/g, c => "-" + c.toLowerCase())}="${CSS.escape(Object.values(a.dataset)[0])}"]` : null;
-    if (sel) keep = { sel, value: a.value, pos: a.selectionStart };
-  }
-  document.querySelectorAll(".cubi-nav-item").forEach(b => { const [i, t] = TABS[b.dataset.tab]; b.innerHTML = ic(i) + t; b.classList.toggle("on", b.dataset.tab === tab); });
-  $("#brand").innerHTML = ic("target", 18) + "Sprint";
-  for (const t of Object.keys(TABS)) { $("#tab-" + t).hidden = t !== tab; if (t !== tab) $("#tab-" + t).innerHTML = ""; }
-  ({ overview: renderOverview, review: renderReview, settings: renderSettings })[tab]();
+  const a = document.activeElement, ident = `${state.current}|${state.session?.id ?? ""}`;
+  const focus = /^(INPUT|TEXTAREA)$/.test(a?.tagName) ? fieldSel(a) : null;
+  const keep = (ident === drawnFor ? [...document.querySelectorAll("section[hidden] :is(input, textarea)")] : [])
+    .filter(f => !f.matches(AUTOSAVED) && f.value !== f.defaultValue).map(f => [fieldSel(f), f.value])
+    .concat(focus ? [[focus, a.value]] : []).filter(([sel]) => sel);
+  const pos = focus && a.selectionStart;
+  renderOverview(); renderReview(); renderSettings();
+  drawnFor = ident;
   if (state.warnings && state.warnings.length) status(state.warnings.join("；"), true);
-  if (keep) { const el = document.querySelector(keep.sel); if (el) { el.value = keep.value; el.focus(); try { el.setSelectionRange(keep.pos, keep.pos); } catch (_) {} } }
+  for (const [sel, value] of keep) { const el = document.querySelector(sel); if (el) el.value = value; }
+  const el = focus && document.querySelector(focus);
+  if (el) { el.focus(); if (pos !== null) el.setSelectionRange(pos, pos); }
 }
 
 function kpi(title, icon, value, sub, delta) {
@@ -283,7 +288,7 @@ function bindCategories(el) {
 // ---------- review ----------
 function renderReview() {
   const el = $("#tab-review"), s = state.sprint;
-  if (!s) { el.innerHTML = header("回顧") + `<div class="cubi-card cubi-muted">還沒有 sprint。</div>`; bindHeader(el); return; }
+  if (!s) { el.innerHTML = `<div class="cubi-card cubi-muted">還沒有 sprint，到「總覽」建立。</div>`; return; }
   const r = s.review;
   el.innerHTML = `<div class="cubi-header"><h1 class="cubi-title">${esc(s.name || s.label)} 回顧</h1><span class="cubi-spacer"></span>
       <button class="cubi-btn primary" id="brief" title="開一個 Claude Code session 讀這個 sprint 的數據，寫好填回這裡">${ic("sparkles")}用 Claude 整理</button>
@@ -405,7 +410,13 @@ function renderSettings() {
 }
 
 // ---------- boot ----------
-document.querySelectorAll(".cubi-nav-item").forEach(b => b.addEventListener("click", () => { tab = b.dataset.tab; render(); }));
+// Switching tabs only shows and hides: every tab stays rendered, so nothing typed in one is lost.
+function showTab(tab) {
+  document.querySelectorAll(".cubi-nav-item").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
+  for (const k of Object.keys(TABS)) $("#tab-" + k).hidden = k !== tab;
+}
+$("#brand").innerHTML = ic("target", 18) + "Sprint";
+document.querySelectorAll(".cubi-nav-item").forEach(b => { const [i, t] = TABS[b.dataset.tab]; b.innerHTML = ic(i) + t; b.addEventListener("click", () => showTab(b.dataset.tab)); });
 setInterval(() => state && state.timers.length && document.querySelectorAll(".timer[data-since]").forEach(t => { const secs = Date.now() / 1000 - Number(t.dataset.since); t.textContent = clock(secs); t.classList.toggle("long", secs > 8 * 3600); }), 1000);
 window.addEventListener("cubisession", () => { session = window.cubiSession || null; refresh(); });
 refresh();

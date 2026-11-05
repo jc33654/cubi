@@ -40,14 +40,14 @@ final class ToolPanel: NSObject, NSWindowDelegate, WKNavigationDelegate {
         bridge = ToolBridge(isEnabled: isEnabled)
     }
 
-    func show(_ tool: ToolPlugin, session: PluginIO.SessionInput?) {
+    func show(_ tool: ToolPlugin, session: PluginIO.SessionInput?, offscreen: Bool = false, appearance: NSAppearance? = nil) {
         bridge.tool = tool
         if let w = window, let web {
             // Already open: hand the page the new session without reloading (its state survives);
             // the page listens for `cubisession`. The user script is replaced too, for a later reload.
             if let session {
-                web.configuration.userContentController.removeAllUserScripts()
-                web.configuration.userContentController.addUserScript(Self.sessionScript(session))
+                // Replace every user script with the full set again: the style kit must survive.
+                Self.install(tool, session: session, into: web.configuration.userContentController)
                 web.evaluateJavaScript(Self.sessionAssignment(session) + " window.dispatchEvent(new Event('cubisession'));")
             }
             w.makeKeyAndOrderFront(nil)
@@ -56,15 +56,18 @@ final class ToolPanel: NSObject, NSWindowDelegate, WKNavigationDelegate {
         }
         let cfg = WKWebViewConfiguration()
         cfg.userContentController.addScriptMessageHandler(bridge, contentWorld: .page, name: tool.panel.bridge)
-        if let session { cfg.userContentController.addUserScript(Self.sessionScript(session)) }
+        Self.install(tool, session: session, into: cfg.userContentController)
         let web = WKWebView(frame: .zero, configuration: cfg)
         web.navigationDelegate = self
         self.web = web
         let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: tool.panel.width, height: tool.panel.height),
-                         styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                         // Off screen (rendering): borderless, so the frame is not clamped to the display's height.
+                         styleMask: offscreen ? [.borderless] : [.titled, .closable, .miniaturizable, .resizable],
                          backing: .buffered, defer: false)
         w.title = tool.displayName
         w.center()
+        if let appearance { w.appearance = appearance }
+        if offscreen { w.setFrameOrigin(NSPoint(x: -20_000, y: -20_000)) }
         w.contentView = web
         w.delegate = self
         w.isReleasedWhenClosed = false
@@ -72,8 +75,21 @@ final class ToolPanel: NSObject, NSWindowDelegate, WKNavigationDelegate {
         let html = (try? String(contentsOfFile: tool.panel.file, encoding: .utf8))
             ?? "<h2 style='font-family:-apple-system;padding:2rem'>找不到 \(tool.panel.file)</h2>"
         web.loadHTMLString(html, baseURL: nil)
+        if offscreen { w.orderBack(nil); return }
         w.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// For `--render-panel --eval`: whatever the script returns is printed.
+    func evaluate(_ script: String) {
+        web?.evaluateJavaScript(script) { value, error in
+            print("eval → \(value.map { "\($0)" } ?? "nil")\(error.map { " error: \($0.localizedDescription)" } ?? "")")
+        }
+    }
+
+    func snapshot(_ done: @escaping @MainActor (NSImage?) -> Void) {
+        guard let web else { return done(nil) }
+        web.takeSnapshot(with: nil) { image, _ in MainActor.assumeIsolated { done(image) } }
     }
 
     /// The JSON is an object literal; a user script is not HTML, so nothing needs escaping.
@@ -81,8 +97,16 @@ final class ToolPanel: NSObject, NSWindowDelegate, WKNavigationDelegate {
         "window.cubiSession = \(session.json());"
     }
 
-    private static func sessionScript(_ session: PluginIO.SessionInput) -> WKUserScript {
-        WKUserScript(source: sessionAssignment(session), injectionTime: .atDocumentStart, forMainFrameOnly: true)
+    /// The page's user scripts, always as one set: the style kit when the manifest asks for it,
+    /// then the session. Rebuilt whole, so replacing the session never drops the styles.
+    private static func install(_ tool: ToolPlugin, session: PluginIO.SessionInput?, into ucc: WKUserContentController) {
+        ucc.removeAllUserScripts()
+        if tool.panel.style == .cubi {
+            ucc.addUserScript(WKUserScript(source: PanelStyleKit.script, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        }
+        if let session {
+            ucc.addUserScript(WKUserScript(source: sessionAssignment(session), injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        }
     }
 
     func windowWillClose(_ notification: Notification) {
@@ -212,6 +236,35 @@ private final class ToolBridge: NSObject, WKScriptMessageHandlerWithReply {
                 } else {
                     replyHandler(["ok": r.code == 0, "out": r.out, "err": r.err], nil)
                 }
+            }
+        }
+    }
+}
+
+/// `--render-panel`: the same web view set-up as a real panel (style kit, bridge, navigation
+/// rules), in a window parked off screen, photographed once the page has had time to call its
+/// commands and draw.
+@MainActor
+enum PanelRenderer {
+    private static var keep: [AnyObject] = []
+
+    static func render(_ tool: ToolPlugin, dark: Bool, to url: URL, script: String? = nil, after delay: TimeInterval = 4,
+                       done: @escaping (Bool) -> Void) {
+        let panel = ToolPanel(isEnabled: { true })
+        keep.append(panel)
+        panel.show(tool, session: nil, offscreen: true, appearance: NSAppearance(named: dark ? .darkAqua : .aqua))
+        if let script {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { panel.evaluate(script) }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay + (script == nil ? 0 : 2)) {
+            panel.snapshot { image in
+                guard let image, let tiff = image.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff),
+                      let png = rep.representation(using: .png, properties: [:]), (try? png.write(to: url)) != nil else {
+                    FileHandle.standardError.write(Data("cubi: snapshot failed\n".utf8))
+                    return done(false)
+                }
+                print("wrote \(url.path) (\(Int(image.size.width))×\(Int(image.size.height)))")
+                done(true)
             }
         }
     }

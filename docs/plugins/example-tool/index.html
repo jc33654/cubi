@@ -1,28 +1,38 @@
 <!doctype html>
 <meta charset="utf-8">
 <title>Example Tool</title>
-<style>
-  body { font: 13px -apple-system, sans-serif; padding: 1.2rem; color: #222; }
-  button { margin-right: .5rem; }
-  pre { background: #f3f3f3; padding: .6rem; min-height: 3em; white-space: pre-wrap; }
-</style>
-<h2>Example Tool</h2>
-<p>每個按鈕對應 manifest 裡的一條指令；面板只能呼叫表裡有的。</p>
-<input id="name" value="世界" size="12">
-<button onclick="call('hello', [document.getElementById('name').value])">hello</button>
-<button onclick="call('date', [])">date</button>
-<button onclick="call('rm', [])">rm（不在表裡，會被拒）</button>
-<pre id="out"></pre>
+<!-- manifest "panel": {"style": "cubi"} gives this page cubi's dashboard look (light and dark)
+     and window.cubiIcon(name). Every class below is from that kit. -->
+<div class="cubi-main">
+  <div class="cubi-header"><h1 class="cubi-title">Example Tool</h1><span class="cubi-spacer"></span>
+    <button class="cubi-btn primary" onclick="call('date', [])" id="date-btn">date</button></div>
+  <div class="cubi-kpis">
+    <div class="cubi-kpi"><div class="cubi-kpi-head">指令<span id="i1"></span></div><div class="cubi-kpi-value"><b>2</b></div><div class="cubi-kpi-sub">manifest 裡有的</div></div>
+    <div class="cubi-kpi"><div class="cubi-kpi-head">上次結果<span id="i2"></span></div><div class="cubi-kpi-value"><b id="state">–</b></div><div class="cubi-kpi-sub">ok／拒絕</div></div>
+  </div>
+  <div class="cubi-card">
+    <div class="cubi-card-head"><h2 class="cubi-card-title">試一下</h2></div>
+    <div class="cubi-row">
+      <input id="name" value="世界" size="12">
+      <button class="cubi-btn" onclick="call('hello', [document.getElementById('name').value])">hello</button>
+      <button class="cubi-btn danger" onclick="call('rm', [])">rm（不在表裡，會被拒）</button>
+    </div>
+    <pre id="out" class="cubi-inline" style="margin-top:12px;min-height:3em;white-space:pre-wrap"></pre>
+  </div>
+</div>
 <script>
   const bridge = window.webkit?.messageHandlers?.cubi;
+  if (window.cubiIcon) { i1.innerHTML = cubiIcon("dashboard"); i2.innerHTML = cubiIcon("check"); }
   async function call(action, args) {
-    const out = document.getElementById("out");
+    const out = document.getElementById("out"), st = document.getElementById("state");
     if (!bridge) { out.textContent = "不是在 Cubi 裡開的，沒有 bridge"; return; }
     try {
       const r = await bridge.postMessage({ action, args });   // {ok, out, err}
       out.textContent = (r.ok ? "" : "失敗：") + (r.out || r.err);
+      st.textContent = r.ok ? "ok" : "失敗";
     } catch (e) {
       out.textContent = "拒絕：" + e;                          // action 不在表裡、參數不合法
+      st.textContent = "拒絕";
     }
   }
 </script>

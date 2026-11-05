@@ -12,7 +12,12 @@ public struct ToolPlugin: Sendable, Equatable {
         public var height: Double
         /// Name of the `window.webkit.messageHandlers.<bridge>` the page posts to.
         public var bridge: String
+        /// `cubi`: the app puts its dashboard style kit (`cubi-` classes, light and dark) in
+        /// front of the page's own styles. nil: the page is left alone.
+        public var style: PanelStyle? = nil
     }
+
+    public enum PanelStyle: String, Sendable, Equatable, CaseIterable { case cubi }
 
     public enum ArgType: Sendable, Equatable {
         /// `[A-Za-z0-9._-]`, 1–64 characters: file and asset names, never a path.
@@ -84,13 +89,14 @@ public struct ToolPlugin: Sendable, Equatable {
         case missingField(String)
         case badCommand(String, String)
         case badHook(String, String)
+        case badField(String, String)
 
         public var errorDescription: String? {
             switch self {
             case .badID(let id): return "id「\(id)」不合法（小寫英數與 -，最多 24 字）"
             case .missingField(let f): return "缺少欄位 \(f)"
             case .badCommand(let action, let why): return "commands.\(action)：\(why)"
-            case .badHook(let field, let why): return "\(field)：\(why)"
+            case .badHook(let field, let why), .badField(let field, let why): return "\(field)：\(why)"
             }
         }
     }
@@ -122,16 +128,24 @@ public struct ToolPlugin: Sendable, Equatable {
         guard AgentID.isValid(id) else { throw LoadError.badID(id) }
         guard let name = m["name"]?.string else { throw LoadError.missingField("name") }
         guard let file = m["panel"]?["file"]?.string else { throw LoadError.missingField("panel.file") }
+        var style: PanelStyle?
+        if let raw = m["panel"]?["style"] {
+            guard let s = raw.string.flatMap(PanelStyle.init(rawValue:)) else {
+                throw LoadError.badField("panel.style", "只能是 \(PanelStyle.allCases.map(\.rawValue).joined(separator: "、"))")
+            }
+            style = s
+        }
         let panel = Panel(file: absolutePath(file, base: baseDirectory, home: home),
                           width: m["panel"]?["width"]?.double ?? 900,
                           height: m["panel"]?["height"]?.double ?? 640,
-                          bridge: m["panel"]?["bridge"]?.string ?? defaultBridge)
+                          bridge: m["panel"]?["bridge"]?.string ?? defaultBridge,
+                          style: style)
 
         var commands: [String: Command] = [:]
         var builtins: Set<String> = []
         for b in m["builtins"]?.array ?? [] {
             guard let name = b.string, optionalBuiltins.contains(name) else {
-                throw LoadError.badHook("builtins", "只能是 \(optionalBuiltins.sorted().joined(separator: "、"))")
+                throw LoadError.badField("builtins", "只能是 \(optionalBuiltins.sorted().joined(separator: "、"))")
             }
             builtins.insert(name)
         }

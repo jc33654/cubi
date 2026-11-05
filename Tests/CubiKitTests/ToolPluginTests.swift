@@ -34,7 +34,10 @@ private let sample = #"""
 @Test func toolManifestDefaultsAndRelativePanel() throws {
     let t = try parse(#"{"id":"t","name":"T","panel":{"file":"index.html"},"commands":{}}"#)
     #expect(t.panel.file == "/plugins/t/index.html")
-    #expect(t.panel.bridge == "cubi" && t.panel.width == 900 && t.panel.height == 640)
+    #expect(t.panel.bridge == "cubi" && t.panel.width == 900 && t.panel.height == 640 && t.panel.style == nil)
+    #expect(try parse(#"{"id":"t","name":"T","panel":{"file":"a","style":"cubi"},"commands":{}}"#).panel.style == .cubi)
+    #expect(throws: ToolPlugin.LoadError.badField("panel.style", "只能是 cubi")) { try parse(#"{"id":"t","name":"T","panel":{"file":"a","style":"fancy"},"commands":{}}"#) }
+    #expect(throws: ToolPlugin.LoadError.badField("panel.style", "只能是 cubi")) { try parse(#"{"id":"t","name":"T","panel":{"file":"a","style":true},"commands":{}}"#) }
 }
 
 @Test func toolManifestRejectsBadShapes() {
@@ -55,7 +58,7 @@ private let sample = #"""
     fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"x":{"run":["/c"],"args":["path"]}}}"#, .badCommand("x", "args[0] 不認得的型別「path」"))
     fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"pick.file":{"run":["/c"]}}}"#, .badCommand("pick.file", "是面板內建的動作名稱，不能自己定義"))
     fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"session.new":{"run":["/c"]}}}"#, .badCommand("session.new", "是面板內建的動作名稱，不能自己定義"))
-    fails(#"{"id":"t","name":"T","panel":{"file":"a"},"builtins":["pick.file"],"commands":{}}"#, .badHook("builtins", "只能是 session.new"))
+    fails(#"{"id":"t","name":"T","panel":{"file":"a"},"builtins":["pick.file"],"commands":{}}"#, .badField("builtins", "只能是 session.new"))
 }
 
 @Test func toolManifestResolvesPluginRelativeCommands() throws {

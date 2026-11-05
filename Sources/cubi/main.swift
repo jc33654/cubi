@@ -27,6 +27,30 @@ if let i = arguments.firstIndex(of: "--render-island"), i + 3 < arguments.count 
     exit(ok ? 0 : 1)
 }
 
+// Offline picture of a tool plugin's panel, real web view and bridge, window kept off screen:
+//   --render-panel <tool id> <out.png> [--dark] [--height N] [--eval JS]   (JS runs after load, the shot 2 s later; point the plugin at test data with its own env, e.g. CUBI_SPRINT_DIR)
+if let i = arguments.firstIndex(of: "--render-panel"), i + 2 < arguments.count {
+    let id = arguments[i + 1], out = URL(fileURLWithPath: arguments[i + 2]), dark = arguments.contains("--dark")
+    let height = arguments.firstIndex(of: "--height").flatMap { $0 + 1 < arguments.count ? Double(arguments[$0 + 1]) : nil }
+    let script = arguments.firstIndex(of: "--eval").flatMap { $0 + 1 < arguments.count ? arguments[$0 + 1] : nil }
+    MainActor.assumeIsolated {
+        NSApplication.shared.setActivationPolicy(.prohibited)
+        let registry = PluginRegistry()
+        guard var tool = registry.tools.first(where: { $0.id == id }) else {
+            FileHandle.standardError.write(Data("cubi: no tool plugin「\(id)」\n".utf8))
+            exit(1)
+        }
+        // The panel runs its real commands: a plugin switched off in the settings is not run.
+        guard registry.isEnabled(id) else {
+            FileHandle.standardError.write(Data("cubi: tool plugin「\(id)」is disabled in the settings\n".utf8))
+            exit(1)
+        }
+        if let height { tool.panel.height = height }
+        PanelRenderer.render(tool, dark: dark, to: out, script: script) { ok in exit(ok ? 0 : 1) }
+    }
+    NSApplication.shared.run()
+}
+
 // Hook management from the terminal (the same code the settings window uses).
 //   --hooks-status             what is installed
 //   --hooks-plan [--retire-notify]   show the diff an install would make, write nothing

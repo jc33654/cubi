@@ -3,7 +3,7 @@
   "kind": "tool",
   "id": "sprint",
   "name": "Sprint",
-  "panel": { "file": "index.html", "width": 980, "height": 700 },
+  "panel": { "file": "index.html", "width": 1180, "height": 780, "style": "cubi" },
   "session": { "info": "session.info", "refresh": 60 },
   "tick": { "action": "tick", "every": 60 },
   "builtins": ["session.new"],

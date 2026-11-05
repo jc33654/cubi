@@ -3,7 +3,7 @@
   "kind": "tool",
   "id": "example-tool",
   "name": "Example Tool",
-  "panel": { "file": "index.html", "width": 520, "height": 360 },
+  "panel": { "file": "index.html", "width": 620, "height": 460, "style": "cubi" },
   "session": { "info": "session.info", "refresh": 60 },
   "commands": {
     "hello": { "run": ["/bin/echo", "hello,", "$1"], "args": ["value"] },

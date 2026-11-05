@@ -4,101 +4,57 @@
 <meta charset="utf-8">
 <title>Sprint</title>
 <style>
-  :root {
-    color-scheme: light dark;
-    --bg: #f6f5f2; --card: #ffffff; --line: #e4e2dc; --line2: #efede8; --ink: #141413; --ink2: #5a5955; --ink3: #8f8d88;
-    --accent: #2a78d6; --accent-ink: #ffffff; --danger: #d03b3b; --good: #0ca30c; --hover: #f3f2ee;
-    --c1: #1baf7a; --c2: #eda100; --c3: #2a78d6; --c4: #eb6834; --c5: #9a9893; --grid: #e4e2dc;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #19191a; --card: #232324; --line: #353537; --line2: #2c2c2e; --ink: #f0efec; --ink2: #bdbcb6; --ink3: #85847f;
-            --accent: #3987e5; --hover: #2a2a2c; --c1: #199e70; --c2: #c98500; --c3: #3987e5; --c4: #d95926; --c5: #7a7975; --grid: #353537; }
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; font: 12.5px/1.55 -apple-system, "PingFang TC", "Helvetica Neue", sans-serif; color: var(--ink); background: var(--bg); }
-  header { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 2px; padding: 8px 18px 0; background: var(--bg); border-bottom: 1px solid var(--line); }
-  header button.tab { background: none; border: 0; border-bottom: 2px solid transparent; padding: 7px 12px; font: inherit; font-size: 13px; color: var(--ink2); cursor: pointer; border-radius: 0; }
-  header button.tab.on { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
-  header .status { margin-left: auto; color: var(--ink3); font-size: 12px; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  header .status.err { color: var(--danger); }
-  main { padding: 16px 18px 28px; max-width: 1040px; }
-  section.tab { display: none; } section.tab.on { display: block; }
-  h2 { font-size: 15px; margin: 0; }
-  h3 { font-size: 12px; margin: 0 0 6px; color: var(--ink2); font-weight: 600; letter-spacing: .02em; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
-  .card .head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-  .card .head .sp { flex: 1; }
-  .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .muted { color: var(--ink3); font-size: 11.5px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px 14px; }
-  .field label { display: block; font-size: 11px; color: var(--ink3); margin-bottom: 3px; }
-  .field input, .field select, .field textarea { width: 100%; }
-  .field .hint { font-size: 11px; color: var(--ink3); margin-top: 3px; }
-  input, select, textarea { font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
-  input:focus, select:focus, textarea:focus { outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent); border-color: var(--accent); }
-  input[type=number] { width: 72px; }
-  button { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 6px; padding: 5px 11px; cursor: pointer; }
-  button:hover { background: var(--hover); }
-  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-  button.primary:hover { filter: brightness(1.08); background: var(--accent); }
-  button.small { padding: 2px 8px; font-size: 11.5px; }
-  button:disabled { opacity: .5; cursor: default; }
-  table { border-collapse: collapse; width: 100%; }
-  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line2); vertical-align: middle; }
-  th { color: var(--ink3); font-weight: 600; font-size: 11px; text-transform: none; }
-  tbody tr:hover { background: var(--hover); }
-  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  td input.actual { width: 60px; text-align: right; padding: 3px 6px; }
-  td .auto { color: var(--ink3); font-size: 11px; }
-  a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
-  .tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 12px 0 14px; }
-  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
-  .tile .v { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
-  .tile .l { font-size: 11px; color: var(--ink3); margin-top: 2px; }
-  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  .legend { display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
-  .legend button { display: flex; align-items: center; gap: 8px; border: 0; background: none; padding: 4px 6px; border-radius: 6px; text-align: left; }
-  .legend button.on, .legend button:hover { background: var(--hover); }
-  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex: none; }
-  .legend b { margin-left: auto; font-variant-numeric: tabular-nums; }
-  .legend2 { display: flex; gap: 12px; font-size: 11px; color: var(--ink2); margin-bottom: 4px; }
-  .legend2 i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
-  .donut { display: grid; grid-template-columns: 170px 1fr; gap: 14px; align-items: center; }
-  svg { width: 100%; height: auto; display: block; }
-  svg text { font: 11px -apple-system, sans-serif; fill: var(--ink2); }
-  svg path.slice { cursor: pointer; stroke: var(--card); stroke-width: 2; }
-  svg path.slice.dim { opacity: .35; }
+  /* Only what the cubi style kit (manifest panel.style: "cubi") does not already give. */
+  .tight td { padding-top: 8px; padding-bottom: 8px; }
+  .key { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; white-space: nowrap; }
+  td input.actual { width: 64px; text-align: right; padding: 3px 6px; }
+  .remain { display: flex; align-items: center; gap: 8px; min-width: 150px; }
+  .remain .cubi-bar { flex: 1; }
+  .remain span { font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 58px; text-align: right; }
+  .donut-wrap { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; align-items: center; }
+  .donut-wrap svg { width: 150px; height: 150px; }
+  .donut-wrap .cubi-split { grid-auto-flow: row; gap: 2px; }
+  .donut-wrap .cubi-split > button { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-bottom: 0; border-left: 4px solid; border-radius: 6px; }
+  .donut-wrap .cubi-split > button b { font-size: 15px; order: 2; }
+  .chart svg { width: 100%; height: auto; display: block; }
+  svg text { font: 11px -apple-system, sans-serif; fill: var(--cubi-ink3); }
+  svg path.slice { cursor: pointer; stroke: var(--cubi-card); stroke-width: 2; }
+  svg .slice.dim { opacity: .3; }
   .lists { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  textarea { width: 100%; min-height: 84px; resize: vertical; line-height: 1.5; }
-  .err { color: var(--danger); }
-  .chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 14px; padding: 2px 10px; background: var(--bg); font-size: 12px; }
-  details summary { cursor: pointer; color: var(--ink2); font-size: 12px; }
-  .inline-form { background: var(--bg); border: 1px dashed var(--line); border-radius: 8px; padding: 8px 10px; margin: 6px 0; }
-  .section-title { font-size: 11px; color: var(--ink3); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; margin: 14px 0 6px; }
+  .lists textarea { min-height: 96px; }
+  .timer { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 15px; }
+  .timer.long { color: var(--cubi-danger); }
 </style>
 </head>
 <body>
-<header>
-  <button class="tab on" data-tab="sprint">本期 sprint</button>
-  <button class="tab" data-tab="review">回顧</button>
-  <button class="tab" data-tab="settings">設定</button>
-  <span class="status" id="status"></span>
-</header>
-<main>
-  <section class="tab on" id="tab-sprint"></section>
-  <section class="tab" id="tab-review"></section>
-  <section class="tab" id="tab-settings"></section>
-</main>
+<div class="cubi-app">
+  <nav class="cubi-nav">
+    <div class="cubi-brand" id="brand">Sprint</div>
+    <button class="cubi-nav-item on" data-tab="overview"></button>
+    <button class="cubi-nav-item" data-tab="review"></button>
+    <button class="cubi-nav-item" data-tab="settings"></button>
+  </nav>
+  <main class="cubi-main">
+    <section id="tab-overview"></section>
+    <section id="tab-review" hidden></section>
+    <section id="tab-settings" hidden></section>
+  </main>
+</div>
+<div class="cubi-status" id="status"></div>
 <script>
 "use strict";
 const $ = (s, el = document) => el.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
-const fmtH = secs => { if (!secs || secs < 60) return "–"; const m = Math.floor(secs / 60), h = Math.floor(m / 60); return h ? `${h}h${String(m % 60).padStart(2, "0")}m` : `${m}m`; };
-const pts = v => v == null ? "–" : (Number.isInteger(v) ? String(v) : String(Math.round(v * 100) / 100));
-const CAT_COLORS = ["var(--c1)", "var(--c2)", "var(--c3)", "var(--c4)", "var(--c5)"];
-let state = null, session = window.cubiSession || null, pendingSprint = null, selectedCategory = null;
+const ic = (n, s) => (window.cubiIcon ? window.cubiIcon(n, s) : "");
+const fmtH = secs => { if (!secs || Math.abs(secs) < 60) return "–"; const m = Math.floor(Math.abs(secs) / 60), h = Math.floor(m / 60); return h ? `${h}h${String(m % 60).padStart(2, "0")}m` : `${m}m`; };
+const clock = secs => { const s = Math.max(0, Math.floor(secs)); return [s / 3600, s / 60 % 60, s % 60].map(v => String(Math.floor(v)).padStart(2, "0")).join(":"); };
+const pts = v => v == null ? "–" : String(Math.round(v * 100) / 100);
+const CAT_COLORS = ["var(--cubi-c2)", "var(--cubi-c4)", "var(--cubi-c1)", "var(--cubi-c3)", "var(--cubi-c5)"];
+const TABS = { overview: ["dashboard", "總覽"], review: ["review", "回顧"], settings: ["settings", "設定"] };
+let state = null, session = window.cubiSession || null, tab = "overview";
+let pendingSprint = false, selectedCategory = null, pendingTime = null, briefPoll = null;
 
-function status(msg, isError) { const el = $("#status"); el.textContent = msg; el.className = "status" + (isError ? " err" : ""); }
+function status(msg, isError) { const el = $("#status"); el.textContent = msg || ""; el.className = "cubi-status" + (isError ? " err" : ""); if (msg && !isError) setTimeout(() => { if (el.textContent === msg) el.textContent = ""; }, 4000); }
 const bridge = () => window.webkit.messageHandlers.cubi;
 
 async function call(action, payload = {}) {
@@ -112,12 +68,18 @@ async function call(action, payload = {}) {
   status("");
   return data;
 }
-async function refresh(action = "panel.state", payload = {}) { state = await call(action, payload); render(); }
-function link(key) { return `<a href="https://${esc(state.site)}/browse/${esc(key)}">${esc(key)} ↗</a>`; }
+// Never rejects: a failure is already on screen (status); the result says whether it worked.
+async function refresh(action = "panel.state", payload = {}) {
+  keepTimeForm();
+  try { state = await call(action, payload); } catch (_) { return false; }
+  render();
+  return true;
+}
+const link = key => `<a href="https://${esc(state.site)}/browse/${esc(key)}" title="在 Jira 開">${esc(key)}</a>`;
+const tip = text => `<span class="cubi-tip" title="${esc(text)}">${ic("info", 13)}</span>`;
 
-// ---------- rendering ----------
-// A re-render while the user is typing elsewhere must not eat the keystrokes: remember the
-// focused field (by id or data attribute), its text and caret, and put them back afterwards.
+// ---------- render ----------
+// A re-render must not eat what the user is typing: remember the focused field and its caret.
 function render() {
   const a = document.activeElement, tag = a && a.tagName;
   let keep = null;
@@ -126,142 +88,221 @@ function render() {
       : Object.keys(a.dataset).length ? `[data-${Object.keys(a.dataset)[0].replace(/[A-Z]/g, c => "-" + c.toLowerCase())}="${CSS.escape(Object.values(a.dataset)[0])}"]` : null;
     if (sel) keep = { sel, value: a.value, pos: a.selectionStart };
   }
-  renderSprint(); renderReview(); renderSettings();
+  document.querySelectorAll(".cubi-nav-item").forEach(b => { const [i, t] = TABS[b.dataset.tab]; b.innerHTML = ic(i) + t; b.classList.toggle("on", b.dataset.tab === tab); });
+  $("#brand").innerHTML = ic("target", 18) + "Sprint";
+  for (const t of Object.keys(TABS)) { $("#tab-" + t).hidden = t !== tab; if (t !== tab) $("#tab-" + t).innerHTML = ""; }
+  ({ overview: renderOverview, review: renderReview, settings: renderSettings })[tab]();
   if (state.warnings && state.warnings.length) status(state.warnings.join("；"), true);
   if (keep) { const el = document.querySelector(keep.sel); if (el) { el.value = keep.value; el.focus(); try { el.setSelectionRange(keep.pos, keep.pos); } catch (_) {} } }
 }
 
-function renderSprint() {
-  const el = $("#tab-sprint"), s = state.sprint, cfg = state.config;
-  let html = "";
-  if (state.session) {
-    const b = state.session;
-    html += `<div class="card"><div class="head"><h2>這個 session</h2><span class="muted">${esc(b.name)} · ${esc(b.cwd || "")}</span><span class="sp"></span>
-        ${b.keys.length > 1 ? `<button class="small" id="shares-btn" title="把目前比例套到本 sprint 已記錄的時段">套用比例到本 sprint</button>` : ""}</div>`;
-    if (b.keys.length) {
-      html += `<table><thead><tr><th>綁定的單</th><th>摘要</th><th class="num">比例</th><th></th></tr></thead><tbody>` +
-        b.keys.map(k => { const t = (s?.tickets || []).find(x => x.key === k) || {}; return `<tr><td>${link(k)}</td><td>${esc(t.summary || "")}</td>
-          <td class="num"><input type="number" min="0" max="100" value="${b.shares[k] ?? ""}" data-share="${esc(k)}"> %</td>
-          <td><button class="small" data-unbind="${esc(k)}">解除</button></td></tr>`; }).join("") + `</tbody></table>`;
-    } else {
-      html += `<p class="muted">還沒綁定工單。</p>`;
-    }
-    html += `<div class="row" style="margin-top:10px"><input id="bind-key" placeholder="單號，可多個" size="18"><button id="bind-btn">綁定</button>
-      <span class="muted">名稱、分支、目錄裡的單號會自動綁：${esc(b.auto.join(" ") || "目前沒抓到")}；時數預設平分</span></div></div>`;
-  }
-  const options = state.sprints.map(x => `<option value="${esc(x.label)}" ${x.label === state.current ? "selected" : ""}>${esc(x.name || x.label)}${x.start ? `（${esc(x.start)} – ${esc(x.end || "?")}）` : ""}</option>`).join("");
-  html += `<div class="card"><div class="head"><select id="sprint-select">${options}</select><button class="small" id="new-btn">＋ 新 sprint</button><span class="sp"></span>`;
-  if (s) html += `<button id="sp-sync" class="primary">同步 Jira</button><button id="sp-resync" title="sprint 變成跟 Jira 查詢結果一模一樣，拿掉不在結果裡的單">重抓並清掉</button>`;
-  html += `</div>`;
-  if (pendingSprint) html += `<div class="inline-form grid"><div class="field"><label>Jira 標籤</label><input id="new-label" placeholder="Sprint7"></div><div class="field"><label>名稱</label><input id="new-name" placeholder="Sprint 7"></div>
-    <div class="field"><label>開始</label><input id="new-start" type="date"></div><div class="field"><label>結束</label><input id="new-end" type="date"></div>
-    <div class="field" style="align-self:end"><button id="new-save" class="primary">建立</button> <button id="new-cancel">取消</button></div></div>`;
-  if (s) html += `<div class="grid"><div class="field"><label>名稱</label><input id="sp-name" value="${esc(s.name || "")}"></div>
-      <div class="field"><label>開始</label><input id="sp-start" type="date" value="${esc(s.start || "")}"></div>
-      <div class="field"><label>結束</label><input id="sp-end" type="date" value="${esc(s.end || "")}"></div>
-      <div class="field" style="grid-column: span 2"><label>目標</label><input id="sp-goal" value="${esc(s.goal || "")}" placeholder="這個 sprint 想達成什麼"></div>
-      <div class="field" style="align-self:end"><button id="sp-save">儲存</button></div></div>`;
-  html += `</div>`;
-  if (!s) { el.innerHTML = html + `<p class="muted">還沒有 sprint。按「＋ 新 sprint」，標籤要跟 Jira 上的一樣（例如 Sprint7），「同步 Jira」會把那個標籤的單抓進來。</p>`; bindSprint(); return; }
-  const m = s.metrics;
-  html += `<div class="card"><div class="head"><h2>工單</h2><span class="muted">估 ${pts(m.estimate)} · 實際 ${pts(m.actual)} · 完成 ${m.done}/${m.tickets} · 投入 ${fmtH(m.seconds)}${m.meetingSeconds ? `（會議 ${fmtH(m.meetingSeconds)}）` : ""}</span><span class="sp"></span>
-      <input id="add-key" placeholder="加單號" size="10"><button class="small" id="add-btn">加</button></div>
-    <table><thead><tr><th>單號</th><th>摘要</th><th>狀態</th><th class="num">估</th><th class="num" title="時數 ÷ ${esc(cfg.hoursPerPoint)}，可覆寫">實</th><th class="num">投入</th><th></th></tr></thead><tbody>`;
-  for (const t of s.tickets) {
-    html += `<tr data-key="${esc(t.key)}"><td>${link(t.key)}</td>
-      <td title="${esc(t.notes)}">${esc(t.summary)}</td><td>${esc(t.status)}${t.done ? " ✓" : ""}</td>
-      <td class="num">${pts(t.estimate)}</td>
-      <td class="num"><input class="actual" type="number" step="0.1" min="0" value="${t.override ?? ""}" placeholder="${t.autoActual ?? ""}" data-actual="${esc(t.key)}">${t.override != null && t.autoActual != null ? `<div class="auto">自動 ${pts(t.autoActual)}</div>` : ""}</td>
-      <td class="num" title="session ${fmtH(t.sessionSeconds)}，手動 ${fmtH(t.manualSeconds)}">${fmtH(t.seconds)}</td>
-      <td class="row"><button class="small" data-transition="${esc(t.key)}">狀態▾</button><button class="small" data-time="${esc(t.key)}">+時數</button>${cfg.actualPointsField ? `<button class="small" data-push="${esc(t.key)}">寫回</button>` : ""}</td></tr>`;
-  }
-  html += `</tbody></table><div id="inline"></div>`;
-  if (s.manual.length) {
-    html += `<details style="margin-top:8px"><summary>手動時段 ${s.manual.length} 筆</summary><table>${s.manual.map(x => `<tr><td>${esc(x.key)}</td><td>${new Date(x.start * 1000).toLocaleString("zh-TW")}</td><td>${fmtH(x.end - x.start)}</td><td>${esc(x.kind)} ${esc(x.note)}</td><td>${x.calendar ? "📅" : ""}</td><td><button class="small" data-remove-time="${esc(x.id)}">刪</button></td></tr>`).join("")}</table></details>`;
-  }
-  html += `</div>`;
-  el.innerHTML = html;
-  bindSprint();
+function kpi(title, icon, value, sub, delta) {
+  const d = delta == null ? "" : `<span class="cubi-delta ${delta > 0 ? "up" : delta < 0 ? "down" : "flat"}">${delta > 0 ? "▲" : delta < 0 ? "▼" : "＝"} ${esc(Math.abs(delta))}</span>`;
+  return `<div class="cubi-kpi"><div class="cubi-kpi-head">${esc(title)}${ic(icon)}</div><div class="cubi-kpi-value"><b>${value}</b>${d}</div><div class="cubi-kpi-sub">${sub}</div></div>`;
 }
 
-function bindSprint() {
-  const el = $("#tab-sprint");
+function header(title) {
+  const s = state.sprint;
+  const options = state.sprints.map(x => `<option value="${esc(x.label)}" ${x.label === state.current ? "selected" : ""}>${esc(x.name || x.label)}</option>`).join("");
+  return `<div class="cubi-header"><h1 class="cubi-title">${esc(title)}</h1>
+      ${s ? `<span class="cubi-pill">${ic("clock", 13)}${esc(s.start || "?")} – ${esc(s.end || "?")}</span>` : ""}
+      <span class="cubi-spacer"></span>
+      ${state.sprints.length ? `<select id="sprint-select" title="切換 sprint">${options}</select>` : ""}
+      <button class="cubi-btn" id="new-btn">${ic("plus")}新 sprint</button>
+      ${s ? `<button class="cubi-btn primary" id="sp-sync" title="照設定的 JQL 從 Jira 抓這個 sprint 的單">${ic("refresh")}同步 Jira</button>` : ""}
+    </div>${pendingSprint ? `<div class="cubi-card"><div class="cubi-form">
+      <div class="cubi-field"><label>Jira 標籤 ${tip("要跟 Jira 上的標籤一模一樣，例如 Sprint7")}</label><input id="new-label" placeholder="Sprint7"></div>
+      <div class="cubi-field"><label>名稱</label><input id="new-name" placeholder="Sprint 7"></div>
+      <div class="cubi-field"><label>開始</label><input id="new-start" type="date"></div>
+      <div class="cubi-field"><label>結束</label><input id="new-end" type="date"></div>
+      <div class="cubi-field" style="align-self:end"><div class="cubi-row"><button class="cubi-btn primary" id="new-save">建立</button><button class="cubi-btn" id="new-cancel">取消</button></div></div></div></div>` : ""}`;
+}
+
+function bindHeader(el) {
   $("#sprint-select", el)?.addEventListener("change", e => refresh("sprint.select", { label: e.target.value }));
-  $("#new-btn", el)?.addEventListener("click", () => { pendingSprint = true; renderSprint(); });
-  $("#new-save", el)?.addEventListener("click", () => { pendingSprint = null; refresh("sprint.new", { label: $("#new-label").value.trim(), name: $("#new-name").value, start: $("#new-start").value, end: $("#new-end").value }); });
-  $("#new-cancel", el)?.addEventListener("click", () => { pendingSprint = null; renderSprint(); });
-  $("#sp-save", el)?.addEventListener("click", () => refresh("sprint.update", { name: $("#sp-name").value, start: $("#sp-start").value, end: $("#sp-end").value, goal: $("#sp-goal").value }));
+  $("#new-btn", el)?.addEventListener("click", () => { pendingSprint = !pendingSprint; render(); });
+  $("#new-save", el)?.addEventListener("click", () => { pendingSprint = false; refresh("sprint.new", { label: $("#new-label").value.trim(), name: $("#new-name").value, start: $("#new-start").value, end: $("#new-end").value }); });
+  $("#new-cancel", el)?.addEventListener("click", () => { pendingSprint = false; render(); });
   $("#sp-sync", el)?.addEventListener("click", () => refresh("sprint.sync"));
-  $("#sp-resync", el)?.addEventListener("click", () => refresh("sprint.sync", { replace: true }));
+}
+
+function statusTone(t) { return t.done || t.statusCategory === "done" ? "good" : t.statusCategory === "indeterminate" ? "info" : ""; }
+function remainTone(t) { if (t.remaining == null || !t.estimate) return ""; const left = t.remaining / (t.estimate * state.config.hoursPerPoint * 3600); return left > 0.5 ? "good" : left > 0.2 ? "warning" : "danger"; }
+function prevSprint() { const h = state.history; const i = h.findIndex(x => x.label === state.current); return i > 0 ? h[i - 1] : null; }
+
+function renderOverview() {
+  const el = $("#tab-overview"), s = state.sprint;
+  let html = header(s ? (s.name || s.label) : "Sprint");
+  if (state.timers.length) {
+    html += `<div class="cubi-card"><div class="cubi-card-head">${ic("clock")}<h2 class="cubi-card-title">計時中</h2></div><table class="cubi-table tight"><tbody>` +
+      state.timers.map(t => `<tr><td>${esc(t.name)}</td><td>${t.keys.map(link).join(" ")}</td>
+        <td class="num"><span class="timer" data-since="${t.start}">${clock(Date.now() / 1000 - t.start)}</span></td>
+        <td class="num"><button class="cubi-btn small" data-stop="${esc(t.sid)}">${ic("pause", 13)}停止並記下</button></td></tr>`).join("") + `</tbody></table></div>`;
+  }
+  if (state.session) html += sessionCard();
+  if (!s) { el.innerHTML = html + `<div class="cubi-card cubi-muted">還沒有 sprint。按「新 sprint」，再「同步 Jira」。</div>`; bindOverview(el); return; }
+  const m = s.metrics, prev = prevSprint(), hpp = state.config.hoursPerPoint;
+  const left = s.tickets.filter(t => !t.done && t.remaining != null).reduce((a, t) => a + Math.max(0, t.remaining), 0);
+  const rate = m.tickets ? Math.round(m.done / m.tickets * 100) : 0;
+  html += `<div class="cubi-kpis">
+      ${kpi("完成點數", "check", `${pts(m.donePoints)}<span class="cubi-muted"> / ${pts(m.estimate)}</span>`, prev ? `上個 sprint ${pts(prev.donePoints)} 點` : "估點合計", prev ? Math.round((m.donePoints - prev.donePoints) * 10) / 10 : null)}
+      ${kpi("完成率", "target", `${rate}%`, `${m.done} / ${m.tickets} 張`, null)}
+      ${kpi("剩餘時數", "hourglass", fmtH(left), `未完成的單，1 點 = ${hpp} 小時`, null)}
+      ${kpi("投入", "clock", fmtH(m.seconds), m.ratio ? `實際 / 估點 ${m.ratio}` : "session＋手動", null)}
+      ${kpi("會議", "users", fmtH(m.meetingSeconds), m.seconds ? `佔 ${Math.round(m.meetingSeconds / m.seconds * 100)}%` : "–", null)}
+    </div>
+    <div class="cubi-grid">
+      <div class="cubi-card"><div class="cubi-card-head"><h2 class="cubi-card-title">任務分類</h2><span class="cubi-spacer"></span>${tip("點一類看那些單")}</div>${categoryBlock(s)}</div>
+      <div class="cubi-card"><div class="cubi-card-head"><h2 class="cubi-card-title">剩餘點數</h2><span class="cubi-spacer"></span><span class="cubi-muted">— 理想　● 實際</span></div><div class="chart">${burndownChart(s.burndown)}</div></div>
+    </div>
+    <div class="cubi-card" style="margin-top:16px"><div class="cubi-card-head"><h2 class="cubi-card-title">工單</h2><span class="cubi-muted">${m.tickets} 張</span><span class="cubi-spacer"></span>
+      <input id="add-key" placeholder="加單號" size="12"><button class="cubi-btn small" id="add-btn">${ic("plus", 13)}加</button></div>
+    <table class="cubi-table"><thead><tr><th>單號</th><th>摘要</th><th>狀態</th><th class="num">估</th><th class="num" title="投入 ÷ ${esc(hpp)} 小時，可覆寫">實</th><th>剩餘</th><th class="num">投入</th><th></th></tr></thead><tbody>`;
+  for (const t of s.tickets) {
+    const rt = remainTone(t), budget = (t.estimate || 0) * hpp * 3600;
+    const used = budget ? Math.min(100, Math.max(0, (budget - t.remaining) / budget * 100)) : 0;
+    html += `<tr><td><span class="key"><span class="cubi-dot ${statusTone(t)}"></span>${link(t.key)}</span></td>
+      <td class="clip" title="${esc(t.summary)}${t.notes ? "\n" + esc(t.notes) : ""}">${esc(t.summary)}</td>
+      <td><span class="cubi-pill ${statusTone(t)}">${esc(t.status || "–")}</span></td>
+      <td class="num">${pts(t.estimate)}</td>
+      <td class="num"><input class="actual" type="number" step="0.1" min="0" value="${t.override ?? ""}" placeholder="${t.autoActual ?? "–"}" data-actual="${esc(t.key)}" title="${t.override != null ? "手動覆寫；自動算是 " + pts(t.autoActual) : "自動算的；填數字可覆寫"}"></td>
+      <td>${t.remaining == null ? `<span class="cubi-muted">未估點</span>` : `<div class="remain"><div class="cubi-bar ${rt}"><i style="width:${used}%"></i></div><span style="color:var(--cubi-${rt || "ink2"})">${t.remaining < 0 ? "超 " + fmtH(-t.remaining) : fmtH(t.remaining)}</span></div>`}</td>
+      <td class="num" title="session ${fmtH(t.sessionSeconds)}，手動 ${fmtH(t.manualSeconds)}">${fmtH(t.seconds)}</td>
+      <td class="num"><span class="cubi-row" style="justify-content:flex-end;flex-wrap:nowrap">
+        <button class="cubi-btn icon" data-time="${esc(t.key)}" title="補時數（會議、討論）">${ic("plus", 15)}</button>
+        <button class="cubi-btn icon" data-transition="${esc(t.key)}" title="換 Jira 狀態">${ic("flag", 15)}</button>
+        ${state.config.actualPointsField ? `<button class="cubi-btn icon" data-push="${esc(t.key)}" title="實際點數寫回 Jira">${ic("download", 15)}</button>` : ""}</span></td></tr>`;
+    if (pendingTime && pendingTime.key === t.key) html += timeFormRow(t.key);
+  }
+  html += `</tbody></table></div>` + sprintInfoCard(s) + manualCard(s);
+  el.innerHTML = html;
+  bindOverview(el);
+  const f = $("#t-min", el); if (f && pendingTime && pendingTime.focus) { f.focus(); pendingTime.focus = false; }
+}
+
+function sessionCard() {
+  const b = state.session;
+  return `<div class="cubi-card"><div class="cubi-card-head">${ic("link")}<h2 class="cubi-card-title">這個 session</h2><span class="cubi-muted">${esc(b.name)}</span><span class="cubi-spacer"></span>
+      ${b.keys.length > 1 ? `<button class="cubi-btn small" id="shares-btn" title="把目前比例套到本 sprint 已記錄的時段">套用比例到本 sprint</button>` : ""}</div>
+    ${b.keys.length ? `<table class="cubi-table tight"><tbody>` + b.keys.map(k => { const t = (state.sprint?.tickets || []).find(x => x.key === k) || {};
+      return `<tr><td>${link(k)}</td><td class="clip">${esc(t.summary || "")}</td><td class="num"><input type="number" min="0" max="100" value="${b.shares[k] ?? ""}" data-share="${esc(k)}" style="width:64px" title="時數分給這張單的比例"> %</td>
+        <td class="num"><button class="cubi-btn icon" data-unbind="${esc(k)}" title="解除">${ic("x", 14)}</button></td></tr>`; }).join("") + `</tbody></table>` : `<div class="cubi-muted">還沒綁單。</div>`}
+    <div class="cubi-row" style="margin-top:10px"><input id="bind-key" placeholder="單號，可多個" size="18"><button class="cubi-btn small" id="bind-btn">${ic("plus", 13)}綁定</button>
+      <span class="cubi-muted">自動抓到：${esc(b.auto.join(" ") || "沒有")}</span>${tip("名稱、分支、目錄（" + (b.cwd || "?") + "）裡的單號會自動綁；多張單時數預設平分")}</div></div>`;
+}
+
+function sprintInfoCard(s) {
+  return `<details class="cubi-card"><summary class="cubi-card-title" style="cursor:pointer">Sprint 資訊</summary><div class="cubi-form" style="margin-top:12px">
+      <div class="cubi-field"><label>名稱</label><input id="sp-name" value="${esc(s.name || "")}"></div>
+      <div class="cubi-field"><label>開始</label><input id="sp-start" type="date" value="${esc(s.start || "")}"></div>
+      <div class="cubi-field"><label>結束</label><input id="sp-end" type="date" value="${esc(s.end || "")}"></div>
+      <div class="cubi-field" style="grid-column: span 2"><label>目標</label><input id="sp-goal" value="${esc(s.goal || "")}"></div>
+      <div class="cubi-field" style="align-self:end"><div class="cubi-row"><button class="cubi-btn primary" id="sp-save">儲存</button>
+        <button class="cubi-btn" id="sp-resync" title="sprint 變成跟 Jira 查詢結果一模一樣，拿掉不在結果裡的單">重抓並清掉</button></div></div></div></details>`;
+}
+
+function manualCard(s) {
+  if (!s.manual.length) return "";
+  return `<details class="cubi-card"><summary class="cubi-card-title" style="cursor:pointer">手動時段 ${s.manual.length} 筆</summary><table class="cubi-table tight" style="margin-top:8px"><tbody>` +
+    s.manual.map(x => `<tr><td>${(Object.keys(x.shares || { [x.key]: 100 })).map(esc).join(" ")}</td><td>${new Date(x.start * 1000).toLocaleString("zh-TW")}</td><td class="num">${fmtH(x.end - x.start)}</td>
+      <td><span class="cubi-pill">${esc(x.kind)}</span> ${esc(x.note || x.reason || "")}</td><td>${x.calendar ? ic("clock", 13) : ""}</td>
+      <td class="num"><button class="cubi-btn icon" data-remove-time="${esc(x.id)}" title="刪除">${ic("x", 14)}</button></td></tr>`).join("") + `</tbody></table></details>`;
+}
+
+// The ＋時數 form sits right under its ticket's row and keeps what was typed across re-renders.
+function timeFormRow(key) {
+  const p = pendingTime;
+  return `<tr><td colspan="8"><div class="cubi-inline cubi-row"><b>${esc(key)}</b>
+    <input id="t-start" type="datetime-local" value="${esc(p.start)}">
+    <input id="t-min" type="number" min="1" max="1440" value="${esc(p.minutes)}" style="width:80px"> 分
+    <select id="t-kind">${["開發", "會議", "討論", "其他"].map(k => `<option ${k === p.kind ? "selected" : ""}>${k}</option>`).join("")}</select>
+    <input id="t-note" placeholder="備註" value="${esc(p.note)}" size="18">
+    <label class="cubi-row" style="gap:4px"><input id="t-cal" type="checkbox" ${p.calendar ? "checked" : ""}> 寫進行事曆</label>
+    <span class="cubi-spacer"></span><button class="cubi-btn primary small" id="t-save">加</button><button class="cubi-btn small" id="t-cancel">取消</button></div></td></tr>`;
+}
+function keepTimeForm() {
+  if (!pendingTime || !$("#t-start")) return;
+  pendingTime = { ...pendingTime, start: $("#t-start").value, minutes: $("#t-min").value, kind: $("#t-kind").value, note: $("#t-note").value, calendar: $("#t-cal").checked };
+}
+function openTimeForm(key) {
+  const d = new Date(Date.now() - 3600 * 1000), local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  pendingTime = pendingTime && pendingTime.key === key ? null : { key, start: local, minutes: 60, kind: "會議", note: "", calendar: true, focus: true };
+  render();
+}
+
+function bindOverview(el) {
+  bindHeader(el);
   $("#add-btn", el)?.addEventListener("click", () => refresh("ticket.add", { key: $("#add-key").value }));
   $("#bind-btn", el)?.addEventListener("click", () => refresh("session.bind", { key: $("#bind-key").value }));
   $("#shares-btn", el)?.addEventListener("click", () => refresh("session.shares", { shares: currentShares(), applyToSprint: true }));
+  $("#sp-save", el)?.addEventListener("click", () => refresh("sprint.update", { name: $("#sp-name").value, start: $("#sp-start").value, end: $("#sp-end").value, goal: $("#sp-goal").value }));
+  $("#sp-resync", el)?.addEventListener("click", () => refresh("sprint.sync", { replace: true }));
+  $("#t-save", el)?.addEventListener("click", async () => { keepTimeForm(); const p = pendingTime; pendingTime = null;
+    if (!await refresh("time.add", { key: p.key, start: p.start, minutes: Number(p.minutes), kind: p.kind, note: p.note, calendar: p.calendar })) { pendingTime = p; render(); } });
+  $("#t-cancel", el)?.addEventListener("click", () => { pendingTime = null; render(); });
   el.querySelectorAll("[data-share]").forEach(i => i.addEventListener("change", () => refresh("session.shares", { shares: currentShares() })));
   el.querySelectorAll("[data-unbind]").forEach(x => x.addEventListener("click", () => refresh("session.unbind", { key: x.dataset.unbind })));
   el.querySelectorAll("[data-actual]").forEach(i => i.addEventListener("change", () => refresh("ticket.update", { key: i.dataset.actual, actual: i.value })));
   el.querySelectorAll("[data-push]").forEach(b => b.addEventListener("click", () => refresh("points.push", { key: b.dataset.push })));
   el.querySelectorAll("[data-remove-time]").forEach(b => b.addEventListener("click", () => refresh("time.remove", { id: b.dataset.removeTime })));
-  el.querySelectorAll("[data-time]").forEach(b => b.addEventListener("click", () => timeForm(b.dataset.time)));
+  el.querySelectorAll("[data-time]").forEach(b => b.addEventListener("click", () => openTimeForm(b.dataset.time)));
   el.querySelectorAll("[data-transition]").forEach(b => b.addEventListener("click", () => transitionMenu(b.dataset.transition, b)));
+  el.querySelectorAll("[data-stop]").forEach(b => b.addEventListener("click", () => refresh("timer.stop", { sid: b.dataset.stop })));
+  bindCategories(el);
 }
 
 function currentShares() { const o = {}; document.querySelectorAll("[data-share]").forEach(i => { o[i.dataset.share] = Number(i.value) || 0; }); return o; }
 
-function timeForm(key) {
-  const now = new Date(Date.now() - 3600 * 1000), local = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-  $("#inline").innerHTML = `<div class="inline-form row"><b>${esc(key)}</b> 開始 <input id="t-start" type="datetime-local" value="${local}"> 長度 <input id="t-min" type="number" value="60" min="1"> 分
-    <select id="t-kind"><option>開發</option><option>會議</option><option>討論</option><option>其他</option></select>
-    <input id="t-note" placeholder="備註" size="16"> <label><input id="t-cal" type="checkbox" checked> 寫進行事曆</label>
-    <button id="t-save" class="primary small">加</button><button id="t-cancel" class="small">取消</button></div>`;
-  $("#t-save").onclick = () => refresh("time.add", { key, start: $("#t-start").value, minutes: Number($("#t-min").value), kind: $("#t-kind").value, note: $("#t-note").value, calendar: $("#t-cal").checked });
-  $("#t-cancel").onclick = () => { $("#inline").innerHTML = ""; };
-}
-
 async function transitionMenu(key, button) {
-  const data = await call("ticket.transition", { key });
+  let data;
+  try { data = await call("ticket.transition", { key }); } catch (_) { return; }
   const sel = document.createElement("select");
   sel.innerHTML = `<option value="">換狀態…</option>` + data.transitions.map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join("");
   sel.onchange = () => { if (sel.value) refresh("ticket.transition", { key, id: sel.value }); };
   button.replaceWith(sel);
+  sel.focus();
+}
+
+// ---------- categories (overview and review share it) ----------
+function categoryBlock(s) {
+  const cats = s.categories, counts = cats.map(c => s.metrics.categories[c] || 0);
+  const selected = selectedCategory && cats.includes(selectedCategory) ? selectedCategory : null;
+  const group = selected ? s.tickets.filter(t => t.category === selected) : [];
+  let html = `<div class="donut-wrap">${donut(counts, cats)}<div class="cubi-split">${cats.map((c, i) =>
+    `<button data-cat="${esc(c)}" class="${selected === c ? "on" : ""}" style="border-color:${CAT_COLORS[i]}"><b>${counts[i]}</b><span>${esc(c)}</span></button>`).join("")}</div></div>`;
+  if (selected) {
+    html += `<table class="cubi-table tight" style="margin-top:12px"><tbody>` + (group.length ? group.map(t => `<tr><td>${link(t.key)}</td><td class="clip">${esc(t.summary)}</td>
+      <td class="num">${pts(t.estimate)} → ${pts(t.actual)}</td><td class="num">${fmtH(t.seconds)}</td></tr>`).join("") : `<tr><td class="cubi-muted">沒有單</td></tr>`) + `</tbody></table>`;
+  }
+  return html;
+}
+function bindCategories(el) {
+  el.querySelectorAll("[data-cat]").forEach(b => b.addEventListener("click", () => { selectedCategory = selectedCategory === b.dataset.cat ? null : b.dataset.cat; render(); }));
 }
 
 // ---------- review ----------
 function renderReview() {
   const el = $("#tab-review"), s = state.sprint;
-  if (!s) { el.innerHTML = `<p class="muted">還沒有 sprint。</p>`; return; }
-  const m = s.metrics, r = s.review, cats = s.categories;
-  const tile = (v, l) => `<div class="tile"><div class="v">${v}</div><div class="l">${l}</div></div>`;
-  const counts = cats.map(c => m.categories[c] || 0);
-  const selected = selectedCategory && cats.includes(selectedCategory) ? selectedCategory : null;
-  const group = selected ? s.tickets.filter(t => t.category === selected) : [];
-  let html = `<div class="row"><h2>${esc(s.name || s.label)} 回顧</h2><span class="muted">${esc(s.start || "?")} – ${esc(s.end || "?")}${s.goal ? " · " + esc(s.goal) : ""}</span><span style="flex:1"></span>
-      <button id="brief" class="primary">用 Claude 整理回顧</button><button id="export">匯出 Markdown</button></div>
-    <div class="tiles">${tile(`${pts(m.donePoints)}<span class="muted">/${pts(m.estimate)}</span>`, "完成點數 / 估點")}${tile(`${m.done}<span class="muted">/${m.tickets}</span>`, "完成單數")}${tile(m.ratio ?? "–", "實際 / 估點")}${tile(fmtH(m.seconds), "投入")}${tile(fmtH(m.meetingSeconds), "會議／討論")}</div>
-    <div class="charts">
-      <div class="card"><h3>任務分類 <span class="muted">點一類看單</span></h3>
-        <div class="donut">${donut(counts)}<div class="legend">${cats.map((c, i) => `<button data-cat="${esc(c)}" class="${selected === c ? "on" : ""}"><i style="background:${CAT_COLORS[i]}"></i>${esc(c)}<b>${counts[i]}</b></button>`).join("")}</div></div>
-      </div>
-      <div class="card"><h3>剩餘點數（burndown）</h3><div class="legend2"><span><i style="background:var(--c3)"></i>理想</span><span><i style="background:var(--c4)"></i>實際</span></div>${burndownChart(s.burndown)}</div>
-    </div>`;
-  if (selected) {
-    html += `<div class="card" style="margin-top:14px"><div class="head"><h3 style="margin:0">${esc(selected)} · ${group.length} 張</h3><span class="sp"></span><button class="small" id="cat-close">關閉</button></div>
-      ${group.length ? `<table><thead><tr><th>單號</th><th>摘要</th><th>狀態</th><th class="num">估 → 實</th><th class="num">投入</th></tr></thead><tbody>` +
-        group.map(t => `<tr><td>${link(t.key)}</td><td>${esc(t.summary)}</td><td>${esc(t.status)}</td><td class="num">${pts(t.estimate)} → ${pts(t.actual)}</td><td class="num">${fmtH(t.seconds)}</td></tr>`).join("") + `</tbody></table>` : `<p class="muted">沒有單。</p>`}</div>`;
-  }
-  html += `<div class="card" style="margin-top:14px"><h3>近幾個 sprint <span class="muted">長條＝完成點數，數字＝實際/估點</span></h3>${historyChart(state.history)}</div>
-    <div class="card"><div class="field"><label>總結</label><textarea data-list="summary" style="min-height:64px" placeholder="兩到三句：這個 sprint 做了什麼、結果如何">${esc(r.summary || "")}</textarea></div>
-    <div class="lists" style="margin-top:10px">
-      <div class="field"><label>做得好的地方</label><textarea data-list="wentWell">${esc(r.wentWell.join("\n"))}</textarea></div>
-      <div class="field"><label>需要改善的地方</label><textarea data-list="toImprove">${esc(r.toImprove.join("\n"))}</textarea></div>
-      <div class="field"><label>改善建議</label><textarea data-list="suggestions">${esc(r.suggestions.join("\n"))}</textarea></div>
-      <div class="field"><label>想感謝的夥伴 <span class="muted">一行一位：名字：原因</span></label><textarea data-list="thanks">${esc(r.thanks.map(t => `${t.who}：${t.why}`).join("\n"))}</textarea></div>
-    </div><p class="muted" style="margin:8px 0 0">一行一條，離開欄位就存。「用 Claude 整理回顧」會開一個 Claude Code session 讀這個 sprint 的數據寫好四段並填回這裡。</p></div>`;
-  el.innerHTML = html;
-  $("#export").onclick = () => call("review.export");
-  $("#brief").onclick = startBrief;
-  $("#cat-close")?.addEventListener("click", () => { selectedCategory = null; renderReview(); });
-  el.querySelectorAll("[data-cat]").forEach(b => b.addEventListener("click", () => { selectedCategory = selectedCategory === b.dataset.cat ? null : b.dataset.cat; renderReview(); }));
-  el.querySelectorAll("path.slice").forEach(p => p.addEventListener("click", () => { selectedCategory = selectedCategory === p.dataset.cat ? null : p.dataset.cat; renderReview(); }));
+  if (!s) { el.innerHTML = header("回顧") + `<div class="cubi-card cubi-muted">還沒有 sprint。</div>`; bindHeader(el); return; }
+  const r = s.review;
+  el.innerHTML = `<div class="cubi-header"><h1 class="cubi-title">${esc(s.name || s.label)} 回顧</h1><span class="cubi-spacer"></span>
+      <button class="cubi-btn primary" id="brief" title="開一個 Claude Code session 讀這個 sprint 的數據，寫好填回這裡">${ic("sparkles")}用 Claude 整理</button>
+      <button class="cubi-btn" id="export">${ic("download")}匯出 Markdown</button></div>
+    <div class="cubi-grid">
+      <div class="cubi-card"><div class="cubi-card-head"><h2 class="cubi-card-title">任務分類</h2></div>${categoryBlock(s)}</div>
+      <div class="cubi-card"><div class="cubi-card-head"><h2 class="cubi-card-title">近幾個 sprint</h2><span class="cubi-spacer"></span>${tip("長條＝完成點數，下面數字＝實際/估點")}</div><div class="chart">${historyChart(state.history)}</div></div>
+    </div>
+    <div class="cubi-card" style="margin-top:16px">
+      <div class="cubi-field"><label>總結</label><textarea data-list="summary" style="min-height:64px" placeholder="兩到三句">${esc(r.summary || "")}</textarea></div>
+      <div class="lists" style="margin-top:14px">
+        <div class="cubi-field"><label>做得好</label><textarea data-list="wentWell" placeholder="一行一條">${esc(r.wentWell.join("\n"))}</textarea></div>
+        <div class="cubi-field"><label>要改善</label><textarea data-list="toImprove" placeholder="一行一條">${esc(r.toImprove.join("\n"))}</textarea></div>
+        <div class="cubi-field"><label>改善建議</label><textarea data-list="suggestions" placeholder="一行一條">${esc(r.suggestions.join("\n"))}</textarea></div>
+        <div class="cubi-field"><label>想感謝 ${tip("一行一位：名字：原因")}</label><textarea data-list="thanks" placeholder="名字：原因">${esc(r.thanks.map(t => `${t.who}：${t.why}`).join("\n"))}</textarea></div>
+      </div></div>`;
+  $("#export", el).onclick = () => call("review.export").catch(() => {});
+  $("#brief", el).onclick = startBrief;
+  bindCategories(el);
   // A field only writes back what the user changed: a blur on an untouched textarea after a
   // refresh must not overwrite what Claude (or another window) just saved.
   el.querySelectorAll("[data-list]").forEach(t => { t.dataset.orig = t.value; });
@@ -274,7 +315,6 @@ function renderReview() {
   }));
 }
 
-let briefPoll = null;
 async function startBrief() {
   let b;
   try { b = await call("review.brief"); } catch (_) { return; }
@@ -284,59 +324,57 @@ async function startBrief() {
   catch (e) { status(String(e.message || e), true); return; }
   if (!r.ok) { status(r.cancelled ? "" : (r.err || "開不了 session"), !r.cancelled); return; }
   status(`已在 ${b.directory} 開 session；每 30 秒看一次，寫好就出現（資料檔 ${b.file}）`);
-  // Watch for the review to land, for up to an hour.
   const before = JSON.stringify(state.sprint?.review), started = Date.now();
   clearInterval(briefPoll);
   briefPoll = setInterval(async () => {
-    try { await refresh(); } catch (_) { return; }
+    if (!await refresh()) return;
     if (JSON.stringify(state.sprint?.review) !== before) { clearInterval(briefPoll); status("Claude 寫回來了"); }
     else if (Date.now() - started > 3600 * 1000) { clearInterval(briefPoll); }
   }, 30000);
 }
 
-// Charts: inline SVG. Categories get fixed colours (one per category, never cycled); the two-series
-// charts use blue for plan/ideal and orange for actual. Text stays in ink, never a series colour.
+// ---------- charts: inline SVG; categories have fixed colours, text stays in ink ----------
 const W = 440;
-function donut(counts) {
-  const total = counts.reduce((a, b) => a + b, 0), R = 70, r = 42, cx = 85, cy = 85;
-  if (!total) return `<svg viewBox="0 0 170 170"><circle cx="${cx}" cy="${cy}" r="${(R + r) / 2}" fill="none" stroke="var(--grid)" stroke-width="${R - r}"/><text x="${cx}" y="${cy + 4}" text-anchor="middle">沒有單</text></svg>`;
+function donut(counts, cats) {
+  const total = counts.reduce((a, b) => a + b, 0), R = 66, r = 44, cx = 75, cy = 75;
+  if (!total) return `<svg viewBox="0 0 150 150"><circle cx="${cx}" cy="${cy}" r="${(R + r) / 2}" fill="none" stroke="var(--cubi-line)" stroke-width="${R - r}"/></svg>`;
   let a0 = -Math.PI / 2, g = "";
   counts.forEach((n, i) => {
     if (!n) return;
-    const a1 = a0 + n / total * 2 * Math.PI, big = a1 - a0 > Math.PI ? 1 : 0;
-    const p = (a, rad) => `${cx + rad * Math.cos(a)},${cy + rad * Math.sin(a)}`;
-    const d = n === total ? `M ${p(a0, R)} A ${R} ${R} 0 1 1 ${p(a0 + Math.PI, R)} A ${R} ${R} 0 1 1 ${p(a0, R)} M ${p(a0, r)} A ${r} ${r} 0 1 0 ${p(a0 + Math.PI, r)} A ${r} ${r} 0 1 0 ${p(a0, r)}`
-      : `M ${p(a0, R)} A ${R} ${R} 0 ${big} 1 ${p(a1, R)} L ${p(a1, r)} A ${r} ${r} 0 ${big} 0 ${p(a0, r)} Z`;
-    const dim = selectedCategory && selectedCategory !== state.sprint.categories[i] ? " dim" : "";
-    g += `<path class="slice${dim}" d="${d}" fill="${CAT_COLORS[i]}" fill-rule="evenodd" data-cat="${esc(state.sprint.categories[i])}"><title>${esc(state.sprint.categories[i])} ${n} 張</title></path>`;
+    const dim = selectedCategory && selectedCategory !== cats[i] ? " dim" : "";
+    if (n === total) { g += `<circle cx="${cx}" cy="${cy}" r="${(R + r) / 2}" fill="none" stroke="${CAT_COLORS[i]}" stroke-width="${R - r}" class="slice${dim}" data-cat="${esc(cats[i])}" style="cursor:pointer"><title>${esc(cats[i])} ${n} 張</title></circle>`; return; }
+    const a1 = a0 + n / total * 2 * Math.PI, big = a1 - a0 > Math.PI ? 1 : 0, p = (a, rad) => `${cx + rad * Math.cos(a)},${cy + rad * Math.sin(a)}`;
+    g += `<path class="slice${dim}" d="M ${p(a0, R)} A ${R} ${R} 0 ${big} 1 ${p(a1, R)} L ${p(a1, r)} A ${r} ${r} 0 ${big} 0 ${p(a0, r)} Z" fill="${CAT_COLORS[i]}" data-cat="${esc(cats[i])}"><title>${esc(cats[i])} ${n} 張</title></path>`;
     a0 = a1;
   });
-  g += `<text x="${cx}" y="${cy - 2}" text-anchor="middle" style="font-size:20px;font-weight:600;fill:var(--ink)">${total}</text><text x="${cx}" y="${cy + 14}" text-anchor="middle">張</text>`;
-  return `<svg viewBox="0 0 170 170">${g}</svg>`;
+  g += `<text x="${cx}" y="${cy + 2}" text-anchor="middle" style="font-size:22px;font-weight:700;fill:var(--cubi-ink)">${total}</text><text x="${cx}" y="${cy + 18}" text-anchor="middle">張</text>`;
+  return `<svg viewBox="0 0 150 150">${g}</svg>`;
 }
 function burndownChart(b) {
-  if (!b.length) return `<p class="muted">sprint 要有起訖日期才畫得出來（本期 sprint 分頁）。</p>`;
-  const H = 160, left = 30, bottom = 20, top = 8, max = Math.max(1, b[0].ideal, ...b.map(p => p.actual || 0));
+  if (!b.length) return `<div class="cubi-muted">sprint 要有起訖日期（Sprint 資訊）。</div>`;
+  const H = 170, left = 30, bottom = 22, top = 10, max = Math.max(1, b[0].ideal, ...b.map(p => p.actual || 0));
   const x = i => left + i / Math.max(1, b.length - 1) * (W - left - 10), y = v => top + (1 - v / max) * (H - top - bottom);
-  const ideal = b.map((p, i) => `${x(i)},${y(p.ideal)}`).join(" ");
-  const actualPts = b.filter(p => p.actual != null);
-  const actual = actualPts.map(p => `${x(b.indexOf(p))},${y(p.actual)}`).join(" ");
-  let g = `<line x1="${left}" y1="${y(0)}" x2="${W - 10}" y2="${y(0)}" stroke="var(--grid)"/><text x="${left - 4}" y="${y(max) + 4}" text-anchor="end">${max}</text><text x="${left - 4}" y="${y(0) + 4}" text-anchor="end">0</text>
-    <polyline points="${ideal}" fill="none" stroke="var(--c3)" stroke-width="2" stroke-dasharray="4 3"/>
-    <polyline points="${actual}" fill="none" stroke="var(--c4)" stroke-width="2"/>`;
-  actualPts.forEach(p => { g += `<circle cx="${x(b.indexOf(p))}" cy="${y(p.actual)}" r="3" fill="var(--c4)"><title>${p.date} 剩 ${p.actual}</title></circle>`; });
+  const actual = b.map((p, i) => [p, i]).filter(([p]) => p.actual != null);
+  const line = actual.map(([p, i]) => `${x(i)},${y(p.actual)}`).join(" ");
+  const area = actual.length ? `${x(actual[0][1])},${y(0)} ${line} ${x(actual[actual.length - 1][1])},${y(0)}` : "";
+  let g = `<defs><linearGradient id="bd" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--cubi-accent)" stop-opacity=".22"/><stop offset="1" stop-color="var(--cubi-accent)" stop-opacity="0"/></linearGradient></defs>`;
+  [0, 0.5, 1].forEach(f => { g += `<line x1="${left}" x2="${W - 10}" y1="${y(max * f)}" y2="${y(max * f)}" stroke="var(--cubi-line2)"/><text x="${left - 6}" y="${y(max * f) + 4}" text-anchor="end">${pts(max * f)}</text>`; });
+  g += `<polyline points="${b.map((p, i) => `${x(i)},${y(p.ideal)}`).join(" ")}" fill="none" stroke="var(--cubi-ink3)" stroke-width="1.5" stroke-dasharray="4 4"/>`;
+  if (area) g += `<polygon points="${area}" fill="url(#bd)"/><polyline points="${line}" fill="none" stroke="var(--cubi-accent)" stroke-width="2.2" stroke-linejoin="round"/>`;
+  actual.forEach(([p, i]) => { g += `<circle cx="${x(i)}" cy="${y(p.actual)}" r="3" fill="var(--cubi-accent)"><title>${p.date} 剩 ${p.actual}</title></circle>`; });
   g += `<text x="${left}" y="${H - 4}">${b[0].date.slice(5)}</text><text x="${W - 10}" y="${H - 4}" text-anchor="end">${b[b.length - 1].date.slice(5)}</text>`;
   return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
 }
 function historyChart(hist) {
-  if (hist.length < 2) return `<p class="muted">有兩個以上的 sprint 才有趨勢。</p>`;
-  const H = 130, max = Math.max(1, ...hist.map(h => h.donePoints)), slot = (W - 20) / hist.length, bw = Math.min(60, slot - 12);
+  if (hist.length < 2) return `<div class="cubi-muted">有兩個以上的 sprint 才有趨勢。</div>`;
+  const H = 150, max = Math.max(1, ...hist.map(h => h.donePoints)), slot = (W - 20) / hist.length, bw = Math.min(46, slot - 16);
   let g = "";
   hist.forEach((h, i) => {
-    const x = 10 + i * slot + (slot - bw) / 2, bh = h.donePoints / max * 80, y = 100 - bh;
-    g += `<rect x="${x}" y="${y}" width="${bw}" height="${bh}" rx="3" fill="var(--c3)"><title>${esc(h.label)} 完成 ${pts(h.donePoints)} 點</title></rect>
-      <text x="${x + bw / 2}" y="${y - 4}" text-anchor="middle">${pts(h.donePoints)}</text>
-      <text x="${x + bw / 2}" y="114" text-anchor="middle">${esc(h.label)}</text><text x="${x + bw / 2}" y="127" text-anchor="middle">${h.ratio ?? "–"}</text>`;
+    const cx = 10 + i * slot + slot / 2, bh = Math.max(4, h.donePoints / max * 90), y = 108 - bh, on = h.label === state.current;
+    g += `<rect x="${cx - bw / 2}" y="${18}" width="${bw}" height="90" rx="10" fill="var(--cubi-line2)"/>
+      <rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${bh}" rx="10" fill="${on ? "var(--cubi-accent)" : "var(--cubi-ink3)"}" opacity="${on ? 1 : .45}"><title>${esc(h.label)} 完成 ${pts(h.donePoints)} 點</title></rect>
+      <text x="${cx}" y="${y - 5}" text-anchor="middle" style="fill:var(--cubi-ink);font-weight:600">${pts(h.donePoints)}</text>
+      <text x="${cx}" y="126" text-anchor="middle" style="${on ? "fill:var(--cubi-accent);font-weight:600" : ""}">${esc(h.label)}</text><text x="${cx}" y="142" text-anchor="middle">${h.ratio ?? "–"}</text>`;
   });
   return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
 }
@@ -344,33 +382,33 @@ function historyChart(hist) {
 // ---------- settings ----------
 function renderSettings() {
   const el = $("#tab-settings"), c = state.config;
-  const field = (k, label, hint, type = "text") => `<div class="field"><label for="c-${k}">${label}</label><input id="c-${k}" type="${type}" value="${esc(c[k] ?? "")}">${hint ? `<div class="hint">${hint}</div>` : ""}</div>`;
-  el.innerHTML = `<div class="card"><div class="section-title" style="margin-top:0">Jira</div><div class="grid">
+  const projects = String(c.projectKey ?? "").split(/[,\s]+/).filter(Boolean);
+  const sent = String(c.jql ?? "").replace("{projects}", projects.join(", ")).replace("{project}", projects[0] || "").replace("{label}", state.current || "…");
+  const field = (k, label, hint, type = "text") => `<div class="cubi-field"><label for="c-${k}">${label} ${hint ? tip(hint) : ""}</label><input id="c-${k}" type="${type}" value="${esc(c[k] ?? "")}"></div>`;
+  el.innerHTML = `<div class="cubi-header"><h1 class="cubi-title">設定</h1><span class="cubi-spacer"></span><button class="cubi-btn primary" id="c-save">${ic("check")}儲存</button></div>
+    <div class="cubi-card"><div class="cubi-section-title">Jira</div><div class="cubi-form">
       ${field("site", "站台", "例如 example.atlassian.net")}
-      ${field("netrc", "帳密檔（netrc）", `一行 <code>machine &lt;站台&gt; login &lt;email&gt; password &lt;API token&gt;</code>；${state.netrcFound ? "<span style='color:var(--good)'>找到檔案</span>" : "<span class='err'>找不到檔案</span>"}`)}
-      ${field("projectKey", "專案 key", "可多個，逗號分開；單號比對認這些")}
-      ${field("pointsField", "估點欄位 id", "Story point estimate 通常是 customfield_10016")}
-      ${field("actualPointsField", "實際點數欄位 id", "留空就只存本機；填了表格才有「寫回」")}
-    </div>
-    <div class="section-title">同步</div><div class="grid">
-      <div class="field" style="grid-column: 1 / -1"><label for="c-jql">抓單用的 JQL</label><input id="c-jql" value="${esc(c.jql ?? "")}"><div class="hint">{projects}、{project}、{label} 會代入；本期會送出：${esc(String(c.jql ?? "").replace("{projects}", String(c.projectKey ?? "").split(/[,\s]+/).filter(Boolean).join(", ")).replace("{project}", String(c.projectKey ?? "").split(/[,\s]+/)[0] || "").replace("{label}", state.current || "…"))}</div></div>
+      ${field("netrc", "帳密檔", `netrc 一行：machine <站台> login <email> password <API token>${state.netrcFound ? "" : "（現在找不到這個檔）"}`)}
+      ${field("projectKey", "專案 key", "可多個，逗號分開")}
+      ${field("pointsField", "估點欄位", "Story point estimate 通常是 customfield_10016")}
+      ${field("actualPointsField", "實際點數欄位", "留空就只存本機；填了表格才有寫回")}
+    </div>${state.netrcFound ? "" : `<div class="cubi-row" style="margin-top:10px"><span class="cubi-pill danger">找不到帳密檔</span></div>`}
+    <div class="cubi-section-title">同步</div><div class="cubi-form">
+      <div class="cubi-field" style="grid-column: 1 / -1"><label for="c-jql">JQL ${tip("本期會送出：" + sent)}</label><input id="c-jql" value="${esc(c.jql ?? "")}"></div>
       ${field("hoursPerPoint", "每點小時數", "實際點數＝投入時數 ÷ 這個數", "number")}
     </div>
-    <div class="section-title">回顧</div><div class="grid">
-      ${field("reviewDir", "Markdown 資料夾", "匯出到 <資料夾>/<sprint 標籤>.md；資料檔 <標籤>-data.md 也在這")}
-      ${field("reviewSessionDir", "整理回顧的 session 開在", "「用 Claude 整理回顧」在這個資料夾開 Claude Code")}
-    </div>
-    <div class="row" style="margin-top:14px"><button id="c-save" class="primary">儲存設定</button></div></div>`;
-  $("#c-save").onclick = () => { const p = {}; ["site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "hoursPerPoint", "reviewDir", "reviewSessionDir"].forEach(k => { p[k] = $("#c-" + k).value; }); refresh("config.set", p); };
+    <div class="cubi-section-title">回顧</div><div class="cubi-form">
+      ${field("reviewDir", "Markdown 資料夾", "匯出 <資料夾>/<標籤>.md；整理用的資料檔也在這")}
+      ${field("reviewSessionDir", "整理用的 session 開在", "「用 Claude 整理」在這裡開 Claude Code")}
+    </div></div>`;
+  $("#c-save", el).onclick = () => { const p = {}; ["site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "hoursPerPoint", "reviewDir", "reviewSessionDir"].forEach(k => { p[k] = $("#c-" + k).value; }); refresh("config.set", p); };
 }
 
 // ---------- boot ----------
-document.querySelectorAll("header button.tab").forEach(b => b.addEventListener("click", () => {
-  document.querySelectorAll("header button.tab").forEach(x => x.classList.toggle("on", x === b));
-  document.querySelectorAll("section.tab").forEach(s => s.classList.toggle("on", s.id === "tab-" + b.dataset.tab));
-}));
+document.querySelectorAll(".cubi-nav-item").forEach(b => b.addEventListener("click", () => { tab = b.dataset.tab; render(); }));
+setInterval(() => state && state.timers.length && document.querySelectorAll(".timer[data-since]").forEach(t => { const secs = Date.now() / 1000 - Number(t.dataset.since); t.textContent = clock(secs); t.classList.toggle("long", secs > 8 * 3600); }), 1000);
 window.addEventListener("cubisession", () => { session = window.cubiSession || null; refresh(); });
-refresh().catch(() => {});
+refresh();
 </script>
 </body>
 </html>

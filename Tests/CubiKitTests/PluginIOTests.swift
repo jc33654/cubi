@@ -47,6 +47,34 @@ private func tool() throws -> ToolPlugin {
     #expect(PluginIO.cleanInput(String(repeating: "a", count: 600))?.count == PluginIO.inputLimit)
 }
 
+@Test func widgetRowsCarryToneProgressAndClock() throws {
+    let now = 1_762_300_000.0
+    let out = try PluginIO.WidgetOutput.parse(#"""
+    {"rows":[
+      {"label":"PROJ-1","value":"剩 12h","tone":"warning","progress":0.4,"clock":{"since":1762299000,"offset":43200,"down":true}},
+      {"label":"a","value":"b","tone":"purple","progress":1.5,"clock":{"since":"x"}},
+      {"label":"c","value":"d","clock":{"since":1e300}},
+      {"label":"e","value":"f","clock":{"since":1762399999,"offset":0}},
+      {"label":"g","value":"h","clock":{"since":1762299000,"offset":1e300}}
+    ],
+     "actions":[{"label":"開始計時","action":"sync","icon":"play.fill"},{"label":"x","action":"sync","icon":"Bad Name!"}]}
+    """#, tool: try tool(), now: now)
+    let r = out.rows
+    #expect(r[0].tone == .warning && r[0].progress == 0.4)
+    #expect(r[0].clock == .init(since: 1762299000, offset: 43200, down: true))
+    #expect(abs((r[0].clock?.seconds(at: now) ?? 0) - 42_200) < 0.001)
+    // Unknown tone, progress out of range, unusable clock: dropped, the row stays.
+    #expect(r[1].tone == nil && r[1].progress == nil && r[1].clock == nil && r[1].value == "b")
+    #expect(r[2].clock == nil)                                  // a since far from now
+    // A since in the future stays put: the clock holds at offset until then, every reparse alike.
+    #expect(r[3].clock?.since == 1762399999 && r[3].clock?.seconds(at: now) == 0)
+    #expect(r[4].clock == nil)                                  // an absurd offset
+    #expect(out.actions.map(\.icon) == ["play.fill", nil])
+    #expect(PluginIO.WidgetOutput.Clock(since: 0, offset: 60, down: true).seconds(at: 100) == -40)
+    #expect(PluginIO.isValidSymbol("clock.arrow.circlepath") && PluginIO.isValidSymbol("a"))
+    #expect(["", "A", ".", "..", "a..b", ".a", "a.", "play fill"].allSatisfy { !PluginIO.isValidSymbol($0) })
+}
+
 @Test func widgetOutputCapsAndRejects() throws {
     let t = try tool()
     let many = (1...15).map { #"["r\#($0)","v"]"# }.joined(separator: ",")

@@ -169,7 +169,7 @@ def brief(sprint, rows, m, cubi, review_path):
     command to hand the result back to the panel."""
     label = sprint["label"]
     review = sprint.get("review") or {}
-    template = {"label": label, "summary": "三到五句的總結", "wentWell": ["…"], "toImprove": ["…"], "suggestions": ["…"],
+    template = {"label": label, "summary": "兩到三句的總結", "wentWell": ["一句話，最多三條"], "toImprove": ["一句話，最多三條"], "suggestions": ["一句話，最多三條"],
                 "thanks": [{"who": "名字", "why": "原因"}]}
     cell = lambda s: str(s or "").replace("|", "\\|").replace("\r", " ").replace("\n", " ")  # noqa: E731
     lines = [f"# {sprint.get('name') or label} 回顧資料", "",

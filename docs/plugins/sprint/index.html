@@ -249,7 +249,7 @@ function renderReview() {
         group.map(t => `<tr><td>${link(t.key)}</td><td>${esc(t.summary)}</td><td>${esc(t.status)}</td><td class="num">${pts(t.estimate)} → ${pts(t.actual)}</td><td class="num">${fmtH(t.seconds)}</td></tr>`).join("") + `</tbody></table>` : `<p class="muted">沒有單。</p>`}</div>`;
   }
   html += `<div class="card" style="margin-top:14px"><h3>近幾個 sprint <span class="muted">長條＝完成點數，數字＝實際/估點</span></h3>${historyChart(state.history)}</div>
-    <div class="card"><div class="field"><label>總結</label><textarea data-list="summary" style="min-height:64px" placeholder="三到五句：這個 sprint 做了什麼、結果如何">${esc(r.summary || "")}</textarea></div>
+    <div class="card"><div class="field"><label>總結</label><textarea data-list="summary" style="min-height:64px" placeholder="兩到三句：這個 sprint 做了什麼、結果如何">${esc(r.summary || "")}</textarea></div>
     <div class="lists" style="margin-top:10px">
       <div class="field"><label>做得好的地方</label><textarea data-list="wentWell">${esc(r.wentWell.join("\n"))}</textarea></div>
       <div class="field"><label>需要改善的地方</label><textarea data-list="toImprove">${esc(r.toImprove.join("\n"))}</textarea></div>

@@ -63,6 +63,37 @@ public enum PluginIO {
             public var value: String
             /// http(s) only; the label becomes a link that opens in the browser.
             public var url: String?
+            /// Colours the value (and a dot before it).
+            public var tone: Tone? = nil
+            /// 0…1: a thin bar under the value.
+            public var progress: Double? = nil
+            /// A value the app keeps ticking every second.
+            public var clock: Clock? = nil
+        }
+
+        public enum Tone: String, Sendable, Equatable { case good, warning, danger, info, neutral }
+
+        /// Shown as `offset ± (now − since)` seconds, counting down when `down`; below zero the
+        /// app writes it as overtime. Times are epoch seconds on this Mac's own clock.
+        public struct Clock: Sendable, Equatable {
+            public var since: Double
+            public var offset: Double
+            public var down: Bool
+
+            public func seconds(at now: Double) -> Double {
+                let elapsed = max(0, now - since)
+                return down ? offset - elapsed : offset + elapsed
+            }
+
+            /// nil unless every number is usable: `since` finite and within a year of now, `offset` finite.
+            static func parse(_ v: JSONValue?, now: Double) -> Clock? {
+                guard let v, let since = v["since"]?.double else { return nil }
+                let offset = v["offset"]?.double ?? 0
+                guard since.isFinite, offset.isFinite, abs(offset) <= maxCalendarDistance,
+                      abs(since - now) <= maxCalendarDistance else { return nil }
+                // A `since` still in the future is kept as is: `seconds` holds at `offset` until it arrives.
+                return Clock(since: since, offset: offset, down: v["down"]?.bool ?? false)
+            }
         }
 
         public struct Action: Sendable, Equatable {
@@ -75,6 +106,8 @@ public enum PluginIO {
             /// A value the plugin chose for this button (say, the ticket a 解除 button is for),
             /// passed as `input` without asking anyone. Ignored when `input` is set.
             public var arg: String?
+            /// An SF Symbol name: the button shows the icon, the label becomes its tooltip.
+            public var icon: String? = nil
         }
 
         public var title: String?
@@ -83,11 +116,11 @@ public enum PluginIO {
         public var error: String?
 
         /// `tool` is needed to check that every action names one of its hook commands.
-        public static func parse(_ stdout: String, tool: ToolPlugin) throws -> WidgetOutput {
+        public static func parse(_ stdout: String, tool: ToolPlugin, now: Double = Date().timeIntervalSince1970) throws -> WidgetOutput {
             let v = try PluginIO.decode(stdout)
             var rows: [Row] = []
             for (i, r) in (v["rows"]?.array ?? []).prefix(maxRows).enumerated() {
-                guard let row = Row(r) else { throw ParseError.badRow(i + 1) }
+                guard let row = Row(r, now: now) else { throw ParseError.badRow(i + 1) }
                 rows.append(row)
             }
             var actions: [Action] = []
@@ -96,7 +129,8 @@ public enum PluginIO {
                 guard tool.isHook(action) else { throw ParseError.badAction("「\(action)」不是這個插件的 hook 命令") }
                 let prompt = a["input"]?.string.flatMap { $0.isEmpty ? nil : String($0.prefix(titleLimit)) }
                 actions.append(Action(label: String(label.prefix(titleLimit)), action: action, input: prompt,
-                                      arg: prompt == nil ? a["arg"]?.string.flatMap(cleanInput) : nil))
+                                      arg: prompt == nil ? a["arg"]?.string.flatMap(cleanInput) : nil,
+                                      icon: a["icon"]?.string.flatMap { isValidSymbol($0) ? $0 : nil }))
             }
             return WidgetOutput(title: v["title"]?.string.map { String($0.prefix(titleLimit)) }, rows: rows, actions: actions,
                                 error: v["error"]?.string)
@@ -176,6 +210,14 @@ public enum PluginIO {
         return kept.isEmpty ? nil : String(kept.prefix(inputLimit))
     }
 
+    /// SF Symbol names: dot-separated words of lower-case letters and digits, 1–40 characters.
+    public static func isValidSymbol(_ s: String) -> Bool {
+        (1...40).contains(s.count)
+            && s.split(separator: ".", omittingEmptySubsequences: false).allSatisfy { part in
+                !part.isEmpty && part.unicodeScalars.allSatisfy { ("a"..."z").contains($0) || ("0"..."9").contains($0) }
+            }
+    }
+
     public static func isValidMarker(_ s: String) -> Bool {
         (1...80).contains(s.count) && s.unicodeScalars.allSatisfy {
             $0.isASCII && (CharacterSet.alphanumerics.contains($0) || ":._-".unicodeScalars.contains($0))
@@ -198,8 +240,9 @@ public enum PluginIO {
 }
 
 extension PluginIO.WidgetOutput.Row {
-    /// `[label, value]` or `{label, value, url?}`.
-    init?(_ v: JSONValue) {
+    /// `[label, value]` or `{label, value, url?, tone?, progress?, clock?}`. An unknown tone, a
+    /// progress outside 0…1 or an unusable clock is left out, not an error.
+    init?(_ v: JSONValue, now: Double) {
         if let pair = v.array, pair.count == 2, let l = pair[0].string, let r = pair[1].string {
             self.init(label: l, value: r, url: nil)
         } else if let l = v["label"]?.string, let r = v["value"]?.string {
@@ -207,6 +250,9 @@ extension PluginIO.WidgetOutput.Row {
                 guard let u = URL(string: url), ["http", "https"].contains(u.scheme ?? "") else { return nil }
             }
             self.init(label: l, value: r, url: v["url"]?.string)
+            tone = v["tone"]?.string.flatMap(PluginIO.WidgetOutput.Tone.init(rawValue:))
+            progress = v["progress"]?.double.flatMap { (0...1).contains($0) ? $0 : nil }
+            clock = PluginIO.WidgetOutput.Clock.parse(v["clock"], now: now)
         } else {
             return nil
         }

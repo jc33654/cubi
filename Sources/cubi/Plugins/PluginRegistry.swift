@@ -56,15 +56,16 @@ final class PluginRegistry {
         plugins.first { $0.id == agent }
     }
 
+    /// The user's switches, kept here (not only in UserDefaults) so views reading `isEnabled` redraw.
+    private var enabled = UserDefaults.standard.dictionary(forKey: PluginRegistry.enabledKey) as? [String: Bool] ?? [:]
+
     func isEnabled(_ id: String) -> Bool {
-        let map = UserDefaults.standard.dictionary(forKey: Self.enabledKey) as? [String: Bool] ?? [:]
-        return map[id] ?? (id == ClaudeCodePlugin.agentID || tools.contains { $0.id == id })
+        enabled[id] ?? (id == ClaudeCodePlugin.agentID || tools.contains { $0.id == id })
     }
 
     func setEnabled(_ id: String, _ on: Bool) {
-        var map = UserDefaults.standard.dictionary(forKey: Self.enabledKey) as? [String: Bool] ?? [:]
-        map[id] = on
-        UserDefaults.standard.set(map, forKey: Self.enabledKey)
+        enabled[id] = on
+        UserDefaults.standard.set(enabled, forKey: Self.enabledKey)
         CubiLog.write("plugin \(id) \(on ? "enabled" : "disabled")")
         // Observers key off `plugins`; nudge them.
         plugins = plugins

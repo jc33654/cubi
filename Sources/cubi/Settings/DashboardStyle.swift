@@ -4,14 +4,14 @@ import AppKit
 /// The settings window's dashboard look, light and dark: the same palette as the panels' style kit
 /// (`panel.style: "cubi"`), so Cubi's own pages and its plugins' read as one thing.
 enum Dash {
-    static let background = adaptive(light: 0xF3F4F6, dark: 0x0F1115)
+    static let background = adaptive(light: 0xF4F5F7, dark: 0x0F1115)
     static let sidebar = adaptive(light: 0xFFFFFF, dark: 0x14171C)
     static let card = adaptive(light: 0xFFFFFF, dark: 0x181B21)
-    static let border = adaptive(light: 0xE5E7EB, dark: 0x262A33)
+    static let border = adaptive(light: 0xE7E8EC, dark: 0x262A33)
     static let accent = adaptive(light: 0x2563EB, dark: 0x3B82F6)
-    static let good = adaptive(light: 0x16A34A, dark: 0x22C55E)
-    static let warning = adaptive(light: 0xD97706, dark: 0xF59E0B)
-    static let danger = adaptive(light: 0xDC2626, dark: 0xEF4444)
+    static let good = adaptive(light: 0x16A34A, dark: 0x34D399)
+    static let warning = adaptive(light: 0xD97706, dark: 0xFBBF24)
+    static let danger = adaptive(light: 0xDC2626, dark: 0xF87171)
 
     private static func adaptive(light: UInt32, dark: UInt32) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in

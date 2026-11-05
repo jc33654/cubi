@@ -44,6 +44,9 @@ struct DisplaySection: View {
                 }
                 SettingRow(title: "登入時啟動") {
                     switchToggle($loginOn).onChange(of: loginOn) { _, v in
+                        // Writing the real status back below triggers this again (say, register
+                        // answered "needs approval"): that one must not undo the request.
+                        guard v != (SMAppService.mainApp.status == .enabled) else { return }
                         do { v ? try SMAppService.mainApp.register() : try SMAppService.mainApp.unregister() }
                         catch { CubiLog.write("login item: \(error)") }
                         loginOn = SMAppService.mainApp.status == .enabled

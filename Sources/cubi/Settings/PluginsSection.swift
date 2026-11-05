@@ -45,13 +45,11 @@ private struct ToolCard: View {
     let openTool: (String) -> Void
 
     var body: some View {
-        let on = registry.isEnabled(tool.id)
         DashCard(title: tool.displayName, icon: "puzzlepiece.extension", help: "\(tool.id) · \(tool.directory)") {
-            Button("開啟") { openTool(tool.id) }.disabled(!on)
-            switchToggle(Binding(get: { on }, set: { registry.setEnabled(tool.id, $0) }))
+            Button("開啟") { openTool(tool.id) }.disabled(!registry.isEnabled(tool.id))
+            switchToggle(Binding(get: { registry.isEnabled(tool.id) }, set: { registry.setEnabled(tool.id, $0) }))
         } content: {
             HStack(spacing: 6) {
-                TraitTag(text: "面板")
                 if tool.session != nil { TraitTag(text: "資訊窗") }
                 if tool.tick != nil { TraitTag(text: "定時") }
                 if tool.panel.style == .cubi { TraitTag(text: "樣式包") }

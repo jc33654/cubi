@@ -22,13 +22,18 @@ class TimerMixin:
             self.segments["timers"][sid] = {"start": float(now), "shares": shares, "seen": float(now)}
         return self.segments["timers"][sid]
 
+    @staticmethod
+    def timer_end(t, now):
+        """Where stopping timer `t` at `now` ends it: a timer left running overnight books 24 h."""
+        return min(float(now), t["start"] + MAX_ENTRY)
+
     def timer_stop(self, sid, now, reason=""):
         """Ends the timer and books it as one manual stretch. Over 24 h (forgotten overnight) it is
         cut at 24 h; under a minute it is dropped. Returns (entry or None, note)."""
         t = self.segments["timers"].pop(sid, None)
         if t is None:
             return None, "沒有在計時"
-        end = min(float(now), t["start"] + MAX_ENTRY)
+        end = self.timer_end(t, now)
         note = "超過 24 小時，只記 24 小時" if now - t["start"] > MAX_ENTRY else ""
         minutes = (end - t["start"]) / 60
         if minutes < 1:

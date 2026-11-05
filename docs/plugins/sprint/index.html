@@ -69,36 +69,44 @@ async function call(action, payload = {}) {
   return data;
 }
 // Never rejects: a failure is already on screen (status); the result says whether it worked.
-async function refresh(action = "panel.state", payload = {}) {
-  keepTimeForm();
+// `sent`: the fields this call saved; on success they show the saved value, not what was typed.
+async function refresh(action = "panel.state", payload = {}, sent = []) {
+  sent = [...sent].map(fieldSel);   // by selector: another re-render may replace the elements meanwhile
   try { state = await call(action, payload); } catch (_) { return false; }
-  render();
+  render(sent);
   return true;
 }
 const link = key => `<a href="https://${esc(state.site)}/browse/${esc(key)}" title="在 Jira 開">${esc(key)}</a>`;
 const tip = text => `<span class="cubi-tip" title="${esc(text)}">${ic("info", 13)}</span>`;
 
 // ---------- render ----------
-// A re-render must not eat what the user is typing: the focused field (with its caret), and on
-// the tabs out of sight whatever was edited but not saved. Fields that save on change already
-// went out when the user left the tab; drafts belong to one sprint and session.
-const AUTOSAVED = "[data-share], [data-actual], [data-list]";
+// A re-render must not eat what the user is typing: every field edited but not saved is put back
+// (and the focused one keeps its caret). Drafts belong to one sprint and session, except the
+// settings, which are global; the ＋時數 form keeps its own (pendingTime).
 const fieldSel = a => a.id ? "#" + CSS.escape(a.id)
   : Object.keys(a.dataset).length ? `[data-${Object.keys(a.dataset)[0].replace(/[A-Z]/g, c => "-" + c.toLowerCase())}="${CSS.escape(Object.values(a.dataset)[0])}"]` : null;
+const isBox = f => f.type === "checkbox" || f.type === "radio";
+const edited = f => isBox(f) ? f.checked !== f.defaultChecked
+  : f.tagName === "SELECT" ? f.selectedIndex !== Math.max(0, [...f.options].findIndex(o => o.defaultSelected)) : f.value !== f.defaultValue;
 let drawnFor = null;
-function render() {
-  const a = document.activeElement, ident = `${state.current}|${state.session?.id ?? ""}`;
-  const focus = /^(INPUT|TEXTAREA)$/.test(a?.tagName) ? fieldSel(a) : null;
-  const keep = (ident === drawnFor ? [...document.querySelectorAll("section[hidden] :is(input, textarea)")] : [])
-    .filter(f => !f.matches(AUTOSAVED) && f.value !== f.defaultValue).map(f => [fieldSel(f), f.value])
-    .concat(focus ? [[focus, a.value]] : []).filter(([sel]) => sel);
-  const pos = focus && a.selectionStart;
+function render(sent = []) {
+  keepTimeForm();
+  const a = document.activeElement, ident = `${state.current}|${state.session?.id ?? ""}`, done = new Set(sent);
+  const keep = [...document.querySelectorAll(":is(input, textarea, select)")]
+    .map(f => [f, fieldSel(f)])
+    .filter(([f, sel]) => sel && !done.has(sel) && !f.closest("[data-time-form]") && (ident === drawnFor || f.closest("#tab-settings")) && (f === a || edited(f)))
+    .map(([f, sel]) => [sel, isBox(f) ? f.checked : f.value, f === a ? a.selectionStart ?? null : false]);
   renderOverview(); renderReview(); renderSettings();
   drawnFor = ident;
   if (state.warnings && state.warnings.length) status(state.warnings.join("；"), true);
-  for (const [sel, value] of keep) { const el = document.querySelector(sel); if (el) el.value = value; }
-  const el = focus && document.querySelector(focus);
-  if (el) { el.focus(); if (pos !== null) el.setSelectionRange(pos, pos); }
+  for (const [sel, value, pos] of keep) {
+    const el = document.querySelector(sel);
+    if (!el) continue;
+    if (isBox(el)) el.checked = value; else el.value = value;
+    if (pos === false) continue;
+    el.focus();
+    if (pos !== null) el.setSelectionRange(pos, pos);
+  }
 }
 
 function kpi(title, icon, value, sub, delta) {
@@ -124,7 +132,7 @@ function header(title) {
 }
 
 function bindHeader(el) {
-  $("#sprint-select", el)?.addEventListener("change", e => refresh("sprint.select", { label: e.target.value }));
+  $("#sprint-select", el)?.addEventListener("change", e => refresh("sprint.select", { label: e.target.value }, [e.target]));
   $("#new-btn", el)?.addEventListener("click", () => { pendingSprint = !pendingSprint; render(); });
   $("#new-save", el)?.addEventListener("click", () => { pendingSprint = false; refresh("sprint.new", { label: $("#new-label").value.trim(), name: $("#new-name").value, start: $("#new-start").value, end: $("#new-end").value }); });
   $("#new-cancel", el)?.addEventListener("click", () => { pendingSprint = false; render(); });
@@ -217,7 +225,7 @@ function manualCard(s) {
 // The ＋時數 form sits right under its ticket's row and keeps what was typed across re-renders.
 function timeFormRow(key) {
   const p = pendingTime;
-  return `<tr><td colspan="8"><div class="cubi-inline cubi-row"><b>${esc(key)}</b>
+  return `<tr><td colspan="8"><div class="cubi-inline cubi-row" data-time-form="${esc(key)}"><b>${esc(key)}</b>
     <input id="t-start" type="datetime-local" value="${esc(p.start)}">
     <input id="t-min" type="number" min="1" max="1440" value="${esc(p.minutes)}" style="width:80px"> 分
     <select id="t-kind">${["開發", "會議", "討論", "其他"].map(k => `<option ${k === p.kind ? "selected" : ""}>${k}</option>`).join("")}</select>
@@ -226,7 +234,7 @@ function timeFormRow(key) {
     <span class="cubi-spacer"></span><button class="cubi-btn primary small" id="t-save">加</button><button class="cubi-btn small" id="t-cancel">取消</button></div></td></tr>`;
 }
 function keepTimeForm() {
-  if (!pendingTime || !$("#t-start")) return;
+  if (!pendingTime || !$(`[data-time-form="${CSS.escape(pendingTime.key)}"]`)) return;
   pendingTime = { ...pendingTime, start: $("#t-start").value, minutes: $("#t-min").value, kind: $("#t-kind").value, note: $("#t-note").value, calendar: $("#t-cal").checked };
 }
 function openTimeForm(key) {
@@ -237,17 +245,17 @@ function openTimeForm(key) {
 
 function bindOverview(el) {
   bindHeader(el);
-  $("#add-btn", el)?.addEventListener("click", () => refresh("ticket.add", { key: $("#add-key").value }));
-  $("#bind-btn", el)?.addEventListener("click", () => refresh("session.bind", { key: $("#bind-key").value }));
-  $("#shares-btn", el)?.addEventListener("click", () => refresh("session.shares", { shares: currentShares(), applyToSprint: true }));
-  $("#sp-save", el)?.addEventListener("click", () => refresh("sprint.update", { name: $("#sp-name").value, start: $("#sp-start").value, end: $("#sp-end").value, goal: $("#sp-goal").value }));
+  $("#add-btn", el)?.addEventListener("click", () => refresh("ticket.add", { key: $("#add-key").value }, [$("#add-key")]));
+  $("#bind-btn", el)?.addEventListener("click", () => refresh("session.bind", { key: $("#bind-key").value }, [$("#bind-key")]));
+  $("#shares-btn", el)?.addEventListener("click", () => refresh("session.shares", { shares: currentShares(), applyToSprint: true }, el.querySelectorAll("[data-share]")));
+  $("#sp-save", el)?.addEventListener("click", () => refresh("sprint.update", { name: $("#sp-name").value, start: $("#sp-start").value, end: $("#sp-end").value, goal: $("#sp-goal").value }, el.querySelectorAll("[id^=sp-]")));
   $("#sp-resync", el)?.addEventListener("click", () => refresh("sprint.sync", { replace: true }));
   $("#t-save", el)?.addEventListener("click", async () => { keepTimeForm(); const p = pendingTime; pendingTime = null;
     if (!await refresh("time.add", { key: p.key, start: p.start, minutes: Number(p.minutes), kind: p.kind, note: p.note, calendar: p.calendar })) { pendingTime = p; render(); } });
   $("#t-cancel", el)?.addEventListener("click", () => { pendingTime = null; render(); });
-  el.querySelectorAll("[data-share]").forEach(i => i.addEventListener("change", () => refresh("session.shares", { shares: currentShares() })));
+  el.querySelectorAll("[data-share]").forEach(i => i.addEventListener("change", () => refresh("session.shares", { shares: currentShares() }, el.querySelectorAll("[data-share]"))));
   el.querySelectorAll("[data-unbind]").forEach(x => x.addEventListener("click", () => refresh("session.unbind", { key: x.dataset.unbind })));
-  el.querySelectorAll("[data-actual]").forEach(i => i.addEventListener("change", () => refresh("ticket.update", { key: i.dataset.actual, actual: i.value })));
+  el.querySelectorAll("[data-actual]").forEach(i => i.addEventListener("change", () => refresh("ticket.update", { key: i.dataset.actual, actual: i.value }, [i])));
   el.querySelectorAll("[data-push]").forEach(b => b.addEventListener("click", () => refresh("points.push", { key: b.dataset.push })));
   el.querySelectorAll("[data-remove-time]").forEach(b => b.addEventListener("click", () => refresh("time.remove", { id: b.dataset.removeTime })));
   el.querySelectorAll("[data-time]").forEach(b => b.addEventListener("click", () => openTimeForm(b.dataset.time)));
@@ -316,7 +324,7 @@ function renderReview() {
     const lines = t.value.split("\n").map(x => x.trim()).filter(Boolean);
     const value = t.dataset.list === "summary" ? t.value.trim()
       : t.dataset.list === "thanks" ? lines.map(l => { const i = l.search(/[:：]/); return i < 0 ? { who: l, why: "" } : { who: l.slice(0, i).trim(), why: l.slice(i + 1).trim() }; }) : lines;
-    refresh("review.update", { [t.dataset.list]: value });
+    refresh("review.update", { [t.dataset.list]: value }, [t]);
   }));
 }
 
@@ -406,7 +414,7 @@ function renderSettings() {
       ${field("reviewDir", "Markdown 資料夾", "匯出 <資料夾>/<標籤>.md；整理用的資料檔也在這")}
       ${field("reviewSessionDir", "整理用的 session 開在", "「用 Claude 整理」在這裡開 Claude Code")}
     </div></div>`;
-  $("#c-save", el).onclick = () => { const p = {}; ["site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "hoursPerPoint", "reviewDir", "reviewSessionDir"].forEach(k => { p[k] = $("#c-" + k).value; }); refresh("config.set", p); };
+  $("#c-save", el).onclick = () => { const p = {}; ["site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "hoursPerPoint", "reviewDir", "reviewSessionDir"].forEach(k => { p[k] = $("#c-" + k).value; }); refresh("config.set", p, el.querySelectorAll("[id^=c-]")); };
 }
 
 // ---------- boot ----------

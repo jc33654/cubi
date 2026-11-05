@@ -299,8 +299,8 @@ class Store(TimerMixin):
             # once it stops: send only the pieces outside it (a piece keeps a stable marker: its start).
             timers = [(m["start"], m["end"]) for m in self.segments["manual"] if m.get("session") == sid]
             if sid in self.segments["timers"]:
-                t0 = self.segments["timers"][sid]["start"]
-                timers.append((t0, min(now, t0 + MAX_ENTRY)))    # what timer_stop will book
+                t = self.segments["timers"][sid]
+                timers.append((t["start"], self.timer_end(t, now)))
             for start, seg in sess.items():
                 keys = list((seg.get("shares") or {}).keys())
                 length = seg["end"] - float(start)

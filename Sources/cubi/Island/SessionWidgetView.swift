@@ -88,8 +88,9 @@ private struct WidgetValue: View {
                 if let clock = row.clock {
                     TimelineView(.periodic(from: .now, by: 1)) { tl in
                         let secs = clock.seconds(at: tl.date.timeIntervalSince1970)
-                        Text(StatusStyle.reading(secs, down: clock.down)).font(.system(size: 11, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(secs < 0 ? StatusStyle.danger : color)
+                        Text(PluginIO.WidgetOutput.Clock.reading(secs, down: clock.down)).font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            // Only a countdown past zero is overtime; a count-up below zero has not started.
+                            .foregroundStyle(clock.down && secs < 0 ? StatusStyle.danger : color)
                     }
                     if !row.value.isEmpty { text(row.value).foregroundStyle(.white.opacity(0.6)) }
                 } else {

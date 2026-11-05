@@ -78,9 +78,10 @@ struct SessionListView: View {
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundStyle(UsageStripView.levelColor(bot.contextPercent).opacity(0.9))
             }
-            Text(bot.resting ? "晚安" : bot.stateLabel)
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.5))
+            let st = StatusStyle.state(bot.stateLabel, resting: bot.resting)
+            Text(st.text)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(st.color)
         }
         .padding(.vertical, 5)
         .padding(.horizontal, 8)

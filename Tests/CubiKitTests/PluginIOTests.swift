@@ -71,6 +71,12 @@ private func tool() throws -> ToolPlugin {
     #expect(r[4].clock == nil)                                  // an absurd offset
     #expect(out.actions.map(\.icon) == ["play.fill", nil])
     #expect(PluginIO.WidgetOutput.Clock(since: 0, offset: 60, down: true).seconds(at: 100) == -40)
+    let read = PluginIO.WidgetOutput.Clock.reading
+    // 00:00 shows once: rounded up while above zero, down past it.
+    #expect(read(0.6, true) == "剩 00:01" && read(0, true) == "剩 00:00" && read(-0.4, true) == "超 00:00" && read(-61, true) == "超 01:01")
+    #expect(read(3599.9, true) == "剩 1h 0m" && read(45_000, true) == "剩 12h 30m" && read(-3700, true) == "超 1h 1m")
+    #expect(read(760, false) == "00:12:40" && read(-300, false) == "−00:05:00")
+    #expect(PluginIO.WidgetOutput.Clock.parse(.object(["since": .number(.nan)]), now: 0) == nil)
     #expect(PluginIO.isValidSymbol("clock.arrow.circlepath") && PluginIO.isValidSymbol("a"))
     #expect(["", "A", ".", "..", "a..b", ".a", "a.", "play fill"].allSatisfy { !PluginIO.isValidSymbol($0) })
 }

@@ -12,6 +12,10 @@ struct SessionDetailView: View {
                 ShapeSwatch(shape: bot.shape, color: bot.color, size: 14)
                 Text(bot.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
                     .help(identity)
+                    .contextMenu {
+                        Button("複製 session id") { copy(bot.id) }
+                        if let t = SessionDetail.terminal(bot.client) { Button("複製終端：\(t)") { copy(t) } }
+                    }
                 StateChip(label: bot.stateLabel, resting: bot.resting)
                 Spacer()
                 IconButton(symbol: "plus.square.on.square", label: "在這個專案再開一個 session") { state.onNewSession(.dialog(fromSession: bot.id)) }
@@ -24,9 +28,12 @@ struct SessionDetailView: View {
 
             Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 3) {
                 let project = bot.stats.projectDir ?? bot.cwd, current = bot.stats.currentDir ?? bot.cwd
-                if let shown = project ?? current {
-                    let elsewhere = project != nil && current != nil && current != project
-                    row("專案", SessionDetail.home(shown) + (elsewhere ? "  →  " + SessionDetail.home(current!) : ""), mono: true)
+                if let project, let current, current != project {
+                    row("專案", SessionDetail.home(project) + "  →  " + SessionDetail.home(current), mono: true)
+                } else if let project {
+                    row("專案", SessionDetail.home(project), mono: true)
+                } else if let current {
+                    row("目前目錄", SessionDetail.home(current), mono: true)
                 }
                 if let m = bot.stats.modelDisplayName ?? bot.modelName {
                     row("模型", [m, bot.stats.effort.map { "effort \($0)" }, bot.stats.version.map { "Claude Code \($0)" }].compactMap { $0 }.joined(separator: " · "))
@@ -46,7 +53,9 @@ struct SessionDetailView: View {
                 GridRow {
                     label("回合")
                     HStack(spacing: 6) {
-                        value("\(bot.prompts) · 工具 \(bot.toolCalls)" + (bot.costUSD.map { String(format: " · $%.2f", $0) } ?? ""))
+                        // Counted only from when Cubi saw the session: ≈ unless it saw the very start.
+                        value((start?.approximate == false ? "≈" : "") + "\(bot.prompts) · 工具 \(bot.toolCalls)" + (bot.costUSD.map { String(format: " · $%.2f", $0) } ?? ""))
+                            .help(start?.approximate == false ? "回合與工具次數只算 Cubi 看到之後（session 更早就開了）" : "")
                         if let a = bot.stats.linesAdded, let r = bot.stats.linesRemoved {
                             Text("+\(a)").font(.system(size: 11, design: .monospaced)).foregroundStyle(StatusStyle.good)
                             Text("−\(r)").font(.system(size: 11, design: .monospaced)).foregroundStyle(StatusStyle.danger)
@@ -85,7 +94,12 @@ struct SessionDetailView: View {
         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.white.opacity(0.06)))
     }
 
-    /// Terminal and session id: rarely needed, so they live in the name's tooltip.
+    private func copy(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    /// Terminal and session id: rarely needed, so they live in the name's tooltip (and its right-click menu).
     private var identity: String {
         ([SessionDetail.terminal(bot.client), "session " + String(bot.id.prefix(8))] as [String?]).compactMap { $0 }.joined(separator: "\n")
     }

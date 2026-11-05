@@ -85,12 +85,23 @@ public enum PluginIO {
                 return down ? offset - elapsed : offset + elapsed
             }
 
+            /// What the card shows for `seconds`. Counting down: `剩 1h 5m`, in the last hour
+            /// `剩 12:40` (rounded up, so `00:00` only at zero), below zero `超 …` (rounded down).
+            /// Counting up: `00:12:40`, `−00:05:00` while still below zero.
+            public static func reading(_ seconds: Double, down: Bool) -> String {
+                let s = Int(down && seconds > 0 ? seconds.rounded(.up) : abs(seconds).rounded(.down))
+                let hms = String(format: "%02d:%02d:%02d", s / 3600, s / 60 % 60, s % 60)
+                guard down else { return (seconds < 0 ? "−" : "") + hms }
+                let amount = s >= 3600 ? "\(s / 3600)h \(s / 60 % 60)m" : String(format: "%02d:%02d", s / 60, s % 60)
+                return (seconds < 0 ? "超 " : "剩 ") + amount
+            }
+
             /// nil unless every number is usable: `since` finite and within a year of now, `offset` finite.
             static func parse(_ v: JSONValue?, now: Double) -> Clock? {
                 guard let v, let since = v["since"]?.double else { return nil }
                 let offset = v["offset"]?.double ?? 0
-                guard since.isFinite, offset.isFinite, abs(offset) <= maxCalendarDistance,
-                      abs(since - now) <= maxCalendarDistance else { return nil }
+                // abs(…) <= also rules out NaN and infinities.
+                guard abs(offset) <= maxCalendarDistance, abs(since - now) <= maxCalendarDistance else { return nil }
                 // A `since` still in the future is kept as is: `seconds` holds at `offset` until it arrives.
                 return Clock(since: since, offset: offset, down: v["down"]?.bool ?? false)
             }
@@ -193,7 +204,7 @@ public enum PluginIO {
             switch self {
             case .tooLarge: return "輸出超過 \(stdoutLimit / 1024) KB"
             case .notJSON(let head): return "輸出不是 JSON 物件：\(head)"
-            case .badRow(let i): return "rows[\(i)] 要是 [label, value] 或 {label, value, url}"
+            case .badRow(let i): return "rows[\(i)] 要是 [label, value] 或 {label, value, url?, tone?, progress?, clock?}"
             case .badAction(let why): return "actions：\(why)"
             case .badCalendar(let i, let why): return "calendar[\(i)]：\(why)"
             }

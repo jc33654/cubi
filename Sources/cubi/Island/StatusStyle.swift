@@ -36,17 +36,6 @@ enum StatusStyle {
         case .idle, nil: return ("閒置", neutral)
         }
     }
-
-    /// A plugin clock's reading. Counting down: `剩 1h 5m`, and in the last hour `剩 12:40` so
-    /// the final minute is not "0m"; below zero `超 …`. Counting up: `00:12:40`, `−00:05:00`
-    /// while still below zero.
-    static func reading(_ seconds: Double, down: Bool) -> String {
-        let s = Int(abs(seconds).rounded(.down))
-        let hms = String(format: "%02d:%02d:%02d", s / 3600, s / 60 % 60, s % 60)
-        guard down else { return (seconds < 0 ? "−" : "") + hms }
-        let amount = s >= 3600 ? SessionDetail.duration(Double(s)) : String(format: "%02d:%02d", s / 60, s % 60)
-        return (seconds < 0 ? "超 " : "剩 ") + amount
-    }
 }
 
 /// The state as a coloured dot and word.
@@ -86,13 +75,5 @@ struct IconButton: View {
     }
 
     /// Whether this system knows the symbol (a plugin may name one that does not exist).
-    static func exists(_ symbol: String) -> Bool {
-        if let known = known[symbol] { return known }
-        let found = NSImage(systemSymbolName: symbol, accessibilityDescription: nil) != nil
-        known[symbol] = found
-        return found
-    }
-
-    /// Looked up once per name: a card with a clock redraws every second.
-    @MainActor private static var known: [String: Bool] = [:]
+    static func exists(_ symbol: String) -> Bool { NSImage(systemSymbolName: symbol, accessibilityDescription: nil) != nil }
 }

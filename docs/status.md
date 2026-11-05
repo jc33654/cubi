@@ -1,4 +1,4 @@
-# cubi 狀態與進度（2026-11-02）
+# cubi 狀態與進度（2026-11-05）
 
 commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字。Sources 約 6,000 多行 Swift。
 
@@ -22,6 +22,7 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 | 工具插件 | `kind: tool` manifest：HTML 面板 + 白名單指令表（`ToolPlugin` 解析／型別驗證、`ToolPanel` 執行不經 shell、bridge 名可設）；選單與設定頁入口；`cubi --tool-run`；原本寫死在 app 裡的那個管理面板改成 Jade 本機的私用插件（manifest 放 plugins/，不進 repo） | 6 個單元測試；真機 `--tool-run`：私用插件的 status／asset.read 走通、`../x` 與未宣告 action 被擋；面板點擊待 Jade 親手試 |
 | session 掛件 | 工具插件選填 `session{info,refresh}`：資訊窗選到 session 時 cubi 把 session（含活動時段）餵 stdin、畫它回的列（可帶連結）與按鈕，「開面板」把 session 注入面板；`$plugin`、相對執行檔、工作目錄＝插件目錄；hook 命令 20 秒逾時（殺整個 process group） | 單元測試（manifest 驗證、PluginIO 上限）；CLI 餵 stdin 走通；真機畫面待 Jade |
 | 活動時段 | `SessionInfo.segments`：真事件開段／依 sleepAfter 切段、tick 收段、SessionEnd 收段、叫醒不算；結束／放生的最後一段保留到下一次 tick | 單元測試 |
+| 第三輪 dashboard（2026-11-05） | 資訊窗：列的 `tone`／`progress`／`clock`、按鈕 `icon`；sprint 的 ▶／⏸ 計時與估點倒數。面板：樣式包 `panel.style:"cubi"`、sprint 面板 dashboard、草稿機制（打到一半不丟、組字中不重畫、亂序回應）。設定頁：左側導覽＋卡片、淺深兩套、`--render-settings` | 單元測試（PluginIO、sprint 35 個）；`--render-panel --eval` 探針（草稿 20 多個情境）；`--render-settings` 六頁 × 淺深；渲染前後 defaults 不變；點按互動待 Jade |
 | 行事曆 | 工具插件選填 `tick{action,every}`：定時餵所有 session，回的 calendar 條目由 `SystemCalendar`（EventKit）寫進設定頁選的行事曆；記號去重、同記號延長、同標題 5 分鐘內合併、每筆 commit、標「空閒」；設定頁「行事曆」區 | `CalendarMerge` 純函式測試；EventKit 真機授權與事件待 Jade |
 | sprint 插件 | `docs/plugins/sprint/`：Python 標準庫；Jira 用 netrc；sprint＝標籤（這個 Jira 沒有 Sprint 欄位）；多專案 JQL（預設只抓受託人是自己的）；自動／手動綁單（資訊窗可直接綁／解除）、多單比例分攤、手動時段、transition；實際點數＝時數÷每點小時數（預設 8，可覆寫、可設欄位寫回）；回顧：五卡、任務分類甜甜圈（提早／準時、超時完成、未完成、超時未完成、未估點，點開列單）、burndown、近幾個 sprint、總結＋四段＋感謝、Markdown 匯出；「用 Claude 整理回顧」寫數據檔並開 Claude Code session（內建 `session.new`）寫好後填回 | 19 個 unittest；CLI 對真 Jira：`session.info`／綁單號 input／`sprint.sync {replace}`（新 JQL 抓到 25 張受託人是 Jade 的單）／`review.brief` 產檔走通；面板畫面待 Jade |
 | 發佈 | `make bundle` strip debug 符號並守門（執行檔裡不得有 `/Users/…`）；`make dist` 產固定檔名 `Cubi.zip`；`scripts/install.sh` 下載、sha256 完整性校驗、`codesign -R` 比對 cubi-dev 憑證 hash 後才裝並拿掉 quarantine；`ci.yml`／`release.yml`（tag 觸發，從 secrets 匯入 .p12 簽） | 真機驗證：v0.1.0 由 release.yml 在 macos-26 建、簽、掛上 Release（1.5 分鐘）；從 `releases/latest/download/` 抓回來 sha256 與 `codesign -R` 都過、OSO 0、版本 0.1.0 |
@@ -47,6 +48,9 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 14. 回顧分頁「用 Claude 整理回顧」：先跳確認框（目錄與第一句話）→ 在設定的資料夾開一個 Claude Code 分頁、第一句話叫它讀 `<reviewDir>/Sprint6-data.md`；它跑 `cubi --tool-run sprint review.update -` 時在終端批准；面板每 30 秒查一次，寫好就出現。
 15. 浮動視窗拖到外接螢幕：島應跟著過去（拖的時候視窗縮成島大小），放開後再拖回瀏海能 dock。
 16. 右鍵選單沒有「Demo 狀態」了。
+17. 資訊窗（第三輪）：按鈕是 icon、滑上去有說明；狀態色（工作中藍、思考紫、等你橘、錯誤紅）；Sprint 區塊 ▶ 開始計時 → 「計時中」每秒走、剩餘跟著倒數 → ⏸ 停止 → 面板「手動時段」多一筆「計時」、行事曆一筆、不跟自動段重疊。
+18. Sprint 面板（第三輪）：「總覽／回顧／設定」左側導覽；「＋時數」在單底下展開、打到一半切分頁不丟；用注音在回顧欄位打字時，面板 30 秒輪詢不會打斷組字。
+19. 設定頁（第三輪）：左側導覽六頁、淺色與深色各看一次；開關與主按鈕是藍色（離線渲染畫不出）；插件頁切一個工具的開關 → 畫面立刻變、「開啟」鈕跟著停用；行事曆頁顯示你實際的權限狀態。
 
 ## 已知限制
 

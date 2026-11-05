@@ -51,6 +51,20 @@ if let i = arguments.firstIndex(of: "--render-panel"), i + 2 < arguments.count {
     NSApplication.shared.run()
 }
 
+// Offline picture of one settings section, this machine's settings, window off screen:
+//   --render-settings <claude|display|sleep|calendar|plugins|scope> <out.png> [--dark]
+if let i = arguments.firstIndex(of: "--render-settings"), i + 2 < arguments.count {
+    guard let page = SettingsView.Page(rawValue: arguments[i + 1]) else {
+        FileHandle.standardError.write(Data("cubi: pages are \(SettingsView.Page.allCases.map(\.rawValue).joined(separator: "|"))\n".utf8))
+        exit(2)
+    }
+    let ok = MainActor.assumeIsolated {
+        NSApplication.shared.setActivationPolicy(.prohibited)
+        return SettingsWindow.render(page: page, dark: arguments.contains("--dark"), to: URL(fileURLWithPath: arguments[i + 2]))
+    }
+    exit(ok ? 0 : 1)
+}
+
 // Hook management from the terminal (the same code the settings window uses).
 //   --hooks-status             what is installed
 //   --hooks-plan [--retire-notify]   show the diff an install would make, write nothing

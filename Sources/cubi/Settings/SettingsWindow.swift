@@ -31,9 +31,11 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
             NSApp.activate(ignoringOtherApps: true)
             return
         }
-        let view = SettingsView(hooks: model, island: island, registry: registry, notifier: notifier, ignored: ignored, timing: timing,
+        let notifier = notifier
+        let view = SettingsView(hooks: model, island: island, registry: registry,
+                                notifications: Binding(get: { notifier.enabled }, set: { notifier.enabled = $0 }), ignored: ignored, timing: timing,
                                 calendar: calendar, openTool: openTool)
-        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 620, height: 600),
+        let w = NSWindow(contentRect: NSRect(origin: .zero, size: Self.size),
                          styleMask: [.titled, .closable, .miniaturizable, .resizable],
                          backing: .buffered, defer: false)
         w.title = "Cubi 設定"
@@ -41,8 +43,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         // Keep the window's own size: a ScrollView reports no ideal size and would collapse it.
         hosting.sizingOptions = []
         w.contentView = hosting
-        w.setContentSize(NSSize(width: 620, height: 600))
-        w.minSize = NSSize(width: 560, height: 420)
+        w.setContentSize(Self.size)
+        w.minSize = NSSize(width: 720, height: 480)
         w.center()
         w.delegate = self
         w.isReleasedWhenClosed = false
@@ -53,6 +55,43 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) {
         window = nil
+    }
+
+    static let size = NSSize(width: 820, height: 600)
+
+    /// `--render-settings`: one page as the window shows it, this machine's real settings,
+    /// drawn off screen. Nothing is pressed; no Notifier (it would take over the notification centre).
+    static func render(page: SettingsView.Page, dark: Bool, to url: URL) -> Bool {
+        let geometry = NotchGeometry(screenFrame: CGRect(x: 0, y: 0, width: 1512, height: 982),
+                                     hasNotch: true, notchWidth: 190, notchHeight: 32)
+        let island = IslandState(geometry: geometry)
+        island.persists = false
+        let view = SettingsView(hooks: HookSetupModel(), island: island, registry: PluginRegistry(),
+                                notifications: .constant(UserDefaults.standard.bool(forKey: Notifier.enabledKey)),
+                                ignored: IgnoredDirectories(), timing: SleepTiming(), calendar: SystemCalendar(),
+                                openTool: { _ in }, page: page)
+        let w = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled], backing: .buffered, defer: false)
+        w.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+        let hosting = NSHostingView(rootView: view)
+        hosting.sizingOptions = []
+        w.contentView = hosting
+        w.setContentSize(size)
+        w.setFrameOrigin(NSPoint(x: -20_000, y: -20_000))
+        w.orderBack(nil)
+        hosting.layoutSubtreeIfNeeded()
+        // Let SwiftUI's onAppear (hook status, calendar status) land before the shot.
+        RunLoop.main.run(until: Date().addingTimeInterval(1))
+        guard let rep = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) else { return false }
+        hosting.cacheDisplay(in: hosting.bounds, to: rep)
+        guard let png = rep.representation(using: .png, properties: [:]) else { return false }
+        do {
+            try png.write(to: url)
+            print("wrote \(url.path) (\(rep.pixelsWide)×\(rep.pixelsHigh))")
+            return true
+        } catch {
+            FileHandle.standardError.write(Data("cubi: cannot write \(url.path): \(error)\n".utf8))
+            return false
+        }
     }
 }
 

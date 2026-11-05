@@ -70,17 +70,21 @@ async function call(action, payload = {}) {
 }
 // Never rejects: a failure is already on screen (status); the result says whether it worked.
 // `sent`: the fields this call saves. On success their drafts go, unless typed over meanwhile.
-// A reply older than one already drawn is dropped (its action still happened; the newer state has it
-// or the next refresh will).
+// Actions run side by side, so replies can come back out of order. A plain read older than a reply
+// already drawn is dropped; a write's reply always shows, since it carries what the write did.
+// A failed send puts what was sent back as drafts, so a form that a re-render dropped can refill.
 let asked = 0, drawn = 0;
 async function refresh(action = "panel.state", payload = {}, sent = []) {
-  sent = [...sent].map(f => [fieldSel(f), fieldValue(f)]);
+  sent = [...sent].map(f => [fieldSel(f), fieldValue(f), !!f.closest("#tab-settings")]);
   const n = ++asked;
   let data;
-  try { data = await call(action, payload); } catch (_) { return false; }
+  try { data = await call(action, payload); } catch (_) {
+    for (const [sel, value, global] of sent) if (sel && !drafts.has(sel)) drafts.set(sel, { value, global });
+    return false;
+  }
+  if (action === "panel.state" && n < drawn) return true;
+  drawn = Math.max(drawn, n);
   for (const [sel, value] of sent) if (drafts.get(sel)?.value === value) drafts.delete(sel);
-  if (n < drawn) return true;
-  drawn = n;
   state = data;
   render();
   return true;
@@ -108,14 +112,20 @@ document.addEventListener("input", noteDraft);
 document.addEventListener("change", noteDraft);
 // Rebuilding the field mid-IME (注音 not yet turned into characters) would cut the composition off:
 // a re-render waits for it to end.
+// Leaving the field or the window ends it too, in case the IME never says so.
+function endComposing() { composing = false; if (renderLater) render(); }
 document.addEventListener("compositionstart", () => { composing = true; });
-document.addEventListener("compositionend", e => { composing = false; noteDraft(e); if (renderLater) render(); });
+document.addEventListener("compositionend", e => { noteDraft(e); endComposing(); });
+document.addEventListener("focusout", () => { if (composing) endComposing(); });
+window.addEventListener("blur", () => { if (composing) endComposing(); });
 // A field that saves on change and got its draft back from a re-render: the browser takes the draft
 // as the value it had on focus, so leaving it fires no change. Send it on the way out instead.
 const restored = new WeakSet();
+const unlikeMarkup = f => isBox(f) ? f.checked !== f.defaultChecked
+  : f.tagName === "SELECT" ? [...f.options].some(o => o.selected !== o.defaultSelected) : f.value !== f.defaultValue;
 document.addEventListener("change", e => restored.delete(e.target), true);
 document.addEventListener("focusout", e => {
-  if (restored.delete(e.target) && fieldValue(e.target) !== e.target.defaultValue) e.target.dispatchEvent(new Event("change"));
+  if (restored.delete(e.target) && unlikeMarkup(e.target)) e.target.dispatchEvent(new Event("change"));
 });
 
 function render() {
@@ -137,7 +147,9 @@ function render() {
     const el = document.querySelector(sel);
     if (!el || fieldValue(el) === d.value) { drafts.delete(sel); continue; }
     if (isBox(el)) el.checked = d.value; else el.value = d.value;
-    if (sel === focus && !moved) restored.add(el);   // a draft carried over from another sprint or session is not sent by itself
+    if (sel !== focus) continue;
+    if (moved) status("這格是在上一個 sprint／session 打的，還沒存", true);   // and it is not sent by itself
+    else restored.add(el);
   }
   const el = focus && document.querySelector(focus);
   if (el) { el.focus(); if (pos !== null) el.setSelectionRange(pos, pos); }

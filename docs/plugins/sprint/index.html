@@ -96,16 +96,17 @@ function render(sent = []) {
   const a = document.activeElement, ident = `${state.current}|${state.session?.id ?? ""}`, saved = new Map(sent);
   const keep = [...document.querySelectorAll(":is(input, textarea, select)")]
     .map(f => [f, fieldSel(f)])
-    .filter(([f, sel]) => sel && (f === a || (edited(f) && !f.closest("[data-time-form]")
-      && (ident === drawnFor || f.closest("#tab-settings")) && saved.get(sel) !== fieldValue(f))))
-    .map(([f, sel]) => [sel, fieldValue(f), f === a ? a.selectionStart ?? null : false]);
+    .map(([f, sel]) => [f, sel, edited(f) && saved.get(sel) !== fieldValue(f)
+      && (f === a || (!f.closest("[data-time-form]") && (ident === drawnFor || f.closest("#tab-settings"))))])
+    .filter(([f, sel, draft]) => sel && (draft || f === a))
+    .map(([f, sel, draft]) => [sel, draft ? fieldValue(f) : undefined, f === a ? a.selectionStart ?? null : false]);
   renderOverview(); renderReview(); renderSettings();
   drawnFor = ident;
   if (state.warnings && state.warnings.length) status(state.warnings.join("；"), true);
   for (const [sel, value, pos] of keep) {
     const el = document.querySelector(sel);
     if (!el) continue;
-    if (isBox(el)) el.checked = value; else el.value = value;
+    if (value !== undefined) { if (isBox(el)) el.checked = value; else el.value = value; }
     if (pos === false) continue;
     el.focus();
     if (pos !== null) el.setSelectionRange(pos, pos);

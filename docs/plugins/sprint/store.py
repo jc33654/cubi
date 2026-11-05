@@ -300,17 +300,20 @@ class Store(TimerMixin):
                 length = seg["end"] - float(start)
                 if seg.get("open") or not keys or seg["end"] < now - window or not 60 <= length <= MAX_ENTRY:
                     continue
-                # Wholly inside a timer from this same session: that event already shows these minutes.
-                if any(m.get("session") == sid and m["start"] <= float(start) and seg["end"] <= m["end"] for m in self.segments["manual"]):
-                    continue
                 # The session name often starts with the keys themselves; say each once.
                 name = " ".join(w for w in (seg.get("name") or "").split() if w.upper() not in keys)
-                entries.append({
-                    "title": " ".join(keys) + (" " + name if name else ""),
-                    "start": float(start), "end": seg["end"],
-                    "notes": "\n".join(self.browse_url(k) for k in keys),
-                    "marker": f"sprint:{sid[:8]}:{int(float(start))}",
-                })
+                # Minutes a timer from this same session covers are on its event already: send only
+                # the pieces outside it (a piece keeps a stable marker: its own start).
+                timers = [(m["start"], m["end"]) for m in self.segments["manual"] if m.get("session") == sid]
+                for lo, hi in subtract((float(start), seg["end"]), timers):
+                    if hi - lo < 60:
+                        continue
+                    entries.append({
+                        "title": " ".join(keys) + (" " + name if name else ""),
+                        "start": lo, "end": hi,
+                        "notes": "\n".join(self.browse_url(k) for k in keys),
+                        "marker": f"sprint:{sid[:8]}:{int(lo)}",
+                    })
         # Newest first, manual entries ahead of stretches, so a busy week never starves a fresh meeting.
         entries.sort(key=lambda e: (not e["marker"].startswith("sprint:manual:"), -e["start"]))
         return entries[:50]
@@ -318,6 +321,14 @@ class Store(TimerMixin):
 
 def empty_review():
     return {"summary": "", "wentWell": [], "toImprove": [], "suggestions": [], "thanks": []}
+
+
+def subtract(span, cuts):
+    """`span` (start, end) minus every (start, end) in `cuts`, as the pieces left over."""
+    pieces = [span]
+    for c0, c1 in cuts:
+        pieces = [p for lo, hi in pieces for p in ((lo, min(hi, c0)), (max(lo, c1), hi)) if p[1] > p[0]]
+    return pieces
 
 
 def overlap(start, end, since, until):

@@ -37,14 +37,16 @@ class CardTests(unittest.TestCase):
 
     def test_claude_session_ids_reads_only_json(self):
         with tempfile.TemporaryDirectory() as d:
-            for name, body in (("1.json", {"sessionId": "aa"}), ("2.json", {"other": 1}), ("3.json", "not an object"), ("1.abc.key", {"sessionId": "zz"})):
+            for name, body in (("1.json", {"sessionId": "aa"}), ("2.json", {"other": 1}), ("3.json", "not an object"), ("1.abc.key", {"sessionId": "zz"}),
+                               ("5.json", {"sessionId": "mine", "pid": os.getpid()}), ("6.json", {"sessionId": "dead", "pid": 2 ** 22 + 12345})):
                 with open(os.path.join(d, name), "w") as f:
                     json.dump(body, f)
             with open(os.path.join(d, "4.json"), "w") as f:
                 f.write("{broken")
             os.environ["CUBI_CLAUDE_SESSIONS"] = d
             try:
-                self.assertEqual(sprint.claude_session_ids(), {"aa"})
+                # A file without a pid is trusted; one whose pid is gone (a crashed Claude Code) is not.
+                self.assertEqual(sprint.claude_session_ids(), {"aa", "mine"})
             finally:
                 del os.environ["CUBI_CLAUDE_SESSIONS"]
 

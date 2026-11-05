@@ -239,6 +239,18 @@ class TimerTests(unittest.TestCase):
         self.assertEqual(self.store.session_seconds("s1", key="PROJ-1"), 500.0)
         self.assertEqual(self.store.session_seconds("s1"), 1000.0)
 
+    def test_calendar_clips_a_stretch_that_straddles_its_timer(self):
+        from store import subtract
+        self.assertEqual(subtract((0, 100), [(10, 20), (50, 200)]), [(0, 10), (20, 50)])
+        self.assertEqual(subtract((0, 100), []), [(0, 100)])
+        # 9:50 the session gets busy, 10:00 ▶, 10:40 it goes quiet, 11:00 ⏸.
+        self.store.record_segments({"id": "s1", "name": "PROJ-1", "segments": [{"start": 35400, "end": 38400, "open": False}]}, {"PROJ-1": 100.0})
+        self.store.timer_start("s1", {"PROJ-1": 100.0}, 36000)
+        self.store.timer_stop("s1", 39600)
+        spans = sorted((e["start"], e["end"], e["marker"]) for e in self.store.calendar_entries(40000, window=10_000))
+        self.assertEqual([(a, b) for a, b, _ in spans], [(35400, 36000), (36000, 39600)])
+        self.assertEqual(spans[0][2], "sprint:s1:35400")
+
     def test_remaining_and_tone(self):
         from store import remaining_seconds, tone_for
         self.assertIsNone(remaining_seconds(None, 100, 8))

@@ -109,12 +109,27 @@ def claude_session_ids():
             continue
         try:
             with open(os.path.join(folder, name), encoding="utf-8") as f:
-                sid = json.load(f).get("sessionId")
+                entry = json.load(f)
+            sid, pid = entry.get("sessionId"), entry.get("pid")
         except (OSError, ValueError, AttributeError):
             continue
-        if isinstance(sid, str) and sid:
+        # A file left behind by a crashed or killed Claude Code does not keep a timer alive.
+        if isinstance(sid, str) and sid and pid_alive(pid):
             ids.add(sid)
     return ids
+
+
+def pid_alive(pid):
+    """True unless `pid` is clearly gone. Not a whole number: unknown, so trusted as alive."""
+    if not isinstance(pid, int) or isinstance(pid, bool) or pid <= 0:
+        return True
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except (PermissionError, OverflowError):
+        return True
+    return True
 
 
 def timer_start(store, p):

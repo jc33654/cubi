@@ -5,3 +5,4 @@ build/
 .swiftpm/
 # Per-machine Claude Code settings (capture hooks point at a local build path)
 .claude/settings.local.json
+__pycache__/

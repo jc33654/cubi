@@ -72,19 +72,20 @@ async function call(action, payload = {}) {
 // `sent`: the fields this call saves. On success their drafts go, unless typed over meanwhile.
 // Actions run side by side, so replies can come back out of order. A plain read older than a reply
 // already drawn is dropped; a write's reply always shows, since it carries what the write did.
-// A failed send puts what was sent back as drafts, so a form that a re-render dropped can refill.
+// A failed send puts what was sent back as drafts (same sprint and session only), so a form that a
+// re-render dropped can refill.
 let asked = 0, drawn = 0;
 async function refresh(action = "panel.state", payload = {}, sent = []) {
-  sent = [...sent].map(f => [fieldSel(f), fieldValue(f), !!f.closest("#tab-settings")]);
-  const n = ++asked;
+  sent = [...sent].map(draftOf).filter(Boolean);
+  const n = ++asked, from = draftsFor;
   let data;
   try { data = await call(action, payload); } catch (_) {
-    for (const [sel, value, global] of sent) if (sel && !drafts.has(sel)) drafts.set(sel, { value, global });
+    if (draftsFor === from) for (const [sel, d] of sent) if (!drafts.has(sel)) drafts.set(sel, d);
     return false;
   }
   if (action === "panel.state" && n < drawn) return true;
   drawn = Math.max(drawn, n);
-  for (const [sel, value] of sent) if (drafts.get(sel)?.value === value) drafts.delete(sel);
+  for (const [sel, d] of sent) if (drafts.get(sel)?.value === d.value) drafts.delete(sel);
   state = data;
   render();
   return true;
@@ -95,18 +96,23 @@ const tip = text => `<span class="cubi-tip" title="${esc(text)}">${ic("info", 13
 // ---------- render ----------
 // What the user typed and has not saved lives in `drafts` (by field selector), noted as they type;
 // a re-render draws the data and puts the drafts back on top. Drafts belong to one sprint and
-// session, except the settings, which are global, and the field being typed in. The ＋時數 form
-// keeps its own (pendingTime).
+// session, except the settings, which are global, and the field being typed in: that one is
+// `carried` into the new sprint or session and never saved by itself until typed in again. The
+// ＋時數 form keeps its own (pendingTime).
 const fieldSel = a => a.id ? "#" + CSS.escape(a.id)
   : Object.keys(a.dataset).length ? `[data-${Object.keys(a.dataset)[0].replace(/[A-Z]/g, c => "-" + c.toLowerCase())}="${CSS.escape(Object.values(a.dataset)[0])}"]` : null;
 const isBox = f => f.type === "checkbox";
 const fieldValue = f => isBox(f) ? f.checked : f.value;
 const isField = f => f?.matches?.("input, textarea, select");
-const drafts = new Map();
+const drafts = new Map(), carried = new Set();
 let draftsFor = null, composing = false, renderLater = false;
+function draftOf(f) {
+  const sel = isField(f) && !f.closest("[data-time-form]") && fieldSel(f);
+  return sel ? [sel, { value: fieldValue(f), global: !!f.closest("#tab-settings") }] : null;
+}
 function noteDraft(e) {
-  const f = e.target, sel = isField(f) && !e.isComposing && !f.closest("[data-time-form]") && fieldSel(f);
-  if (sel) drafts.set(sel, { value: fieldValue(f), global: !!f.closest("#tab-settings") });
+  const d = !e.isComposing && draftOf(e.target);
+  if (d) { drafts.set(...d); carried.delete(d[0]); }
 }
 document.addEventListener("input", noteDraft);
 document.addEventListener("change", noteDraft);
@@ -116,13 +122,15 @@ document.addEventListener("change", noteDraft);
 function endComposing() { composing = false; if (renderLater) render(); }
 document.addEventListener("compositionstart", () => { composing = true; });
 document.addEventListener("compositionend", e => { noteDraft(e); endComposing(); });
-document.addEventListener("focusout", () => { if (composing) endComposing(); });
-window.addEventListener("blur", () => { if (composing) endComposing(); });
+// After the event, so a compositionend still on its way lands first and focus has settled.
+const endComposingSoon = () => setTimeout(() => { if (composing) endComposing(); });
+document.addEventListener("focusout", endComposingSoon);
+window.addEventListener("blur", endComposingSoon);
 // A field that saves on change and got its draft back from a re-render: the browser takes the draft
 // as the value it had on focus, so leaving it fires no change. Send it on the way out instead.
 const restored = new WeakSet();
 const unlikeMarkup = f => isBox(f) ? f.checked !== f.defaultChecked
-  : f.tagName === "SELECT" ? [...f.options].some(o => o.selected !== o.defaultSelected) : f.value !== f.defaultValue;
+  : f.tagName === "SELECT" ? f.selectedIndex !== Math.max(0, [...f.options].findIndex(o => o.defaultSelected)) : f.value !== f.defaultValue;
 document.addEventListener("change", e => restored.delete(e.target), true);
 document.addEventListener("focusout", e => {
   if (restored.delete(e.target) && unlikeMarkup(e.target)) e.target.dispatchEvent(new Event("change"));
@@ -137,6 +145,8 @@ function render() {
   const moved = ident !== draftsFor;
   if (moved) {
     for (const [sel, d] of drafts) if (!d.global && sel !== focus) drafts.delete(sel);
+    carried.clear();
+    if (focus && drafts.has(focus) && !drafts.get(focus).global) carried.add(focus);
     draftsFor = ident;
   }
   const open = [...document.querySelectorAll("details[id][open]")].map(d => d.id);
@@ -145,11 +155,11 @@ function render() {
   if (state.warnings && state.warnings.length) status(state.warnings.join("；"), true);
   for (const [sel, d] of drafts) {
     const el = document.querySelector(sel);
-    if (!el || fieldValue(el) === d.value) { drafts.delete(sel); continue; }
+    if (!el || fieldValue(el) === d.value) { drafts.delete(sel); carried.delete(sel); continue; }
     if (isBox(el)) el.checked = d.value; else el.value = d.value;
     if (sel !== focus) continue;
-    if (moved) status("這格是在上一個 sprint／session 打的，還沒存", true);   // and it is not sent by itself
-    else restored.add(el);
+    if (!carried.has(sel)) restored.add(el);
+    else if (moved) status("這格是在上一個 sprint／session 打的，還沒存", true);
   }
   const el = focus && document.querySelector(focus);
   if (el) { el.focus(); if (pos !== null) el.setSelectionRange(pos, pos); }

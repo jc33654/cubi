@@ -55,7 +55,7 @@ struct SettingsView: View {
             .background(Dash.background)
         }
         .frame(minWidth: 720, minHeight: 480)
-        .onAppear { hooks.refresh() }
+        .onAppear { hooks.clearFeedback() }
         .onChange(of: page) { hooks.clearFeedback() }
         .sheet(item: Binding(get: { hooks.pending.map { PreviewBox(preview: $0) } }, set: { if $0 == nil { hooks.cancelPending() } })) { box in
             DiffSheet(title: hooks.pendingIsUninstall ? "解除安裝 Claude Code hooks" : "安裝 Claude Code hooks",

@@ -22,6 +22,10 @@ struct DisplaySection: View {
         _notificationsOn = State(initialValue: notifications.wrappedValue)
     }
 
+    private func checkPermission() async {
+        denied = notificationsOn ? await notificationsDenied() : false
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             DashCard(title: "島", icon: "capsule") {
@@ -51,7 +55,11 @@ struct DisplaySection: View {
                     }
                     switchToggle($notificationsOn).onChange(of: notificationsOn) { _, v in notifications.wrappedValue = v }
                 }
-                .task(id: notificationsOn) { denied = await notificationsDenied() }
+                .task(id: notificationsOn) { await checkPermission() }
+                // Back from System Settings with the permission changed.
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                    Task { await checkPermission() }
+                }
                 SettingRow(title: "登入時啟動") {
                     switchToggle($loginOn).onChange(of: loginOn) { _, v in
                         // Writing the real status back below triggers this again (say, register

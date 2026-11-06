@@ -40,7 +40,8 @@ struct SessionListView: View {
     }
 
     private func row(_ bot: BotRuntime) -> some View {
-        HStack(spacing: 10) {
+        let st = StatusStyle.state(bot.stateLabel, resting: bot.resting)
+        return HStack(spacing: 10) {
             ShapeSwatch(shape: bot.shape, color: bot.color)
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
@@ -56,10 +57,13 @@ struct SessionListView: View {
                             .background(Capsule().fill(.white.opacity(0.12)))
                     }
                 }
-                Text(bot.ticker)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.6))
-                    .lineLimit(1)
+                // The state word sits on the right already; the line under the name says what it is doing.
+                if bot.ticker != st.text {
+                    Text(bot.ticker)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.6))
+                        .lineLimit(1)
+                }
             }
             Spacer(minLength: 8)
             if let edit = bot.lastEdit {
@@ -78,7 +82,6 @@ struct SessionListView: View {
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundStyle(UsageStripView.levelColor(bot.contextPercent).opacity(0.9))
             }
-            let st = StatusStyle.state(bot.stateLabel, resting: bot.resting)
             Text(st.text)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(st.color)

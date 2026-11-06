@@ -24,7 +24,9 @@ struct SessionDetailView: View {
                 IconButton(symbol: "arrow.up.forward.app", label: "跳到終端", tint: StatusStyle.info) { state.onFocus(bot.id) }
                 IconButton(symbol: "xmark", label: "關閉") { state.selectedSession = nil }
             }
-            Text(bot.ticker).font(.system(size: 11)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+            if bot.ticker != StatusStyle.state(bot.stateLabel, resting: bot.resting).text {
+                Text(bot.ticker).font(.system(size: 11)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+            }
 
             Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 3) {
                 let project = bot.stats.projectDir ?? bot.cwd, current = bot.stats.currentDir ?? bot.cwd

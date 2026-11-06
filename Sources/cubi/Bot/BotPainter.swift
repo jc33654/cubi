@@ -75,15 +75,6 @@ enum BotPainter {
                 return CGPoint(x: body.midX + rx * cos(a), y: body.midY + ry * sin(a))
             }
             return roundedPolygon(points, radius: w * 0.12)
-        case .gear:
-            // Eight teeth: alternating outer and inner points, two of each per tooth.
-            let teeth = 8, outer = 0.6, inner = 0.48
-            let points = (0..<teeth * 4).map { i -> CGPoint in
-                let a = (Double(i) + 0.5) * .pi * 2 / Double(teeth * 4)
-                let r = (i % 4 < 2) ? outer : inner
-                return CGPoint(x: body.midX + w * r * cos(a), y: body.midY + h * r * sin(a))
-            }
-            return roundedPolygon(points, radius: w * 0.04)
         }
     }
 

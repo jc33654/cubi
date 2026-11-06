@@ -5,11 +5,6 @@
 
 public enum BotShape: String, CaseIterable, Sendable, Codable {
     case square, circle, triangle, hexagon
-    /// The settings window's own Cubiii; not offered for sessions.
-    case gear
-
-    /// The shapes a session's robot can be given.
-    public static let pickable: [BotShape] = [.square, .circle, .triangle, .hexagon]
 
     public var displayName: String {
         switch self {
@@ -17,7 +12,6 @@ public enum BotShape: String, CaseIterable, Sendable, Codable {
         case .circle: return "圓形"
         case .triangle: return "三角"
         case .hexagon: return "六角"
-        case .gear: return "齒輪"
         }
     }
 }

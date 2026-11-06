@@ -39,12 +39,11 @@ struct SettingsView: View {
     @Bindable var calendar: SystemCalendar
     let openTool: (String) -> Void
     @State var page: Page = .claude
-    @State private var mascot: BotRuntime = {
-        let b = BotRuntime(id: "settings", name: "Cubiii", color: RGB(hex: 0x3B82F6))
-        b.shape = .gear
-        return b
-    }()
+    @State private var mascot = BotRuntime(id: "settings", name: "Cubiii", color: RGB(hex: 0x3B82F6))
+    @State private var mascotSpot = ScreenSpot()
     @State private var calmDown: Task<Void, Never>?
+    /// Off when the window is behind another app's or minimised: the mascot then stops drawing.
+    @Environment(\.appearsActive) private var appearsActive
 
     var body: some View {
         HStack(spacing: 0) {
@@ -70,7 +69,7 @@ struct SettingsView: View {
         .onChange(of: timing.sleepMinutes) { celebrate() }
         .onChange(of: timing.restHours) { celebrate() }
         .onChange(of: calendar.calendarID) { celebrate() }
-        .onChange(of: hooks.revision) { celebrate() }
+        .onChange(of: hooks.revision) { if hooks.lastWriteSucceeded { celebrate() } }
         .sheet(item: Binding(get: { hooks.pending.map { PreviewBox(preview: $0) } }, set: { if $0 == nil { hooks.cancelPending() } })) { box in
             DiffSheet(title: hooks.pendingIsUninstall ? "解除安裝 Claude Code hooks" : "安裝 Claude Code hooks",
                       diff: box.preview.plan.diff, path: box.preview.url.path,
@@ -81,7 +80,9 @@ struct SettingsView: View {
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
-                BotView(bot: mascot, paused: false).frame(width: 34, height: 34)
+                BotView(bot: mascot, paused: !appearsActive).frame(width: 34, height: 34)
+                    .background(ScreenSpotView(spot: mascotSpot))
+                    .task(id: appearsActive) { if appearsActive { await followMouse() } }
                 Text("Cubi").font(.system(size: 16, weight: .bold))
             }
             .padding(.horizontal, 6).padding(.bottom, 10)
@@ -104,8 +105,20 @@ struct SettingsView: View {
         .background(Dash.sidebar)
     }
 
+    /// The eyes follow the pointer anywhere on screen, the way the island's robots do.
+    private func followMouse() async {
+        while true {
+            if let c = mascotSpot.center {
+                let m = NSEvent.mouseLocation
+                mascot.model.setMouseLook(x: tanh((m.x - c.x) / 260), y: tanh((m.y - c.y) / 200))
+            }
+            do { try await Task.sleep(for: .milliseconds(33)) } catch { return }
+        }
+    }
+
     /// A setting just changed: Cubiii is happy for a moment (again from the start on every change).
     private func celebrate() {
+        mascot.model.setState(.idle)
         mascot.model.setState(.happy)
         calmDown?.cancel()
         calmDown = Task {
@@ -125,4 +138,27 @@ struct SettingsView: View {
         case .scope: ScopeSection(ignored: ignored)
         }
     }
+}
+
+/// Where a view sits on screen, read through the NSView it is drawn in.
+@MainActor
+final class ScreenSpot {
+    fileprivate weak var view: NSView?
+
+    var center: CGPoint? {
+        guard let v = view, let w = v.window else { return nil }
+        return w.convertPoint(toScreen: v.convert(CGPoint(x: v.bounds.midX, y: v.bounds.midY), to: nil))
+    }
+}
+
+struct ScreenSpotView: NSViewRepresentable {
+    let spot: ScreenSpot
+
+    func makeNSView(context: Context) -> NSView {
+        let v = NSView()
+        spot.view = v
+        return v
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
 }

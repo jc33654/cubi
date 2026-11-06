@@ -95,7 +95,7 @@ enum IconRenderer {
         let names = (0..<count).map { stock[$0 % stock.count] + ($0 < stock.count ? "" : String($0)) }
         for (i, name) in names.enumerated() {
             let bot = BotRuntime(id: name, name: name, color: SessionPalette.colors[(i * 2) % SessionPalette.colors.count])
-            bot.shape = BotShape.allCases[i % 4]
+            bot.shape = BotShape.allCases[i % BotShape.allCases.count]
             if i == 2 { bot.resting = true }
             bot.model.setState(i == 0 ? bs : (bot.resting ? .sleeping : .idle))
             bot.contextPercent = [92, 35, 0, 12][i % 4]

@@ -59,6 +59,7 @@ final class HookSetupModel {
 
     func confirmPending() {
         guard let p = pending else { return }
+        var failure: String?
         do {
             let backup = try HookSetup.apply(p)
             message = (pendingIsUninstall ? "已移除。" : "已安裝。") + (backup.map { "備份：\($0.lastPathComponent)" } ?? "")
@@ -67,11 +68,13 @@ final class HookSetupModel {
             error = nil
         } catch {
             lastWriteSucceeded = false
-            self.error = error.localizedDescription
+            failure = error.localizedDescription
         }
         pending = nil
         revision += 1
         refresh()
+        // refresh() resets `error` from reading the file; a failed write must still say why.
+        if let failure { error = failure }
     }
 
     func cancelPending() { pending = nil }

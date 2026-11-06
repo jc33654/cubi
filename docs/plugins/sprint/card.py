@@ -67,7 +67,8 @@ def session_info(store, p, sync=False):
     actions = [{"label": "綁單號", "action": "session.bind", "input": "要綁的單號（可多個，用空白隔開）", "icon": "link.badge.plus"}]
     if keys:
         # Room for two 解除 buttons under the five-button cap; more tickets than that, the panel.
-        actions += [{"label": f"解除 {k}", "action": "session.unbind", "arg": k, "icon": "minus.circle"} for k in keys[:2]]
+        # Text, not an icon: with two tickets bound, two identical icons would not say which goes.
+        actions += [{"label": f"✕ {k}", "action": "session.unbind", "arg": k} for k in keys[:2]]
     # ⏸ whenever a timer runs, bound tickets or not (unbinding the last one must not strand it).
     if timer or keys:
         actions.append({"label": "停止計時並記下" if timer else "開始計時（會議、離開電腦的討論）",

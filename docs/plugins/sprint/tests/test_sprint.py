@@ -28,6 +28,12 @@ class CardTests(unittest.TestCase):
         rows = sprint.ticket_update(self.store, {"key": "PROJ-1", "starred": False})["sprint"]["tickets"]
         self.assertFalse(rows[0]["starred"])
 
+    def test_unbind_buttons_name_their_ticket(self):
+        self.store.ticket("PROJ-2").update(summary="乙", estimate=1.0)
+        out = sprint.session_info(self.store, {**self.session, "name": "PROJ-1 PROJ-2"})
+        unbind = [a for a in out["actions"] if a["action"] == "session.unbind"]
+        self.assertEqual([(a["label"], a["arg"], "icon" in a) for a in unbind], [("✕ PROJ-1", "PROJ-1", False), ("✕ PROJ-2", "PROJ-2", False)])
+
     def actions(self, out):
         return [a["action"] for a in out["actions"]]
 

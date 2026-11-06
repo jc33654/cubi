@@ -379,7 +379,11 @@ async function transitionMenu(key, button) {
   try { data = await call("ticket.transition", { key }); } catch (_) { return; }
   const sel = document.createElement("select");
   sel.innerHTML = `<option value="">換狀態…</option>` + data.transitions.map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join("");
-  sel.onchange = async () => { if (sel.value && !await refresh("ticket.transition", { key, id: sel.value })) render(); };   // failed: buttons back
+  sel.onchange = async () => {
+    if (!sel.value) return;
+    sel.disabled = true;   // one transition per choice, however slow Jira is
+    if (!await refresh("ticket.transition", { key, id: sel.value })) render();   // failed: buttons back
+  };
   sel.onblur = () => { if (!sel.value) render(); };   // left without choosing: the buttons come back
   const cell = button.closest("td");
   cell.classList.add("choosing");

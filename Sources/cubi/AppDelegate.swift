@@ -26,7 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         NSApp.setActivationPolicy(.accessory)
-        NSApp.mainMenu = Self.editMenu()
+        NSApp.mainMenu = Self.mainMenu()
         Sounds.prewarm()
 
         let island = IslandController()
@@ -77,10 +77,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// A menu-bar app shows no menu bar, but key equivalents only arrive through one: without it,
     /// text fields get no ⌘X ⌘C ⌘V ⌘A ⌘Z and windows no ⌘W —
     /// pasting a ticket number into a dialog or a panel did nothing.
-    private static func editMenu() -> NSMenu {
+    private static func mainMenu() -> NSMenu {
         let edit = NSMenu(title: "編輯")
-        edit.addItem(withTitle: "還原", action: #selector(UndoManager.undo), keyEquivalent: "z")
-        edit.addItem(withTitle: "重做", action: #selector(UndoManager.redo), keyEquivalent: "Z")
+        // undo:/redo: with the colon: that is what windows answer (UndoManager.undo has none).
+        edit.addItem(withTitle: "還原", action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: "重做", action: Selector(("redo:")), keyEquivalent: "Z")
         edit.addItem(.separator())
         edit.addItem(withTitle: "剪下", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
         edit.addItem(withTitle: "拷貝", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
@@ -88,10 +89,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         edit.addItem(withTitle: "全選", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         let item = NSMenuItem(title: "編輯", action: nil, keyEquivalent: "")
         item.submenu = edit
-        // ⌘W closes the settings window or a panel, ⌘Q quits.
+        // ⌘W closes the settings window or a panel (the island is not closable). No ⌘Q: after a click
+        // the island is the key window while another app still looks frontmost, so ⌘Q meant for that
+        // app would quit Cubi. The status-bar menu has 結束.
         let app = NSMenu(title: "Cubi")
         app.addItem(withTitle: "關閉視窗", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
-        app.addItem(withTitle: "結束 Cubi", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         let appItem = NSMenuItem(title: "Cubi", action: nil, keyEquivalent: "")
         appItem.submenu = app
         let main = NSMenu()

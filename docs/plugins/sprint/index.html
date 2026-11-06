@@ -8,6 +8,18 @@
   .tight td { padding-top: 8px; padding-bottom: 8px; }
   .key { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; white-space: nowrap; }
   td input.actual { width: 64px; text-align: right; padding: 3px 6px; }
+  /* Fixed columns: the summary takes what is left (cut with …), so the table never runs past its card. */
+  .scroll-x { overflow-x: auto; }
+  table.fixed .remain { min-width: 0; }
+  table.fixed td select { width: 100%; }
+  table.fixed { table-layout: fixed; }
+  table.fixed td { overflow: hidden; white-space: nowrap; }
+  table.fixed td.clip { max-width: none; text-overflow: ellipsis; }
+  table.fixed .cubi-pill { max-width: 100%; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: middle; }
+  th[data-sort] { cursor: pointer; user-select: none; }
+  th[data-sort]:hover { color: var(--cubi-ink); }
+  .star { background: none; border: 0; padding: 0; font-size: 15px; line-height: 1; cursor: pointer; color: var(--cubi-ink3); }
+  .star.on { color: var(--cubi-warning); }
   .remain { display: flex; align-items: center; gap: 8px; min-width: 150px; }
   .remain .cubi-bar { flex: 1; }
   .remain span { font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 58px; text-align: right; }
@@ -165,6 +177,24 @@ function render() {
   if (el) { el.focus(); if (pos !== null) el.setSelectionRange(pos, pos); }
 }
 
+// Clicking a heading sorts by it, again reverses; starred tickets always come first.
+let sortBy = null, sortDir = 1;
+function sortTh(key, label, cls = "") {
+  const mark = sortBy === key ? (sortDir > 0 ? " ▲" : " ▼") : "";
+  return `<th class="${cls}" data-sort="${key}" title="點一下排序">${label}${mark}</th>`;
+}
+function sortedTickets(list) {
+  const value = t => sortBy === "remaining" ? t.remaining : t[sortBy];
+  const cmp = (a, b) => {
+    if (a.starred !== b.starred) return a.starred ? -1 : 1;
+    if (!sortBy) return 0;
+    const x = value(a), y = value(b);
+    if (x == null || y == null) return x == null && y == null ? 0 : x == null ? 1 : -1;   // empty last, either way
+    return (typeof x === "number" ? x - y : String(x).localeCompare(String(y), "zh-Hant", { numeric: true })) * sortDir;
+  };
+  return list.map((t, i) => [t, i]).sort(([a, i], [b, j]) => cmp(a, b) || i - j).map(([t]) => t);
+}
+
 // Points still to do against the room left: a workday holds 8 h ÷ hours-per-point points.
 function pendingKpi(c, hpp) {
   const over = c.roomLeft != null && c.pending > c.roomLeft;
@@ -242,13 +272,16 @@ function renderOverview() {
     </div>
     <div class="cubi-card" style="margin-top:16px"><div class="cubi-card-head"><h2 class="cubi-card-title">工單</h2><span class="cubi-muted">${m.tickets} 張</span><span class="cubi-spacer"></span>
       <input id="add-key" placeholder="加單號" size="12"><button class="cubi-btn small" id="add-btn">${ic("plus", 13)}加</button></div>
-    <table class="cubi-table"><thead><tr><th>單號</th><th>摘要</th><th>狀態</th><th class="num">估</th><th class="num" title="投入 ÷ ${esc(hpp)} 小時，可覆寫">實</th><th>剩餘</th><th class="num">投入</th><th></th></tr></thead><tbody>`;
-  for (const t of s.tickets) {
+    <div class="scroll-x"><table class="cubi-table fixed" style="min-width:720px">
+    <colgroup><col style="width:36px"><col style="width:112px"><col><col style="width:104px"><col style="width:44px"><col style="width:88px"><col style="width:150px"><col style="width:64px"><col style="width:${state.config.actualPointsField ? 118 : 84}px"></colgroup>
+    <thead><tr><th title="有星號的永遠排最上面">★</th>${sortTh("key", "單號")}<th>摘要</th>${sortTh("status", "狀態")}${sortTh("estimate", "估", "num")}<th class="num" title="投入 ÷ ${esc(hpp)} 小時，可覆寫">實</th>${sortTh("remaining", "剩餘")}${sortTh("seconds", "投入", "num")}<th></th></tr></thead><tbody>`;
+  for (const t of sortedTickets(s.tickets)) {
     const rt = remainTone(t), budget = (t.estimate || 0) * hpp * 3600;
     const used = budget ? Math.min(100, Math.max(0, (budget - t.remaining) / budget * 100)) : 0;
-    html += `<tr><td><span class="key"><span class="cubi-dot ${statusTone(t)}"></span>${link(t.key)}</span></td>
+    html += `<tr><td><button class="star ${t.starred ? "on" : ""}" data-star="${esc(t.key)}" title="${t.starred ? "取消重點" : "標成重點"}">${t.starred ? "★" : "☆"}</button></td>
+      <td><span class="key"><span class="cubi-dot ${statusTone(t)}"></span>${link(t.key)}</span></td>
       <td class="clip" title="${esc(t.summary)}${t.notes ? "\n" + esc(t.notes) : ""}">${esc(t.summary)}</td>
-      <td><span class="cubi-pill ${statusTone(t)}">${esc(t.status || "–")}</span></td>
+      <td title="${esc(t.status || "")}"><span class="cubi-pill ${statusTone(t)}">${esc(t.status || "–")}</span></td>
       <td class="num">${pts(t.estimate)}</td>
       <td class="num"><input class="actual" type="number" step="0.1" min="0" value="${t.override ?? ""}" placeholder="${t.autoActual ?? "–"}" data-actual="${esc(t.key)}" title="${t.override != null ? "手動覆寫；自動算是 " + pts(t.autoActual) : "自動算的；填數字可覆寫"}"></td>
       <td>${t.remaining == null ? `<span class="cubi-muted">未估點</span>` : `<div class="remain"><div class="cubi-bar ${rt}"><i style="width:${used}%"></i></div><span style="color:var(--cubi-${rt || "ink2"})">${t.remaining < 0 ? "超 " + fmtH(-t.remaining) : fmtH(t.remaining)}</span></div>`}</td>
@@ -259,7 +292,7 @@ function renderOverview() {
         ${state.config.actualPointsField ? `<button class="cubi-btn icon" data-push="${esc(t.key)}" title="實際點數寫回 Jira">${ic("download", 15)}</button>` : ""}</span></td></tr>`;
     if (pendingTime && pendingTime.key === t.key) html += timeFormRow(t.key);
   }
-  html += `</tbody></table></div>` + sprintInfoCard(s) + manualCard(s);
+  html += `</tbody></table></div></div>` + sprintInfoCard(s) + manualCard(s);
   el.innerHTML = html;
   bindOverview(el);
   const f = $("#t-min", el); if (f && pendingTime && pendingTime.focus) { f.focus(); pendingTime.focus = false; }
@@ -297,7 +330,7 @@ function manualCard(s) {
 // The ＋時數 form sits right under its ticket's row and keeps what was typed across re-renders.
 function timeFormRow(key) {
   const p = pendingTime;
-  return `<tr><td colspan="8"><div class="cubi-inline cubi-row" data-time-form="${esc(key)}"><b>${esc(key)}</b>
+  return `<tr><td colspan="9" style="white-space:normal;overflow:visible"><div class="cubi-inline cubi-row" data-time-form="${esc(key)}"><b>${esc(key)}</b>
     <input id="t-start" type="datetime-local" value="${esc(p.start)}">
     <input id="t-min" type="number" min="1" max="1440" value="${esc(p.minutes)}" style="width:80px"> 分
     <select id="t-kind">${["開發", "會議", "討論", "其他"].map(k => `<option ${k === p.kind ? "selected" : ""}>${k}</option>`).join("")}</select>
@@ -332,6 +365,8 @@ function bindOverview(el) {
   el.querySelectorAll("[data-remove-time]").forEach(b => b.addEventListener("click", () => refresh("time.remove", { id: b.dataset.removeTime })));
   el.querySelectorAll("[data-time]").forEach(b => b.addEventListener("click", () => openTimeForm(b.dataset.time)));
   el.querySelectorAll("[data-transition]").forEach(b => b.addEventListener("click", () => transitionMenu(b.dataset.transition, b)));
+  el.querySelectorAll("[data-star]").forEach(b => b.addEventListener("click", () => refresh("ticket.update", { key: b.dataset.star, starred: !b.classList.contains("on") })));
+  el.querySelectorAll("th[data-sort]").forEach(h => h.addEventListener("click", () => { sortDir = sortBy === h.dataset.sort ? -sortDir : 1; sortBy = h.dataset.sort; render(); }));
   el.querySelectorAll("[data-stop]").forEach(b => b.addEventListener("click", () => refresh("timer.stop", { sid: b.dataset.stop })));
   bindCategories(el);
 }
@@ -356,8 +391,8 @@ function categoryBlock(s) {
   let html = `<div class="donut-wrap">${donut(counts, cats)}<div class="cubi-split">${cats.map((c, i) =>
     `<button data-cat="${esc(c)}" class="${selected === c ? "on" : ""}" style="border-color:${CAT_COLORS[i]}"><b>${counts[i]}</b><span>${esc(c)}</span></button>`).join("")}</div></div>`;
   if (selected) {
-    html += `<table class="cubi-table tight" style="margin-top:12px"><tbody>` + (group.length ? group.map(t => `<tr><td>${link(t.key)}</td><td class="clip">${esc(t.summary)}</td>
-      <td class="num">${pts(t.estimate)} → ${pts(t.actual)}</td><td class="num">${fmtH(t.seconds)}</td></tr>`).join("") : `<tr><td class="cubi-muted">沒有單</td></tr>`) + `</tbody></table>`;
+    html += `<div class="scroll-x"><table class="cubi-table tight fixed" style="margin-top:12px;min-width:360px"><colgroup><col style="width:104px"><col><col style="width:76px"><col style="width:60px"></colgroup><tbody>` + (group.length ? group.map(t => `<tr><td>${link(t.key)}</td><td class="clip" title="${esc(t.summary)}">${esc(t.summary)}</td>
+      <td class="num">${pts(t.estimate)} → ${pts(t.actual)}</td><td class="num">${fmtH(t.seconds)}</td></tr>`).join("") : `<tr><td class="cubi-muted" colspan="4">沒有單</td></tr>`) + `</tbody></table></div>`;
   }
   return html;
 }

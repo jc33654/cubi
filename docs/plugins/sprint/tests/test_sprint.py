@@ -20,6 +20,14 @@ class CardTests(unittest.TestCase):
         self.store.save()
         self.dir.cleanup()
 
+    def test_star_a_ticket(self):
+        self.store.new_sprint("Sprint7")
+        self.store.add_to_sprint("Sprint7", "PROJ-1")
+        rows = sprint.ticket_update(self.store, {"key": "PROJ-1", "starred": True})["sprint"]["tickets"]
+        self.assertTrue(rows[0]["starred"])
+        rows = sprint.ticket_update(self.store, {"key": "PROJ-1", "starred": False})["sprint"]["tickets"]
+        self.assertFalse(rows[0]["starred"])
+
     def actions(self, out):
         return [a["action"] for a in out["actions"]]
 

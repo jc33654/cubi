@@ -89,6 +89,7 @@ def ticket_rows(sprint, tickets, hours, hours_per_point=8.0, totals=None):
             # Left of the whole estimate: against every hour ever worked on it, not just this sprint's.
             "remaining": remaining_seconds(t.get("estimate"), (totals or hours).get(key, {}).get("total", 0.0), hours_per_point),
             "estimate": t.get("estimate"), "actual": actual, "autoActual": auto, "override": override, "notes": t.get("notes", ""),
+            "starred": bool(t.get("starred")),
             "doneAt": done_on(t).isoformat() if done_on(t) else None,
             "category": category(bool(t.get("done")), t.get("estimate"), actual),
             "seconds": seconds, "sessionSeconds": h.get("session", 0.0),

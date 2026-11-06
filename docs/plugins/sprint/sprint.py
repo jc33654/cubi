@@ -128,6 +128,8 @@ def ticket_update(store, p):
         t["actual"] = float(p["actual"]) if p["actual"] not in (None, "") else None
     if "notes" in p:
         t["notes"] = p["notes"]
+    if "starred" in p:
+        t["starred"] = bool(p["starred"])
     return panel_state(store, p)
 
 

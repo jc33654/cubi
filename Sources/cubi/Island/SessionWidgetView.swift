@@ -34,26 +34,7 @@ private struct WidgetSection: View {
             if let failure = entry?.failure {
                 Text(failure).font(.system(size: 11)).foregroundStyle(.red.opacity(0.85)).lineLimit(2)
             } else if let out = entry?.output {
-                if let error = out.error {
-                    Text(error).font(.system(size: 11)).foregroundStyle(.red.opacity(0.85)).lineLimit(2)
-                }
-                Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
-                    ForEach(Array(out.rows.enumerated()), id: \.offset) { _, row in
-                        GridRow {
-                            if let url = row.url.flatMap(URL.init(string:)) {
-                                Button { NSWorkspace.shared.open(url) } label: {
-                                    Text(row.label + " ↗").font(.system(size: 10, weight: .semibold)).foregroundStyle(.white.opacity(0.75)).underline()
-                                }
-                                .buttonStyle(.plain)
-                                .help(url.absoluteString)
-                                .frame(width: 72, alignment: .leading)
-                            } else {
-                                Text(row.label).font(.system(size: 10, weight: .semibold)).foregroundStyle(.white.opacity(0.45)).frame(width: 72, alignment: .leading)
-                            }
-                            WidgetValue(row: row)
-                        }
-                    }
-                }
+                WidgetRows(output: out) { action in Task { await store.act(action, session: bot.id, plugin: tool) } }
             }
             HStack(spacing: 6) {
                 ForEach(Array((entry?.output?.actions ?? []).enumerated()), id: \.offset) { _, action in
@@ -74,6 +55,87 @@ private struct WidgetSection: View {
                 try? await Task.sleep(for: .seconds(every))
             }
         }
+    }
+}
+
+/// A plugin's error line and rows; `act` runs a row's button.
+struct WidgetRows: View {
+    let output: PluginIO.WidgetOutput
+    let act: (PluginIO.WidgetOutput.Action) -> Void
+
+    var body: some View {
+        if let error = output.error {
+            Text(error).font(.system(size: 11)).foregroundStyle(.red.opacity(0.85)).lineLimit(2)
+        }
+        Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
+            ForEach(Array(output.rows.enumerated()), id: \.offset) { _, row in
+                GridRow {
+                    if let url = row.url.flatMap(URL.init(string:)) {
+                        Button { NSWorkspace.shared.open(url) } label: {
+                            Text(row.label + " ↗").font(.system(size: 10, weight: .semibold)).foregroundStyle(.white.opacity(0.75)).underline()
+                        }
+                        .buttonStyle(.plain)
+                        .help(url.absoluteString)
+                        .frame(width: 72, alignment: .leading)
+                    } else {
+                        Text(row.label).font(.system(size: 10, weight: .semibold)).foregroundStyle(.white.opacity(0.45)).frame(width: 72, alignment: .leading)
+                    }
+                    HStack(spacing: 6) {
+                        WidgetValue(row: row).frame(maxWidth: .infinity, alignment: .leading)
+                        if let action = row.action { RowButton(action: action) { act(action) } }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Offline picture of a plugin's `session.info` for a made-up session named `name`, on the
+    /// island's black, as wide as the detail card. The plugin's command really runs.
+    static func render(_ tool: ToolPlugin, name: String, to url: URL) async -> Bool {
+        func fail(_ why: String) -> Bool {
+            FileHandle.standardError.write(Data("cubi: render-widget: \(why)\n".utf8))
+            return false
+        }
+        guard let hook = tool.session else { return fail("\(tool.id) has no session hook") }
+        let input = PluginIO.SessionInput(id: "render-widget", name: name, cwd: nil, projectDirectory: nil, agent: "claude-code", segments: [])
+        let text: String
+        switch await ToolRunner.hook(tool, action: hook.info, json: input.json()) {
+        case .success(let t): text = t
+        case .failure(let f): return fail("\(hook.info) failed: \(f.message)")
+        }
+        let out: PluginIO.WidgetOutput
+        do { out = try PluginIO.WidgetOutput.parse(text, tool: tool) } catch { return fail("bad output: \(error.localizedDescription)") }
+        let hosting = NSHostingView(rootView: VStack(alignment: .leading, spacing: 4) { WidgetRows(output: out) { _ in } }
+            .padding(12).frame(width: 500).background(.black).environment(\.colorScheme, .dark))
+        hosting.setFrameSize(hosting.fittingSize)
+        hosting.layoutSubtreeIfNeeded()
+        guard let rep = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) else { return fail("cannot draw") }
+        hosting.cacheDisplay(in: hosting.bounds, to: rep)
+        guard let png = rep.representation(using: .png, properties: [:]) else { return fail("cannot encode png") }
+        do { try png.write(to: url) } catch { return fail("cannot write \(url.path): \(error.localizedDescription)") }
+        return true
+    }
+}
+
+/// The small button at a row's end: its icon (✕ by default), the label as its tooltip.
+private struct RowButton: View {
+    let action: PluginIO.WidgetOutput.Action
+    let run: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: run) {
+            Image(systemName: action.icon.flatMap { IconButton.exists($0) ? $0 : nil } ?? "xmark")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.white.opacity(hovering ? 0.9 : 0.4))
+                .frame(width: 18, height: 18)
+                .background(Circle().fill(.white.opacity(hovering ? 0.15 : 0)))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(action.label)
+        .accessibilityLabel(action.label)
     }
 }
 

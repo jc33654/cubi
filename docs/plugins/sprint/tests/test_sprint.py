@@ -76,11 +76,14 @@ class CardTests(unittest.TestCase):
         self.assertEqual([m["note"] for m in self.store.other_work("Sprint7")], ["上一期最後一天的會"])
         self.assertEqual([m["note"] for m in self.store.other_work("Sprint8")], ["不在任何一期"])
 
-    def test_unbind_buttons_name_their_ticket(self):
-        self.store.ticket("PROJ-2").update(summary="乙", estimate=1.0)
-        out = sprint.session_info(self.store, {**self.session, "name": "PROJ-1 PROJ-2"})
-        unbind = [a for a in out["actions"] if a["action"] == "session.unbind"]
-        self.assertEqual([(a["label"], a["arg"], "icon" in a) for a in unbind], [("✕ PROJ-1", "PROJ-1", False), ("✕ PROJ-2", "PROJ-2", False)])
+    def test_every_bound_ticket_has_its_own_unbind_button_on_its_row(self):
+        keys = [f"PROJ-{i}" for i in range(1, 7)]
+        for k in keys:
+            self.store.ticket(k).update(summary=k, estimate=1.0)
+        out = sprint.session_info(self.store, {**self.session, "name": " ".join(keys)})
+        self.assertEqual([(r["label"], r["action"]["action"], r["action"]["arg"]) for r in out["rows"] if "action" in r],
+                         [(k, "session.unbind", k) for k in keys])
+        self.assertNotIn("session.unbind", self.actions(out))
 
     def actions(self, out):
         return [a["action"] for a in out["actions"]]

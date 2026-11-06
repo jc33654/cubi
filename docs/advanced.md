@@ -116,18 +116,20 @@ stdout：
 
 ```json
 {"title":"Sprint",
- "rows":[{"label":"PROJ-12","value":"剩 12h30m / 28h","url":"https://jira.example/browse/PROJ-12","tone":"good","progress":0.45},
+ "rows":[{"label":"PROJ-12","value":"剩 12h30m / 28h","url":"https://jira.example/browse/PROJ-12","tone":"good","progress":0.45,
+          "action":{"label":"解除 PROJ-12","action":"session.unbind","arg":"PROJ-12","icon":"xmark"}},
          ["今日","2h 35m"],
          {"label":"計時中","value":"","clock":{"since":1762230000,"offset":0}}],
  "actions":[{"label":"同步 Jira","action":"session.sync","icon":"arrow.clockwise"}],
  "error":"（選填）顯示成紅字的一行"}
 ```
 
-- `rows[]`：`[label, value]` 或 `{label, value, url?, tone?, progress?, clock?}`。最多 10 列、value 最多 200 字；`url` 只收 http(s)，有的話 label 帶 `↗`、點了用系統瀏覽器開。
+- `rows[]`：`[label, value]` 或 `{label, value, url?, tone?, progress?, clock?, action?}`。最多 10 列、value 最多 200 字；`url` 只收 http(s)，有的話 label 帶 `↗`、點了用系統瀏覽器開。
   - `tone`：`good`／`warning`／`danger`／`info`／`neutral`，value 前面多一個色點、字也上色。
   - `progress`：0…1，value 底下畫一條細進度條。
   - `clock`：`{since, offset?, down?}`，cubi 每秒自己算 `offset ± (now − since)` 秒顯示（`down: true` 是倒數），不用插件一直重送。倒數低於零寫成「超 …」、最後一小時顯示到秒。`since` 是 **epoch 秒**、要在現在前後一年內，`offset` 預設 0。
-  - 這三個欄位不合規**不報錯、直接略過**：`tone` 拼錯、`progress` 超出 0…1、`clock.since` 誤給毫秒，畫面上就是少了那個效果。沒出現時先檢查拼字與單位。
+  - `action`：列尾一顆小按鈕（預設畫 ✕，`label` 是滑鼠提示），格式與檢查都跟下面的 `actions[]` 一樣：`action` 不是這個插件的 hook 命令就整份輸出拒收。一列最多一顆；適合「解除這張單」這種跟著某一列的動作。
+  - `tone`／`progress`／`clock` 不合規**不報錯、直接略過**：`tone` 拼錯、`progress` 超出 0…1、`clock.since` 誤給毫秒，畫面上就是少了那個效果。沒出現時先檢查拼字與單位。
 - `actions[]`（最多 5 個）：按鈕；`action` 必須是同一個插件的 hook 命令，按了以同一份 stdin 執行，成功才重抓 `session.info`，失敗訊息留在區塊上。加 `"input": "提示文字"` 的按鈕會先跳系統對話框問一行字，cubi 把 tab／換行換成空白、洗掉控制字元、截到 512 字後放進 stdin JSON 的 `input` 欄；按取消就不執行。加 `"arg": "值"` 的按鈕不問人，直接把那個值當 `input` 送（例如「解除 PROJ-1」帶 `PROJ-1`）。加 `"icon": "SF Symbol 名"`（`[a-z0-9.]`，1–40 字，例如 `play.fill`）就畫成 icon 按鈕，`label` 變成滑鼠提示；名字不合規就照舊畫文字。
 - 區塊固定多一顆「開面板」。
 - stdout 超過 64 KB、不是 JSON 物件、列形狀不對、action 不合規 → 區塊顯示錯誤。
@@ -161,7 +163,7 @@ stdin：`{"now": <epoch 秒>, "sessions": [<同上的 session 物件>…]}`，�
 3. 面板「設定」分頁：站台、專案 key（可多個，逗號分開）、抓單用 JQL（預設 `project in ({projects}) AND labels = "{label}" AND assignee = currentUser()`）、估點欄位 id、實際點數欄位 id（Jira 沒有這個欄位就留空，寫回鈕就不出現）、每點小時數（預設 8）、回顧 Markdown 資料夾、整理回顧的 session 要開在哪。
 4. 「總覽」分頁：建 sprint（標籤要跟 Jira 一樣，起訖日期給 burndown 用）→「同步 Jira」（「Sprint 資訊」裡的「重抓並清掉」讓 sprint 等於 JQL 結果）。上排五張數字卡（「待處理點數」＝未完成的估點，跟從今天到結束日的容量比：週一到週五、假日不扣，一個工作日 = 8 小時 ÷ 每點小時數 點；超過就紅字，整個 sprint 排的點數超過容量另標「排了 X / 容量 Y 點」；估 0 點的單在面板各處都算「未估點」）、任務分類與剩餘點數圖，下面是工單表：「投入」寫成「6h00m · 0.75 點」（點數＝投入時數 ÷ 每點小時數，就是實際點數，不能手動改；以前填過的覆寫值不再用），點一下在那列底下展開各類工時（session 自動記的叫「實作」，手動時段照種類），上方「投入」數字卡點一下展開整個 sprint 的；「剩餘」是估點換成時數減掉已投入（綠／黃／紅照剩餘比例，超過就紅字「超 …」）；換狀態走 Jira transition；「＋時數」在那張單底下展開表單，補實體會議／討論；「寫回」把這張單所有投入（含之前的 sprint，跟「剩餘」同一個基準）換算的點數寫進設定的欄位。每列最前面的 ☆／★ 是重點標記，只存在本機（`tickets.json`），不寫回 Jira；點 ★、單號、狀態、估、剩餘、投入的標題排序（點 ★ 是有星號的排前面），再點反向，沒有值的排最後，排序不記住（重開面板回到原順序）。打到一半的欄位切分頁、面板重畫都不會丟。
 5. 計時：資訊窗 Sprint 區塊的 ▶ 替這個 session 綁的單開始計時（實體會議、離開電腦的討論），⏸ 停止就記成一筆「計時」手動時段（依綁定比例分給各單、寫行事曆）；計時中那列每秒走，剩餘時數跟著倒數。超過 24 小時只記 24 小時，不到 1 分鐘不記。session 結束（cubi 不再回報它、Claude Code 也不再列出它）15 分鐘後還在計時，就在它最後活動的時間自動停；只是放生或閒置的 session 不會被停。計時期間 session 自己的活動時段不會重複算、行事曆也不會重疊。面板「總覽」最上面列出所有計時中的，也能停。
-6. 綁定：session 名稱、git 分支、cwd 裡的單號自動綁；資訊窗的「綁單號…」「解除 X」直接改；在面板拿掉的不會再自動加回；一個 session 綁多張單時時數預設平分，比例可改（「套用比例到本 sprint」會回算已過的段）。
+6. 綁定：session 名稱、git 分支、cwd 裡的單號自動綁；資訊窗的「綁單號…」與每張單那列尾端的 ✕ 直接改；在面板拿掉的不會再自動加回；一個 session 綁多張單時時數預設平分，比例可改（「套用比例到本 sprint」會回算已過的段）。
 7. 時數：session 活動時段依比例分攤給綁的單；手動時段整段算；種類是會議／討論的另計「會議時數」。「沒有單號的工作」卡片記沒有 Jira 單的時段（PM 開的異常會議、支援、面試…）：要寫說明，掛在開始時間落在的那個 sprint（都沒落在就掛目前的）；勾「計入工時」的算進「投入」（會議類也算進「會議」），不算進任何一張單、不影響實際／估點比例與容量；也能勾寫進行事曆（標題＝說明＋種類）。行事曆：收掉的段（標題＝單號＋session 名）與勾了的手動時段。
 8. 「回顧」：五張數字卡、任務分類甜甜圈（提早／準時完成、超時完成、未完成、超時未完成、未估點；點一類列出那些單）、burndown、近幾個 sprint、總結與四段文字＋感謝（一行一條，離開欄位就存）、「匯出 Markdown」。「用 Claude 整理回顧」把數據寫成 `<reviewDir>/<標籤>-data.md`，在設定的資料夾開一個 Claude Code session，請它寫好四段後用 `cubi --tool-run sprint review.update -` 填回面板。
 9. 資料：`~/Library/Application Support/cubi/sprint/`（config、sprints、tickets、bindings、segments，都是 JSON）。`make plugin-test` 跑它的測試。

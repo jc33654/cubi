@@ -69,6 +69,9 @@ public enum PluginIO {
             public var progress: Double? = nil
             /// A value the app keeps ticking every second.
             public var clock: Clock? = nil
+            /// One small button at the end of the row (say, unbinding that row's ticket); checked
+            /// like the section's actions.
+            public var action: Action? = nil
         }
 
         public enum Tone: String, Sendable, Equatable { case good, warning, danger, info, neutral }
@@ -131,20 +134,22 @@ public enum PluginIO {
             let v = try PluginIO.decode(stdout)
             var rows: [Row] = []
             for (i, r) in (v["rows"]?.array ?? []).prefix(maxRows).enumerated() {
-                guard let row = Row(r, now: now) else { throw ParseError.badRow(i + 1) }
+                guard var row = Row(r, now: now) else { throw ParseError.badRow(i + 1) }
+                if let a = r["action"], a != .null { row.action = try action(a, tool: tool) }
                 rows.append(row)
             }
-            var actions: [Action] = []
-            for a in (v["actions"]?.array ?? []).prefix(maxActions) {
-                guard let label = a["label"]?.string, let action = a["action"]?.string else { throw ParseError.badAction("缺 label 或 action") }
-                guard tool.isHook(action) else { throw ParseError.badAction("「\(action)」不是這個插件的 hook 命令") }
-                let prompt = a["input"]?.string.flatMap { $0.isEmpty ? nil : String($0.prefix(titleLimit)) }
-                actions.append(Action(label: String(label.prefix(titleLimit)), action: action, input: prompt,
-                                      arg: prompt == nil ? a["arg"]?.string.flatMap(cleanInput) : nil,
-                                      icon: a["icon"]?.string.flatMap { isValidSymbol($0) ? $0 : nil }))
-            }
+            let actions = try (v["actions"]?.array ?? []).prefix(maxActions).map { try action($0, tool: tool) }
             return WidgetOutput(title: v["title"]?.string.map { String($0.prefix(titleLimit)) }, rows: rows, actions: actions,
                                 error: v["error"]?.string)
+        }
+
+        private static func action(_ a: JSONValue, tool: ToolPlugin) throws -> Action {
+            guard let label = a["label"]?.string, let action = a["action"]?.string else { throw ParseError.badAction("缺 label 或 action") }
+            guard tool.isHook(action) else { throw ParseError.badAction("「\(action)」不是這個插件的 hook 命令") }
+            let prompt = a["input"]?.string.flatMap { $0.isEmpty ? nil : String($0.prefix(titleLimit)) }
+            return Action(label: String(label.prefix(titleLimit)), action: action, input: prompt,
+                          arg: prompt == nil ? a["arg"]?.string.flatMap(cleanInput) : nil,
+                          icon: a["icon"]?.string.flatMap { isValidSymbol($0) ? $0 : nil })
         }
     }
 

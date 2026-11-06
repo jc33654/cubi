@@ -124,3 +124,27 @@ private func tool() throws -> ToolPlugin {
     #expect(capped.calendar.count == 50 && capped.problems == ["calendar 有 51 筆，只收前 50 筆"])
     #expect(PluginIO.isValidMarker("sprint:manual:0f3a-1") && !PluginIO.isValidMarker("") && !PluginIO.isValidMarker(String(repeating: "a", count: 81)))
 }
+
+@Test func widgetRowCarriesOneActionCheckedLikeTheOthers() throws {
+    let t = try tool()
+    let out = try PluginIO.WidgetOutput.parse(#"""
+        {"rows":[{"label":"PROJ-1","value":"剩 2h","action":{"label":"解除 PROJ-1","action":"sync","arg":"PROJ-1","icon":"xmark"}},
+                 {"label":"今日","value":"1h"}, ["工單","未綁定"]]}
+        """#, tool: t)
+    #expect(out.rows[0].action == .init(label: "解除 PROJ-1", action: "sync", input: nil, arg: "PROJ-1", icon: "xmark"))
+    // Rows from plugins that know nothing of it decode as before.
+    #expect(out.rows[1].action == nil && out.rows[2].action == nil)
+    #expect(try PluginIO.WidgetOutput.parse(#"{"rows":[{"label":"a","value":"b","action":null}]}"#, tool: t).rows[0].action == nil)
+    #expect(throws: PluginIO.ParseError.badAction("「plain」不是這個插件的 hook 命令")) {
+        try PluginIO.WidgetOutput.parse(#"{"rows":[{"label":"a","value":"b","action":{"label":"x","action":"plain"}}]}"#, tool: t)
+    }
+    #expect(throws: PluginIO.ParseError.badAction("缺 label 或 action")) {
+        try PluginIO.WidgetOutput.parse(#"{"rows":[{"label":"a","value":"b","action":{"action":"sync"}}]}"#, tool: t)
+    }
+    // Same rules as the section's buttons: an input prompt drops arg, a bad icon is dropped, a bad arg too.
+    let asks = try PluginIO.WidgetOutput.parse(#"{"rows":[{"label":"a","value":"b","action":{"label":"x","action":"sync","input":"單號？","arg":"P-1","icon":"no such"}}]}"#, tool: t)
+    #expect(asks.rows[0].action == .init(label: "x", action: "sync", input: "單號？", arg: nil, icon: nil))
+    let control = try PluginIO.WidgetOutput.parse(#"{"rows":[{"label":"a","value":"b","action":{"label":"x","action":"sync","arg":"P-1\u0007"}}]}"#, tool: t)
+    let section = try PluginIO.WidgetOutput.parse(#"{"actions":[{"label":"x","action":"sync","arg":"P-1\u0007"}]}"#, tool: t)
+    #expect(control.rows[0].action?.arg == section.actions[0].arg)
+}

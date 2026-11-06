@@ -51,6 +51,22 @@ if let i = arguments.firstIndex(of: "--render-panel"), i + 2 < arguments.count {
     NSApplication.shared.run()
 }
 
+// Offline picture of a tool plugin's rows in a session's detail card, for a made-up session:
+//   --render-widget <tool id> <session name> <out.png>   (point the plugin at test data, as above)
+if let i = arguments.firstIndex(of: "--render-widget"), i + 3 < arguments.count {
+    let id = arguments[i + 1], name = arguments[i + 2], out = URL(fileURLWithPath: arguments[i + 3])
+    MainActor.assumeIsolated {
+        NSApplication.shared.setActivationPolicy(.prohibited)
+        let registry = PluginRegistry()
+        guard let tool = registry.tools.first(where: { $0.id == id }), registry.isEnabled(id) else {
+            FileHandle.standardError.write(Data("cubi: no enabled tool plugin「\(id)」\n".utf8))
+            exit(1)
+        }
+        Task { @MainActor in exit(await WidgetRows.render(tool, name: name, to: out) ? 0 : 1) }
+    }
+    NSApplication.shared.run()
+}
+
 // Offline picture of one settings section, this machine's settings, window off screen:
 //   --render-settings <claude|display|sleep|calendar|plugins|scope> <out.png> [--dark]
 if let i = arguments.firstIndex(of: "--render-settings"), i + 2 < arguments.count {

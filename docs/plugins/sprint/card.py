@@ -36,7 +36,8 @@ def session_info(store, p, sync=False):
         t = store.tickets.get(key, {})
         secs = worked.get(key, {}).get("total", 0)
         summary = t.get("summary") or ("Jira 查不到這張單" if t.get("notFound") else "（還沒從 Jira 讀到）")
-        row = {"label": key, "url": store.browse_url(key)}
+        row = {"label": key, "url": store.browse_url(key),
+               "action": {"label": f"解除 {key}", "action": "session.unbind", "arg": key, "icon": "xmark"}}
         budget = (t.get("estimate") or 0) * hpp * 3600
         left = remaining_seconds(t.get("estimate"), secs, hpp)
         if left is None:
@@ -65,10 +66,6 @@ def session_info(store, p, sync=False):
                      "clock": {"since": timer["start"], "offset": 0, "down": False}})
     sprint = store.current_sprint()
     actions = [{"label": "綁單號", "action": "session.bind", "input": "要綁的單號（可多個，用空白隔開）", "icon": "link.badge.plus"}]
-    if keys:
-        # Room for two ✕ buttons under the five-button cap; more tickets than that, the panel.
-        # Text, not an icon: with two tickets bound, two identical icons would not say which goes.
-        actions += [{"label": f"✕ {k}", "action": "session.unbind", "arg": k} for k in keys[:2]]
     # ⏸ whenever a timer runs, bound tickets or not (unbinding the last one must not strand it).
     if timer or keys:
         actions.append({"label": "停止計時並記下" if timer else "開始計時（會議、離開電腦的討論）",

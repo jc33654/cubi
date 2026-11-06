@@ -24,7 +24,7 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 | 活動時段 | `SessionInfo.segments`：真事件開段／依 sleepAfter 切段、tick 收段、SessionEnd 收段、叫醒不算；結束／放生的最後一段保留到下一次 tick | 單元測試 |
 | 第三輪 dashboard（2026-11-05） | 資訊窗：列的 `tone`／`progress`／`clock`、按鈕 `icon`；sprint 的 ▶／⏸ 計時與估點倒數。面板：樣式包 `panel.style:"cubi"`、sprint 面板 dashboard、草稿機制（打到一半不丟、組字中不重畫、亂序回應）。設定頁：左側導覽＋卡片、淺深兩套、`--render-settings` | 單元測試（PluginIO、sprint 35 個）；`--render-panel --eval` 探針（草稿 20 多個情境）；`--render-settings` 六頁 × 淺深；渲染前後 defaults 不變；點按互動待 Jade |
 | 行事曆 | 工具插件選填 `tick{action,every}`：定時餵所有 session，回的 calendar 條目由 `SystemCalendar`（EventKit）寫進設定頁選的行事曆；記號去重、同記號延長、同標題 5 分鐘內合併、每筆 commit、標「空閒」；設定頁「行事曆」區 | `CalendarMerge` 純函式測試；EventKit 真機授權與事件待 Jade |
-| sprint 插件 | `docs/plugins/sprint/`：Python 標準庫；Jira 用 netrc；sprint＝標籤（這個 Jira 沒有 Sprint 欄位）；多專案 JQL（預設只抓受託人是自己的）；自動／手動綁單（資訊窗可直接綁／解除）、多單比例分攤、手動時段、transition；實際點數＝時數÷每點小時數（預設 8，可覆寫、可設欄位寫回）；回顧：五卡、任務分類甜甜圈（提早／準時、超時完成、未完成、超時未完成、未估點，點開列單）、burndown、近幾個 sprint、總結＋四段＋感謝、Markdown 匯出；「用 Claude 整理回顧」寫數據檔並開 Claude Code session（內建 `session.new`）寫好後填回 | 19 個 unittest；CLI 對真 Jira：`session.info`／綁單號 input／`sprint.sync {replace}`（新 JQL 抓到 25 張受託人是 Jade 的單）／`review.brief` 產檔走通；面板畫面待 Jade |
+| sprint 插件 | `docs/plugins/sprint/`：Python 標準庫；Jira 用 netrc；sprint＝標籤（這個 Jira 沒有 Sprint 欄位）；多專案 JQL（預設只抓受託人是自己的）；自動／手動綁單（資訊窗可直接綁／解除）、多單比例分攤、手動時段、transition；實際點數＝時數÷每點小時數（預設 8，可設欄位寫回）；回顧：五卡、任務分類甜甜圈（提早／準時、超時完成、未完成、超時未完成、未估點，點開列單）、burndown、近幾個 sprint、總結＋四段＋感謝、Markdown 匯出；「用 Claude 整理回顧」寫數據檔並開 Claude Code session（內建 `session.new`）寫好後填回 | 19 個 unittest；CLI 對真 Jira：`session.info`／綁單號 input／`sprint.sync {replace}`（新 JQL 抓到 25 張受託人是 Jade 的單）／`review.brief` 產檔走通；面板畫面待 Jade |
 | 發佈 | `make bundle` strip debug 符號並守門（執行檔裡不得有 `/Users/…`）；`make dist` 產固定檔名 `Cubi.zip`；`scripts/install.sh` 下載、sha256 完整性校驗、`codesign -R` 比對 cubi-dev 憑證 hash 後才裝並拿掉 quarantine；`ci.yml`／`release.yml`（tag 觸發，從 secrets 匯入 .p12 簽） | 真機驗證：v0.1.0 由 release.yml 在 macos-26 建、簽、掛上 Release（1.5 分鐘）；從 `releases/latest/download/` 抓回來 sha256 與 `codesign -R` 都過、OSO 0、版本 0.1.0 |
 | 文件 | README（介紹、機器人表情與島的截圖 `docs/images/`、安裝、操作一覽、解除）、`docs/development.md`（make 目標、CLI、憑證、發版、設計上刻意的事）、`docs/protocol.md`（relay 協定、欄位、manifest 格式）、`docs/plan.md` | 經審查員對帳；圖是 `--render-island` 渲染後裁的 |
 
@@ -43,17 +43,18 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 9. 在另一台沒裝過的機器跑 `curl -fsSL https://raw.githubusercontent.com/jc33654/cubi/main/scripts/install.sh | bash`，看 Automation 授權與機器人是否出現（v0.1.0 已發，secrets 已設）。
 10. 資訊窗：選一個名字帶單號的 session，底下有「Sprint · Sprint6」區塊，單號列可點開瀏覽器，「同步 Jira」「開面板」有反應；example-tool 的區塊也在。
 11. 設定頁「行事曆」：允許存取 → 選一本行事曆；一分鐘後綁了單的 session 收掉的段出現在行事曆（標題＝單號＋session 名、標空閒、備註最後一行有記號）；重啟 Cubi 不重複；前後 5 分鐘內的段合成一筆。
-12. Sprint 面板：Sprint6 已用新 JQL 重抓（25 張受託人是你的單，沒填起訖）——填起訖日期、改一個「實」（自動值＝時數÷8）、+時數一筆會議勾行事曆、換一個狀態（會真的送 Jira）、回顧分頁點甜甜圈的一類看單、匯出 Markdown 到 Finder。
-13. 資訊窗 Sprint 區塊：「綁單號…」跳輸入框、打 `PROJ-xxxx` 綁上；「解除 X」拿掉；沒有 Example Tool 區塊了。
+12. Sprint 面板：Sprint6 已用新 JQL 重抓（25 張受託人是你的單，沒填起訖）——填起訖日期、看「投入」欄的點數、點開各類工時明細、+時數一筆會議勾行事曆、換一個狀態（會真的送 Jira）、回顧分頁點甜甜圈的一類看單、匯出 Markdown 到 Finder。
+13. 資訊窗 Sprint 區塊：「綁單號…」跳輸入框、打 `PROJ-xxxx` 綁上；每列尾端的 ✕ 拿掉那張單；沒有 Example Tool 區塊了。
 14. 回顧分頁「用 Claude 整理回顧」：先跳確認框（目錄與第一句話）→ 在設定的資料夾開一個 Claude Code 分頁、第一句話叫它讀 `<reviewDir>/Sprint6-data.md`；它跑 `cubi --tool-run sprint review.update -` 時在終端批准；面板每 30 秒查一次，寫好就出現。
 15. 浮動視窗拖到外接螢幕：島應跟著過去（拖的時候視窗縮成島大小），放開後再拖回瀏海能 dock。
 16. 右鍵選單沒有「Demo 狀態」了。
 17. 資訊窗（第三輪）：按鈕是 icon、滑上去有說明；狀態色（工作中藍、思考紫、等你橘、錯誤紅）；Sprint 區塊 ▶ 開始計時 → 「計時中」每秒走、剩餘跟著倒數 → ⏸ 停止 → 面板「手動時段」多一筆「計時」、行事曆一筆、不跟自動段重疊。
 18. Sprint 面板（第三輪）：「總覽／回顧／設定」左側導覽；「＋時數」在單底下展開、打到一半切分頁不丟；用注音在回顧欄位打字時，面板 30 秒輪詢不會打斷組字。
 19. 設定頁（第三輪）：左側導覽六頁、淺色與深色各看一次；開關與主按鈕是藍色（離線渲染畫不出）；插件頁切一個工具的開關 → 畫面立刻變、「開啟」鈕跟著停用；行事曆頁顯示你實際的權限狀態。在插件頁替一個 agent 按「安裝…」寫入後，卡片按鈕立刻變「更新…／解除…」；設定視窗關掉再開、或切頁，上一次的「已安裝」訊息不再出現。系統通知：第一次打開時在詢問框按「不允許」→ 開關旁出現「沒有權限」；按「打開系統設定」看實際開到哪一頁（目標是通知設定）；在系統設定改成允許後切回 Cubi，標籤消失。
-20. 第三輪之後（11-06）：Sprint 總覽「待處理點數」紅字與「排了 X / 容量 Y 點」；session 清單列與資訊窗不再把「思考中」寫兩次（清單離線畫不出，沒驗）；設定窗左上角的方塊 Cubiii 眼睛跟著滑鼠、改任何設定會開心一下、切到別的 app 時停住（都沒驗）。工單表不撐出卡片、＋時數與換狀態按鈕看得到、換狀態的選單浮出來看得到選項；☆／★ 標記（重開面板還在）、點標題排序；對話框與面板裡 ⌘V 能貼上單號（也能貼整個 Jira 網址）；綁單號對話框、設定頁、面板裡各按一次 ⌘Z 能還原；⌘W 關設定窗與面板；點過島之後按 ⌘Q 不會關掉 Cubi（結束走選單列）；資訊窗解除按鈕寫著「✕ 單號」。
+20. 第三輪之後（11-06）：Sprint 總覽「待處理點數」紅字與「排了 X / 容量 Y 點」；session 清單列與資訊窗不再把「思考中」寫兩次（清單離線畫不出，沒驗）；設定窗左上角的方塊 Cubiii 眼睛跟著滑鼠、改任何設定會開心一下、切到別的 app 時停住（都沒驗）。工單表不撐出卡片、＋時數與換狀態按鈕看得到、換狀態的選單浮出來看得到選項；☆／★ 標記（重開面板還在）、點標題排序；對話框與面板裡 ⌘V 能貼上單號（也能貼整個 Jira 網址）；綁單號對話框、設定頁、面板裡各按一次 ⌘Z 能還原；⌘W 關設定窗與面板；點過島之後按 ⌘Q 不會關掉 Cubi（結束走選單列）；資訊窗解除按鈕（已改成每列尾端的 ✕，見第 22 條）。
 
 21. 11-06 下午：sprint 設定頁與設定窗的 ⓘ 滑上去出現說明；滑上去再點 → 固定；固定後再點 ⓘ 本身 → 收起；點別處也收起（設定窗那邊離線畫不出，沒驗）；工單表「★」標題能排序、沒排序時有星號不再自動置頂；「投入」顯示點數、點一下展開各類工時，上方「投入」數字卡點一下展開整個 sprint 的；「實」欄不見了；「寫回 Jira」送的是這張單所有 sprint 的投入換算點數；「沒有單號的工作」記一筆（記在開始時間所在的 sprint；不寫說明會擋、取消勾「計入工時」不加進投入、勾行事曆會出現在行事曆）。
+22. 資訊窗：綁 6 張單時每一列尾端都有 ✕，滑上去寫「解除 單號」，點了只拿掉那一張；底部不再有「✕ 單號」按鈕（離線畫過列，底部按鈕列與點擊沒驗）。
 
 ## 已知限制
 

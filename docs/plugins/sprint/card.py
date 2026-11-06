@@ -66,7 +66,7 @@ def session_info(store, p, sync=False):
     sprint = store.current_sprint()
     actions = [{"label": "綁單號", "action": "session.bind", "input": "要綁的單號（可多個，用空白隔開）", "icon": "link.badge.plus"}]
     if keys:
-        # Room for two 解除 buttons under the five-button cap; more tickets than that, the panel.
+        # Room for two ✕ buttons under the five-button cap; more tickets than that, the panel.
         # Text, not an icon: with two tickets bound, two identical icons would not say which goes.
         actions += [{"label": f"✕ {k}", "action": "session.unbind", "arg": k} for k in keys[:2]]
     # ⏸ whenever a timer runs, bound tickets or not (unbinding the last one must not strand it).

@@ -268,11 +268,12 @@ class Store(TimerMixin):
     def hours_by_key(self, since=None, until=None):
         """Seconds per key within [since, until]: session stretches split by their shares, manual
         entries whole. 'meeting' is the part of 'manual' whose kind is a meeting or discussion;
-        'kinds' is the same seconds by kind, session stretches as SESSION_KIND."""
+        'kinds' is the same seconds by kind, session stretches as SESSION_KIND; 'entries' lists the
+        manual entries in the window with the seconds each one adds here (so they sum to 'manual')."""
         out = {}
 
         def bucket(key):
-            return out.setdefault(key, {"session": 0.0, "manual": 0.0, "meeting": 0.0, "kinds": {}})
+            return out.setdefault(key, {"session": 0.0, "manual": 0.0, "meeting": 0.0, "kinds": {}, "entries": []})
 
         def add(b, kind, secs):
             b["kinds"][kind] = b["kinds"].get(kind, 0.0) + secs
@@ -286,12 +287,18 @@ class Store(TimerMixin):
         for m in self.segments["manual"]:
             if m.get("key") is None:
                 continue
+            if not overlap(m["start"], m["end"], since, until):
+                continue
             secs = self._timer_extra(m, since, until)
             for key, pct in (m.get("shares") or {m["key"]: 100}).items():
-                bucket(key)["manual"] += secs * pct / 100
-                add(bucket(key), m.get("kind") or "其他", secs * pct / 100)
+                part = secs * pct / 100
+                bucket(key)["entries"].append({"id": m["id"], "start": m["start"], "kind": m.get("kind") or "其他",
+                                               "note": m.get("note") or m.get("reason") or "", "pct": pct, "seconds": part,
+                                               "session": bool(m.get("session"))})
+                bucket(key)["manual"] += part
+                add(bucket(key), m.get("kind") or "其他", part)
                 if m.get("kind") in MEETING_KINDS:
-                    bucket(key)["meeting"] += secs * pct / 100
+                    bucket(key)["meeting"] += part
         for b in out.values():
             b["total"] = b["session"] + b["manual"]
         return out

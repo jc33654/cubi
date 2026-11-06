@@ -90,7 +90,7 @@ def ticket_rows(sprint, tickets, hours, hours_per_point=8.0, totals=None):
             "doneAt": done_on(t).isoformat() if done_on(t) else None,
             "category": category(bool(t.get("done")), t.get("estimate"), actual),
             "seconds": seconds, "meetingSeconds": h.get("meeting", 0.0),
-            "kinds": h.get("kinds", {}),
+            "kinds": h.get("kinds", {}), "entries": sorted(h.get("entries", []), key=lambda e: -e["start"]),
         })
     return rows
 

@@ -13,6 +13,9 @@
   .kinds { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; }
   .kinds span { white-space: nowrap; font-variant-numeric: tabular-nums; }
   .kinds b { font-weight: 600; margin-right: 4px; }
+  table.entries { margin-top: 8px; width: auto; }
+  table.entries td { white-space: nowrap; overflow: visible; padding: 4px 14px 4px 0; border: 0; font-size: 12px; }
+  table.entries td.note { white-space: normal; }
   /* Fixed columns: the summary takes what is left (cut with …), so the table never runs past its card. */
   .scroll-x { overflow-x: auto; }
   table.fixed .remain { min-width: 0; }
@@ -297,7 +300,7 @@ function renderOverview() {
         <button class="cubi-btn icon" data-time="${esc(t.key)}" title="補時數（會議、討論）">${ic("plus", 15)}</button>
         <button class="cubi-btn icon" data-transition="${esc(t.key)}" title="換 Jira 狀態">${ic("flag", 15)}</button>
         ${state.config.actualPointsField ? `<button class="cubi-btn icon" data-push="${esc(t.key)}" title="這張單所有投入（含之前的 sprint）換算的點數寫回 Jira">${ic("download", 15)}</button>` : ""}</span></td></tr>`;
-    if (openHours.has(t.key)) html += `<tr><td colspan="8" style="white-space:normal">${kindsList(t.kinds, hpp)}</td></tr>`;
+    if (openHours.has(t.key)) html += `<tr><td colspan="8" style="white-space:normal">${kindsList(t.kinds, hpp)}${entriesList(t.entries, hpp)}</td></tr>`;
     if (pendingTime && pendingTime.key === t.key) html += timeFormRow(t.key);
   }
   html += `</tbody></table></div></div>` + otherCard(s, hpp) + sprintInfoCard(s) + manualCard(s);
@@ -336,6 +339,16 @@ function hoursButton(key, secs, hpp = null) {
 function kindsList(kinds, hpp) {
   const list = Object.entries(kinds || {}).filter(([, v]) => v >= 60).sort((a, b) => b[1] - a[1]);
   return list.length ? `<div class="kinds">${list.map(([k, v]) => `<span><b>${esc(k)}</b>${fmtH(v)}${asPts(v, hpp)}</span>`).join("")}</div>` : `<span class="cubi-muted">沒有工時</span>`;
+}
+
+// The ticket's hand-added stretches in this sprint, newest first, with what each adds to the totals
+// above (this ticket's share, the sprint's part, minus minutes its session already counted).
+function entriesList(entries, hpp) {
+  if (!entries.length) return "";
+  return `<table class="cubi-table tight entries"><tbody>${entries.map(x => `<tr><td>${new Date(x.start * 1000).toLocaleString("zh-TW", { dateStyle: "short", timeStyle: "short" })}</td>
+      <td><span class="cubi-pill">${esc(x.kind)}</span></td>
+      <td class="num">${x.seconds >= 60 ? fmtH(x.seconds) + asPts(x.seconds, hpp) : x.session ? `<span class="cubi-muted" title="這段時間 session 已經記過，算在「實作」">已算在實作</span>` : `<span class="cubi-muted">本 sprint 內不到 1 分鐘</span>`}${x.pct < 100 ? ` <small class="cubi-muted">（${Math.round(x.pct)}%）</small>` : ""}</td>
+      <td class="note">${esc(x.note) || `<span class="cubi-muted">沒寫備註</span>`}</td></tr>`).join("")}</tbody></table>`;
 }
 
 // Work with no ticket (a PM's incident meeting…): kept on the sprint; counted ones add to its hours.

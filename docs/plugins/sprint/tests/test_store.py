@@ -58,6 +58,17 @@ class StoreTests(unittest.TestCase):
         # A window cuts the stretches, not the entries' existence.
         self.assertAlmostEqual(self.store.hours_by_key(since=2800, until=4600)["PROJ-1"]["session"], 900, places=0)
 
+    def test_entries_add_up_to_the_manual_hours_they_list(self):
+        s = session(name="PROJ-1", segments=[{"start": 10_000, "end": 13_600, "open": False}])
+        self.store.record_segments(s, self.store.shares(self.store.binding(s)))
+        timer = self.store.add_manual("PROJ-1", 10_000, 60, kind="計時")      # all inside its own session's stretch
+        timer["session"] = "s1"
+        self.store.add_manual("PROJ-1", 50_000, 120, kind="會議", note="跨邊界")  # the window ends halfway
+        self.store.add_manual("PROJ-1", 90_000, 60, kind="會議", note="窗外")
+        h = self.store.hours_by_key(since=0, until=53_600)["PROJ-1"]
+        self.assertEqual([(e["kind"], e["note"], e["seconds"]) for e in h["entries"]], [("計時", "", 0.0), ("會議", "跨邊界", 3600.0)])
+        self.assertEqual(sum(e["seconds"] for e in h["entries"]), h["manual"])
+
     def test_open_stretch_grows_and_keeps_its_first_shares(self):
         s = session(name="PROJ-1", segments=[{"start": 100, "end": 200, "open": True}])
         self.store.record_segments(s, {"PROJ-1": 100.0})

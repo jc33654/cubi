@@ -75,7 +75,8 @@ final class PluginRegistry {
 
     func secret(_ plugin: String, _ key: String) -> String? { Keychain.get(plugin: plugin, key: key) }
 
-    func setSecret(_ plugin: String, _ key: String, _ value: String) {
-        if value.isEmpty { Keychain.remove(plugin: plugin, key: key) } else { Keychain.set(plugin: plugin, key: key, value: value) }
+    /// Whether the keychain took it.
+    func setSecret(_ plugin: String, _ key: String, _ value: String) -> Bool {
+        value.isEmpty ? Keychain.remove(plugin: plugin, key: key) : Keychain.set(plugin: plugin, key: key, value: value)
     }
 }

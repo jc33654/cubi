@@ -88,6 +88,13 @@ extension EnvironmentValues {
     }
 }
 
+/// The same binding, calling `changed` when the user sets it. Pages use this rather than watching
+/// the model, which would also cheer for changes made elsewhere (say, pinning from the island).
+@MainActor
+func reporting<T>(_ binding: Binding<T>, _ changed: @escaping @MainActor () -> Void) -> Binding<T> {
+    Binding(get: { binding.wrappedValue }, set: { binding.wrappedValue = $0; changed() })
+}
+
 @MainActor
 func switchToggle(_ isOn: Binding<Bool>) -> some View {
     Toggle("", isOn: isOn).labelsHidden().toggleStyle(.switch).controlSize(.small)

@@ -63,12 +63,6 @@ struct SettingsView: View {
         .onAppear { hooks.clearFeedback() }
         .onChange(of: page) { hooks.clearFeedback() }
         .environment(\.settingChanged, celebrate)
-        .onChange(of: island.pinned) { celebrate() }
-        .onChange(of: island.expandOnHover) { celebrate() }
-        .onChange(of: island.botSizeChoice) { celebrate() }
-        .onChange(of: timing.sleepMinutes) { celebrate() }
-        .onChange(of: timing.restHours) { celebrate() }
-        .onChange(of: calendar.calendarID) { celebrate() }
         .onChange(of: hooks.revision) { if hooks.lastWriteSucceeded { celebrate() } }
         .sheet(item: Binding(get: { hooks.pending.map { PreviewBox(preview: $0) } }, set: { if $0 == nil { hooks.cancelPending() } })) { box in
             DiffSheet(title: hooks.pendingIsUninstall ? "解除安裝 Claude Code hooks" : "安裝 Claude Code hooks",
@@ -107,10 +101,12 @@ struct SettingsView: View {
 
     /// The eyes follow the pointer anywhere on screen, the way the island's robots do.
     private func followMouse() async {
+        var last: (CGPoint, CGPoint)?
         while true {
             if let c = mascotSpot.center {
                 let m = NSEvent.mouseLocation
-                mascot.model.setMouseLook(x: tanh((m.x - c.x) / 260), y: tanh((m.y - c.y) / 200))
+                if last.map({ $0.0 != m || $0.1 != c }) ?? true { mascot.model.look(at: m, from: c) }
+                last = (m, c)
             }
             do { try await Task.sleep(for: .milliseconds(33)) } catch { return }
         }

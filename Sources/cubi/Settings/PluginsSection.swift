@@ -65,6 +65,7 @@ private struct AgentCard: View {
     @Bindable var hooks: HookSetupModel
     @State private var secretValues: [String: String] = [:]
     @State private var status: ClaudeHookInstaller.Status?
+    @State private var problem: String?
     @Environment(\.settingChanged) private var settingChanged
 
     var body: some View {
@@ -81,6 +82,7 @@ private struct AgentCard: View {
                 if plugin.capabilities.contains(.questions) { TraitTag(text: "問題") }
                 if plugin.capabilities.contains(.statusline) { TraitTag(text: "用量") }
             }
+            if let problem { Text(problem).foregroundStyle(Dash.danger) }
             if plugin.id != ClaudeCodePlugin.agentID {
                 ForEach(plugin.secrets, id: \.key) { spec in
                     SettingRow(title: spec.label + (spec.required ? "（必填）" : ""), help: "存在登入鑰匙圈") {
@@ -88,13 +90,19 @@ private struct AgentCard: View {
                             get: { secretValues[spec.key] ?? registry.secret(plugin.id, spec.key) ?? "" },
                             set: { secretValues[spec.key] = $0 }))
                             .font(.system(size: 11, design: .monospaced)).frame(width: 220)
-                        Button("儲存") { registry.setSecret(plugin.id, spec.key, secretValues[spec.key] ?? ""); settingChanged() }
+                        Button("儲存") {
+                            if registry.setSecret(plugin.id, spec.key, secretValues[spec.key] ?? "") { problem = nil; settingChanged() }
+                            else { problem = "存不進登入鑰匙圈" }
+                        }
                             .disabled(secretValues[spec.key] == nil)
                     }
                 }
             }
         }
-        .task(id: hooks.revision) { status = try? HookSetup.status(plugin: plugin) }
+        .task(id: hooks.revision) {
+            do { status = try HookSetup.status(plugin: plugin); problem = nil }
+            catch { status = nil; problem = "讀不到安裝狀態：\(error.localizedDescription)" }
+        }
     }
 
     @ViewBuilder

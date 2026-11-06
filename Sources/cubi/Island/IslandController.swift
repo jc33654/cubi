@@ -115,10 +115,8 @@ final class IslandController {
     }
 
     private func updateLook(mouse: CGPoint, rect: CGRect) {
-        let dx = (mouse.x - rect.midX) / 260
-        let dy = (mouse.y - rect.midY) / 200
-        let lx = tanh(dx), ly = tanh(dy)
-        for bot in state.bots { bot.model.setMouseLook(x: lx, y: ly) }
+        let centre = CGPoint(x: rect.midX, y: rect.midY)
+        for bot in state.bots { bot.model.look(at: mouse, from: centre) }
     }
 
     private func pointerEntered() {

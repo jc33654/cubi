@@ -47,6 +47,7 @@ final class HookSetupModel {
                 message = "\(plugin.displayName) 要手動安裝。"; return
             }
             if !p.plan.changed { message = "已經裝好了，沒有要改的東西。"; return }
+            refresh()   // the file reads again: an old read error goes
             pending = p
             pendingIsUninstall = false
         } catch { self.error = error.localizedDescription }
@@ -57,6 +58,7 @@ final class HookSetupModel {
         do {
             guard let p = try HookSetup.uninstallPreview(plugin: plugin) else { message = "\(plugin.displayName) 要手動移除。"; return }
             if !p.plan.changed { message = "\(p.url.lastPathComponent) 裡沒有 Cubi 的東西。"; return }
+            refresh()   // the file reads again: an old read error goes
             pending = p
             pendingIsUninstall = true
         } catch { self.error = error.localizedDescription }

@@ -4,6 +4,7 @@ import AppKit
 /// Settings → 行事曆: permission and which calendar plugins' work stretches go to.
 struct CalendarSection: View {
     @Bindable var calendar: SystemCalendar
+    @Environment(\.settingChanged) private var settingChanged
 
     var body: some View {
         DashCard(title: "工作時段寫進行事曆", icon: "calendar",
@@ -14,7 +15,7 @@ struct CalendarSection: View {
                 SettingRow(title: "寫入哪個行事曆", help: "建議另外建一本「工作紀錄」，別寫進主行事曆；分享出去的行事曆別人看得到事件內容。") {
                     Picker("", selection: Binding(
                         get: { calendar.calendarID ?? "" },
-                        set: { calendar.calendarID = $0.isEmpty ? nil : $0 })) {
+                        set: { calendar.calendarID = $0.isEmpty ? nil : $0; settingChanged() })) {
                         Text("未選擇").tag("")
                         ForEach(calendar.calendars) { Text($0.name).tag($0.id) }
                     }

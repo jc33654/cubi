@@ -31,13 +31,13 @@ struct DisplaySection: View {
         VStack(alignment: .leading, spacing: 14) {
             DashCard(title: "島", icon: "capsule") {
                 SettingRow(title: "保持顯示", help: "島不收回，休息時停在 compact") {
-                    switchToggle($island.pinned)
+                    switchToggle(reporting($island.pinned, settingChanged))
                 }
                 SettingRow(title: "滑入就展開", help: "關掉的話，滑入只停在 compact，點一下才展開。保持顯示或浮動時才有作用。") {
-                    switchToggle($island.expandOnHover).disabled(!island.pinned && island.placement != .floating)
+                    switchToggle(reporting($island.expandOnHover, settingChanged)).disabled(!island.pinned && island.placement != .floating)
                 }
                 SettingRow(title: "機器人大小") {
-                    Picker("", selection: $island.botSizeChoice) {
+                    Picker("", selection: reporting($island.botSizeChoice, settingChanged)) {
                         ForEach(IslandState.BotSizeChoice.allCases, id: \.self) { Text($0.displayName).tag($0) }
                     }
                     .labelsHidden().pickerStyle(.segmented).fixedSize()
@@ -76,7 +76,7 @@ struct DisplaySection: View {
                         do { v ? try SMAppService.mainApp.register() : try SMAppService.mainApp.unregister() }
                         catch { CubiLog.write("login item: \(error)") }
                         loginOn = SMAppService.mainApp.status == .enabled
-                        settingChanged()
+                        if loginOn == v { settingChanged() }   // not when it needs approval or failed
                     }
                 }
             }

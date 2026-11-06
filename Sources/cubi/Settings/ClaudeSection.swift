@@ -53,7 +53,7 @@ struct HookFeedback: View {
         }
         if let m = hooks.message { Text(m).foregroundStyle(.secondary) }
         if let e = hooks.readError { Text(e).foregroundStyle(Dash.danger) }
-        if let e = hooks.error { Text(e).foregroundStyle(Dash.danger) }
+        if let e = hooks.error, e != hooks.readError { Text(e).foregroundStyle(Dash.danger) }
     }
 }
 

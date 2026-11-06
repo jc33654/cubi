@@ -1,6 +1,13 @@
 import SwiftUI
 import CubiKit
 
+extension BotModel {
+    /// Eyes toward the pointer: both in screen coordinates, the robot's centre and the mouse.
+    mutating func look(at mouse: CGPoint, from centre: CGPoint) {
+        setMouseLook(x: tanh((mouse.x - centre.x) / 260), y: tanh((mouse.y - centre.y) / 200))
+    }
+}
+
 /// One animated Cubi. The model advances by real elapsed time, clamped so a pause or a stall
 /// never produces one giant step (and the display's refresh rate does not change the tempo).
 struct BotView: View {

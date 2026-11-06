@@ -165,6 +165,16 @@ function render() {
   if (el) { el.focus(); if (pos !== null) el.setSelectionRange(pos, pos); }
 }
 
+// Points still to do against the room left: a workday holds 8 h ÷ hours-per-point points.
+function pendingKpi(c, hpp) {
+  const over = c.roomLeft != null && c.pending > c.roomLeft;
+  const value = `<span style="color:var(--cubi-${over ? "danger" : "ink"})">${pts(c.pending)}</span>`;
+  const sub = c.roomLeft == null ? "填起訖日期才能比容量"
+    : `剩 ${c.workdaysLeft} 個工作日（${pts(c.roomLeft)} 點）` + (c.unestimated ? ` · ${c.unestimated} 張未估點` : "");
+  const warn = c.room != null && c.planned > c.room ? `<span class="cubi-pill danger" title="假日不扣；1 個工作日 = 8 小時 = ${pts(8 / hpp)} 點">排了 ${pts(c.planned)} / 容量 ${pts(c.room)} 點</span>` : "";
+  return kpi("待處理點數", "hourglass", value, sub + warn, null);
+}
+
 function kpi(title, icon, value, sub, delta) {
   const d = delta == null ? "" : `<span class="cubi-delta ${delta > 0 ? "up" : delta < 0 ? "down" : "flat"}">${delta > 0 ? "▲" : delta < 0 ? "▼" : "＝"} ${esc(Math.abs(delta))}</span>`;
   return `<div class="cubi-kpi"><div class="cubi-kpi-head">${esc(title)}${ic(icon)}</div><div class="cubi-kpi-value"><b>${value}</b>${d}</div><div class="cubi-kpi-sub">${sub}</div></div>`;
@@ -218,12 +228,11 @@ function renderOverview() {
   if (state.session) html += sessionCard();
   if (!s) { el.innerHTML = html + `<div class="cubi-card cubi-muted">還沒有 sprint。按「新 sprint」，再「同步 Jira」。</div>`; bindOverview(el); return; }
   const m = s.metrics, prev = prevSprint(), hpp = state.config.hoursPerPoint;
-  const left = s.tickets.filter(t => !t.done && t.remaining != null).reduce((a, t) => a + Math.max(0, t.remaining), 0);
   const rate = m.tickets ? Math.round(m.done / m.tickets * 100) : 0;
   html += `<div class="cubi-kpis">
       ${kpi("完成點數", "check", `${pts(m.donePoints)}<span class="cubi-muted"> / ${pts(m.estimate)}</span>`, prev ? `上個 sprint ${pts(prev.donePoints)} 點` : "估點合計", prev ? Math.round((m.donePoints - prev.donePoints) * 10) / 10 : null)}
       ${kpi("完成率", "target", `${rate}%`, `${m.done} / ${m.tickets} 張`, null)}
-      ${kpi("剩餘時數", "hourglass", fmtH(left), `未完成的單，1 點 = ${hpp} 小時`, null)}
+      ${pendingKpi(s.capacity, hpp)}
       ${kpi("投入", "clock", fmtH(m.seconds), m.ratio ? `實際 / 估點 ${m.ratio}` : "session＋手動", null)}
       ${kpi("會議", "users", fmtH(m.meetingSeconds), m.seconds ? `佔 ${Math.round(m.meetingSeconds / m.seconds * 100)}%` : "–", null)}
     </div>

@@ -82,6 +82,15 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(b[-1]["ideal"], 0)
         self.assertEqual(review.burndown({"label": "x"}, []), [])
 
+    def test_capacity_counts_workdays_left_against_pending_points(self):
+        # 2026-11-03 (Tue) … 11-14 (Sat): 9 workdays; from 11-10 (Tue): 4. PROJ-2 (2 pts) is done; 5 + 1 pending.
+        c = review.capacity(self.sprint, self.rows(), 8, today=date(2026, 11, 10))
+        self.assertEqual((c["pending"], c["planned"], c["unestimated"]), (6, 8, 0))
+        self.assertEqual((c["workdays"], c["workdaysLeft"], c["room"], c["roomLeft"]), (9, 4, 9, 4))
+        self.assertEqual(review.capacity(self.sprint, self.rows(), 4, today=date(2026, 11, 1))["roomLeft"], 18)   # before the start, 2 pts a day
+        self.assertEqual(review.capacity(self.sprint, self.rows(), 8, today=date(2026, 11, 20))["workdaysLeft"], 0)
+        self.assertIsNone(review.capacity({"label": "x"}, self.rows(), 8)["room"])
+
     def test_markdown(self):
         self.sprint["review"] = {"summary": "整體順利。", "wentWell": ["一次過"], "toImprove": ["估少了"], "suggestions": ["加 buffer"], "thanks": [{"who": "某人", "why": "幫忙查"}]}
         md = review.markdown(self.sprint, self.rows(), review.metrics(self.rows()))

@@ -60,6 +60,7 @@ def panel_state(store, p):
         rows = rows_for(store, sprint)
         state["sprint"] = {**{k: sprint.get(k) for k in ("label", "name", "start", "end", "goal")}, "review": {**empty_review(), **(sprint.get("review") or {})},
                            "tickets": rows, "metrics": review.metrics(rows), "burndown": review.burndown(sprint, rows),
+                           "capacity": review.capacity(sprint, rows, store.hours_per_point()),
                            "categories": list(review.CATEGORIES),
                            "manual": [m for m in store.segments["manual"] if set(m.get("shares") or [m["key"]]) & set(sprint["keys"])]}
     return state

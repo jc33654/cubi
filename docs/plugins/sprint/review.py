@@ -135,6 +135,33 @@ def burndown(sprint, rows, today=None):
     return out
 
 
+WORKDAY_HOURS = 8
+
+
+def workdays(first, last):
+    """Monday to Friday from `first` to `last`, both included. Holidays are not known."""
+    return sum(1 for i in range((last - first).days + 1) if (first + timedelta(days=i)).weekday() < 5)
+
+
+def capacity(sprint, rows, hours_per_point, today=None):
+    """What is still to do against what the sprint has room for, in points: a workday holds
+    WORKDAY_HOURS ÷ hours-per-point points. Room is counted from today (or the start) to the end."""
+    out = {"pending": round(sum(r["estimate"] or 0 for r in rows if not r["done"]), 2),
+           "planned": round(sum(r["estimate"] or 0 for r in rows), 2),
+           "unestimated": sum(1 for r in rows if not r["done"] and not r["estimate"]),
+           "workdays": None, "workdaysLeft": None, "room": None, "roomLeft": None}
+    start, end = parse_date(sprint.get("start")), parse_date(sprint.get("end"))
+    if not start or not end or end < start or not hours_per_point:
+        return out
+    today = today or date.today()
+    per_day = WORKDAY_HOURS / hours_per_point
+    out["workdays"] = workdays(start, end)
+    out["workdaysLeft"] = workdays(max(start, today), end) if today <= end else 0
+    out["room"] = round(out["workdays"] * per_day, 2)
+    out["roomLeft"] = round(out["workdaysLeft"] * per_day, 2)
+    return out
+
+
 def history(store, limit=4):
     """The last few sprints' headline numbers, oldest first."""
     sprints = sorted(store.sprints["sprints"].values(), key=lambda s: (s.get("start") or "", s["label"]))

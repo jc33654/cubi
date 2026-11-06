@@ -129,7 +129,7 @@ def ticket_update(store, p):
     if "notes" in p:
         t["notes"] = p["notes"]
     if "starred" in p:
-        t["starred"] = bool(p["starred"])
+        t["starred"] = p["starred"] is True
     return panel_state(store, p)
 
 

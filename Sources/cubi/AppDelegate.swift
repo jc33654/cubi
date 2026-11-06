@@ -26,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         NSApp.setActivationPolicy(.accessory)
+        NSApp.mainMenu = Self.editMenu()
         Sounds.prewarm()
 
         let island = IslandController()
@@ -74,6 +75,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// A one-line question from a plugin's card (the island has no text fields of its own).
+    /// A menu-bar app shows no menu bar, but text fields only get ⌘X ⌘C ⌘V ⌘A ⌘Z through one:
+    /// without it, pasting a ticket number into a dialog or a panel does nothing.
+    private static func editMenu() -> NSMenu {
+        let edit = NSMenu(title: "編輯")
+        edit.addItem(withTitle: "還原", action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: "重做", action: Selector(("redo:")), keyEquivalent: "Z")
+        edit.addItem(.separator())
+        edit.addItem(withTitle: "剪下", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "拷貝", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "貼上", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "全選", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        let item = NSMenuItem(title: "編輯", action: nil, keyEquivalent: "")
+        item.submenu = edit
+        let main = NSMenu()
+        main.addItem(NSMenuItem(title: "Cubi", action: nil, keyEquivalent: ""))
+        main.addItem(item)
+        return main
+    }
+
     static func askForLine(_ prompt: String) -> String? {
         let alert = NSAlert()
         alert.messageText = prompt

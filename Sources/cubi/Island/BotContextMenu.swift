@@ -9,7 +9,7 @@ struct BotContextMenu: View {
 
     var body: some View {
         Menu("形狀") {
-            ForEach(BotShape.allCases, id: \.self) { shape in
+            ForEach(BotShape.pickable, id: \.self) { shape in
                 Button { state.setShape(shape == .square ? nil : shape, for: bot.id) } label: {
                     Text((bot.shape == shape ? "✓ " : "") + shape.displayName)
                 }

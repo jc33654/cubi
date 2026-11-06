@@ -4,6 +4,7 @@ import SwiftUI
 struct ScopeSection: View {
     let ignored: IgnoredDirectories
     @State private var text: String
+    @Environment(\.settingChanged) private var settingChanged
 
     init(ignored: IgnoredDirectories) {
         self.ignored = ignored
@@ -21,6 +22,7 @@ struct ScopeSection: View {
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(Dash.border))
                 .onChange(of: text) { _, v in
                     ignored.prefixes = v.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+                    settingChanged()
                 }
         }
     }

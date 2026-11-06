@@ -16,7 +16,7 @@ final class HookSetupModel {
     var projectLocalFiles: [URL] = []
     /// After a write: hooks are read when a session starts.
     var needsRestart = false
-    /// Bumped by every write, so views holding their own install status read it again.
+    /// Bumped by every successful write, so views holding their own install status read it again.
     var revision = 0
 
     static let projectLocalKey = "projectLocalHookDirs"
@@ -61,12 +61,12 @@ final class HookSetupModel {
             let backup = try HookSetup.apply(p)
             message = (pendingIsUninstall ? "已移除。" : "已安裝。") + (backup.map { "備份：\($0.lastPathComponent)" } ?? "")
             needsRestart = true
+            revision += 1
             error = nil
         } catch {
             self.error = error.localizedDescription
         }
         pending = nil
-        revision += 1
         refresh()
     }
 

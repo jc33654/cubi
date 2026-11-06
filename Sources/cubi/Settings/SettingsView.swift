@@ -39,6 +39,12 @@ struct SettingsView: View {
     @Bindable var calendar: SystemCalendar
     let openTool: (String) -> Void
     @State var page: Page = .claude
+    @State private var mascot: BotRuntime = {
+        let b = BotRuntime(id: "settings", name: "Cubiii", color: RGB(hex: 0x3B82F6))
+        b.shape = .gear
+        return b
+    }()
+    @State private var calmDown: Task<Void, Never>?
 
     var body: some View {
         HStack(spacing: 0) {
@@ -57,6 +63,14 @@ struct SettingsView: View {
         .frame(minWidth: 720, minHeight: 480)
         .onAppear { hooks.clearFeedback() }
         .onChange(of: page) { hooks.clearFeedback() }
+        .environment(\.settingChanged, celebrate)
+        .onChange(of: island.pinned) { celebrate() }
+        .onChange(of: island.expandOnHover) { celebrate() }
+        .onChange(of: island.botSizeChoice) { celebrate() }
+        .onChange(of: timing.sleepMinutes) { celebrate() }
+        .onChange(of: timing.restHours) { celebrate() }
+        .onChange(of: calendar.calendarID) { celebrate() }
+        .onChange(of: hooks.revision) { celebrate() }
         .sheet(item: Binding(get: { hooks.pending.map { PreviewBox(preview: $0) } }, set: { if $0 == nil { hooks.cancelPending() } })) { box in
             DiffSheet(title: hooks.pendingIsUninstall ? "解除安裝 Claude Code hooks" : "安裝 Claude Code hooks",
                       diff: box.preview.plan.diff, path: box.preview.url.path,
@@ -66,7 +80,11 @@ struct SettingsView: View {
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Cubi").font(.system(size: 16, weight: .bold)).padding(.horizontal, 10).padding(.bottom, 10)
+            HStack(spacing: 8) {
+                BotView(bot: mascot, paused: false).frame(width: 34, height: 34)
+                Text("Cubi").font(.system(size: 16, weight: .bold))
+            }
+            .padding(.horizontal, 6).padding(.bottom, 10)
             ForEach(Page.allCases) { s in
                 Button { page = s } label: {
                     Label(s.title, systemImage: s.icon)
@@ -84,6 +102,16 @@ struct SettingsView: View {
         .padding(14)
         .frame(width: 190)
         .background(Dash.sidebar)
+    }
+
+    /// A setting just changed: Cubiii is happy for a moment (again from the start on every change).
+    private func celebrate() {
+        mascot.model.setState(.happy)
+        calmDown?.cancel()
+        calmDown = Task {
+            do { try await Task.sleep(for: .seconds(1.8)) } catch { return }
+            mascot.model.setState(.idle)
+        }
     }
 
     @ViewBuilder

@@ -76,6 +76,18 @@ struct SettingRow<Control: View>: View {
     }
 }
 
+private struct SettingChangedKey: EnvironmentKey {
+    static let defaultValue: @MainActor () -> Void = {}
+}
+
+extension EnvironmentValues {
+    /// A page calls this when a setting it owns was changed, so the window's Cubiii can cheer.
+    var settingChanged: @MainActor () -> Void {
+        get { self[SettingChangedKey.self] }
+        set { self[SettingChangedKey.self] = newValue }
+    }
+}
+
 @MainActor
 func switchToggle(_ isOn: Binding<Bool>) -> some View {
     Toggle("", isOn: isOn).labelsHidden().toggleStyle(.switch).controlSize(.small)

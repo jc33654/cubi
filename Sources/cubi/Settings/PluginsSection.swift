@@ -43,11 +43,12 @@ private struct ToolCard: View {
     let tool: ToolPlugin
     @Bindable var registry: PluginRegistry
     let openTool: (String) -> Void
+    @Environment(\.settingChanged) private var settingChanged
 
     var body: some View {
         DashCard(title: tool.displayName, icon: "puzzlepiece.extension", help: "\(tool.id) · \(tool.directory)") {
             Button("開啟") { openTool(tool.id) }.disabled(!registry.isEnabled(tool.id))
-            switchToggle(Binding(get: { registry.isEnabled(tool.id) }, set: { registry.setEnabled(tool.id, $0) }))
+            switchToggle(Binding(get: { registry.isEnabled(tool.id) }, set: { registry.setEnabled(tool.id, $0); settingChanged() }))
         } content: {
             HStack(spacing: 6) {
                 if tool.session != nil { TraitTag(text: "資訊窗") }
@@ -64,11 +65,12 @@ private struct AgentCard: View {
     @Bindable var hooks: HookSetupModel
     @State private var secretValues: [String: String] = [:]
     @State private var status: ClaudeHookInstaller.Status?
+    @Environment(\.settingChanged) private var settingChanged
 
     var body: some View {
         DashCard(title: plugin.displayName, icon: "cpu", help: plugin.id) {
             installControls
-            switchToggle(Binding(get: { registry.isEnabled(plugin.id) }, set: { registry.setEnabled(plugin.id, $0) }))
+            switchToggle(Binding(get: { registry.isEnabled(plugin.id) }, set: { registry.setEnabled(plugin.id, $0); settingChanged() }))
         } content: {
             HStack(spacing: 6) {
                 RoundedRectangle(cornerRadius: 3, style: .continuous)
@@ -86,7 +88,7 @@ private struct AgentCard: View {
                             get: { secretValues[spec.key] ?? registry.secret(plugin.id, spec.key) ?? "" },
                             set: { secretValues[spec.key] = $0 }))
                             .font(.system(size: 11, design: .monospaced)).frame(width: 220)
-                        Button("儲存") { registry.setSecret(plugin.id, spec.key, secretValues[spec.key] ?? "") }
+                        Button("儲存") { registry.setSecret(plugin.id, spec.key, secretValues[spec.key] ?? ""); settingChanged() }
                             .disabled(secretValues[spec.key] == nil)
                     }
                 }

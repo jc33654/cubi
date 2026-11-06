@@ -12,6 +12,7 @@ struct DisplaySection: View {
     @State private var notificationsOn: Bool
     @State private var denied = false
     @State private var loginOn = SMAppService.mainApp.status == .enabled
+    @Environment(\.settingChanged) private var settingChanged
 
     // Starting values come in here, not in onAppear: setting them there would count as a change and
     // write back (and ask for notification permission again) on every visit to this page.
@@ -44,7 +45,7 @@ struct DisplaySection: View {
             }
             DashCard(title: "提醒與啟動", icon: "bell") {
                 SettingRow(title: "音效") {
-                    switchToggle($soundsOn).onChange(of: soundsOn) { _, v in Sounds.enabled = v }
+                    switchToggle($soundsOn).onChange(of: soundsOn) { _, v in Sounds.enabled = v; settingChanged() }
                 }
                 SettingRow(title: "系統通知", help: "需要通知權限，預設關") {
                     if notificationsOn && denied {
@@ -56,6 +57,7 @@ struct DisplaySection: View {
                     // Switching on asks first (the setter); the check after it then waits for the answer.
                     switchToggle($notificationsOn).onChange(of: notificationsOn) { _, v in
                         notifications.wrappedValue = v
+                        settingChanged()
                         Task { await checkPermission() }
                     }
                 }
@@ -74,6 +76,7 @@ struct DisplaySection: View {
                         do { v ? try SMAppService.mainApp.register() : try SMAppService.mainApp.unregister() }
                         catch { CubiLog.write("login item: \(error)") }
                         loginOn = SMAppService.mainApp.status == .enabled
+                        settingChanged()
                     }
                 }
             }

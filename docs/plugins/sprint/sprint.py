@@ -116,7 +116,9 @@ def sprint_sync(store, p):
     else:
         for key in found:
             store.add_to_sprint(s["label"], key)
-    fetch_tickets(store, [k for k in s["keys"] if not store.tickets.get(k, {}).get("summary")])
+    # Tickets the query does not return (added by hand) are refreshed too, so their status and its
+    # colour never stay as they were first read; not the ones Jira already said it does not know.
+    fetch_tickets(store, [k for k in s["keys"] if k not in found and not store.tickets.get(k, {}).get("notFound")])
     return panel_state(store, p)
 
 

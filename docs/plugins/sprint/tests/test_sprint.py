@@ -79,6 +79,61 @@ class CardTests(unittest.TestCase):
         self.assertEqual([m["note"] for m in self.store.other_work("Sprint7")], ["上一期最後一天的會"])
         self.assertEqual([m["note"] for m in self.store.other_work("Sprint8")], ["不在任何一期"])
 
+    def test_sync_does_not_keep_asking_for_tickets_jira_does_not_know(self):
+        calls = []
+
+        class FakeJira:
+            def search(self, jql, fields):
+                calls.append("search")
+                if "PROJ-2" in jql:
+                    raise sprint.JiraError("does not exist", code=400)   # one unknown key fails the batch
+                return []
+
+            def issue(self, key, fields):
+                calls.append(key)
+                if key == "PROJ-2":
+                    raise sprint.JiraError("not found", code=404)
+                return {"key": key, "fields": {"summary": key, "status": {"name": "待辦", "statusCategory": {"key": "new"}}}}
+        self.store.config["jql"] = "labels = {label}"
+        self.store.new_sprint("Sprint7")
+        for k in ("PROJ-1", "PROJ-2"):
+            self.store.add_to_sprint("Sprint7", k)
+        real, sprint.jira = sprint.jira, lambda store: FakeJira()
+        common.jira, real_common = sprint.jira, common.jira
+        try:
+            sprint.sprint_sync(self.store, {})
+            self.assertTrue(self.store.tickets["PROJ-2"]["notFound"])
+            calls.clear()
+            sprint.sprint_sync(self.store, {})
+        finally:
+            sprint.jira, common.jira = real, real_common
+        self.assertEqual(calls, ["search", "search"])   # the query, then PROJ-1 alone in one batch
+
+    def test_sync_refreshes_tickets_the_query_does_not_return(self):
+        asked = []
+
+        def issue(key, status, cat):
+            return {"key": key, "fields": {"summary": key, "status": {"name": status, "statusCategory": {"key": cat}}}}
+
+        class FakeJira:
+            def search(self, jql, fields):
+                asked.append(jql)
+                if jql.startswith("key in"):
+                    return [issue("PROJ-9", "進行中", "indeterminate")]
+                return [issue("PROJ-1", "進行中", "indeterminate")]
+        self.store.config["jql"] = "labels = {label}"
+        self.store.new_sprint("Sprint7")
+        self.store.add_to_sprint("Sprint7", "PROJ-9")                      # added by hand, read before categories were kept
+        self.store.ticket("PROJ-9").update(summary="舊", status="進行中")
+        real, sprint.jira = sprint.jira, lambda store: FakeJira()
+        common.jira, real_common = sprint.jira, common.jira
+        try:
+            rows = sprint.sprint_sync(self.store, {})["sprint"]["tickets"]
+        finally:
+            sprint.jira, common.jira = real, real_common
+        self.assertEqual(asked, ["labels = Sprint7", "key in (PROJ-9)"])
+        self.assertEqual({r["key"]: r["statusCategory"] for r in rows}, {"PROJ-9": "indeterminate", "PROJ-1": "indeterminate"})
+
     def test_every_bound_ticket_has_its_own_unbind_button_on_its_row(self):
         keys = [f"PROJ-{i}" for i in range(1, 7)]
         for k in keys:

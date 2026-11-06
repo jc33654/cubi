@@ -1,10 +1,13 @@
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import time
 import unittest
 from datetime import datetime
 
+import common
 import sprint
 from store import Store
 
@@ -87,6 +90,63 @@ class CardTests(unittest.TestCase):
 
     def actions(self, out):
         return [a["action"] for a in out["actions"]]
+
+    def test_card_lists_eight_tickets_and_counts_the_rest(self):
+        keys = [f"PROJ-{i}" for i in range(1, 11)]
+        def labels(out):
+            return [r["label"] if isinstance(r, dict) else r[0] for r in out["rows"]]
+        out = sprint.session_info(self.store, {**self.session, "name": " ".join(keys)})
+        self.assertEqual(labels(out), keys[:8] + ["還有", "今日"])
+        self.assertIn("2 張沒列出", out["rows"][8]["value"])
+        sprint.timer_start(self.store, {**self.session, "name": " ".join(keys)})
+        out = sprint.session_info(self.store, {**self.session, "name": " ".join(keys)})
+        self.assertEqual(labels(out), keys[:7] + ["還有", "今日", "計時中"])   # still within cubi's 10 rows
+
+    def test_bindings_overview_unbinds_any_session(self):
+        sprint.session_info(self.store, {**self.session, "name": "PROJ-1 PROJ-2"})
+        sprint.session_info(self.store, {**self.session, "id": "s2", "name": "PROJ-3"})
+        state = sprint.panel_state(self.store, {})
+        self.assertEqual([(b["sid"], b["keys"]) for b in state["bindings"]], [("s1", ["PROJ-1", "PROJ-2"]), ("s2", ["PROJ-3"])])
+        state = sprint.session_unbind(self.store, {"sid": "s1", "key": "PROJ-2", "session": {**self.session, "id": "s2", "name": "PROJ-3"}})
+        self.assertEqual([(b["sid"], b["keys"]) for b in state["bindings"]], [("s1", ["PROJ-1"]), ("s2", ["PROJ-3"])])
+        with self.assertRaises(ValueError):
+            sprint.session_unbind(self.store, {"sid": "nope", "key": "PROJ-1"})
+
+    def test_offline_render_without_test_data_writes_nothing(self):
+        home = tempfile.TemporaryDirectory()
+        self.addCleanup(home.cleanup)
+        env = {k: v for k, v in os.environ.items() if k not in ("CUBI_SPRINT_DIR", "CUBI_RENDER")}
+
+        def run(extra):
+            return subprocess.run([sys.executable, sprint.__file__, "session.info"], input=json.dumps(self.session),
+                                  capture_output=True, text=True, env={**env, "HOME": home.name, **extra})
+        self.assertEqual(json.loads(run({"CUBI_RENDER": "1"}).stdout)["rows"][0]["label"], "PROJ-1")   # drawn all the same
+        self.assertFalse(os.path.exists(os.path.join(home.name, "Library", "Application Support", "cubi", "sprint", "bindings.json")))
+        run({})
+        self.assertTrue(os.path.exists(os.path.join(home.name, "Library", "Application Support", "cubi", "sprint", "bindings.json")))
+
+    def test_offline_render_on_real_data_never_reaches_jira_or_writes_reviews(self):
+        made = []
+        real = common.Jira
+        common.Jira = lambda *a: made.append(a)
+        saved = {k: os.environ.pop(k, None) for k in ("CUBI_SPRINT_DIR", "CUBI_RENDER")}
+        os.environ["CUBI_RENDER"] = "1"
+        try:
+            self.assertTrue(sprint.dry_run())
+            with self.assertRaisesRegex(sprint.JiraError, "離線渲染不連 Jira"):
+                sprint.jira(self.store)
+            with self.assertRaisesRegex(ValueError, "離線渲染不寫回顧檔"):
+                sprint.review_dir(self.store)
+            os.environ["CUBI_SPRINT_DIR"] = self.dir.name   # test data: business as usual
+            self.assertFalse(sprint.dry_run())
+            sprint.jira(self.store)
+        finally:
+            common.Jira = real
+            for k, v in saved.items():
+                os.environ.pop(k, None)
+                if v is not None:
+                    os.environ[k] = v
+        self.assertEqual(len(made), 1)   # only the test-data run built a client
 
     def test_pause_stays_after_the_last_ticket_is_unbound(self):
         sprint.timer_start(self.store, self.session)

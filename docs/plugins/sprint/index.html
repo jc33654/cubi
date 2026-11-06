@@ -303,7 +303,7 @@ function renderOverview() {
     if (openHours.has(t.key)) html += `<tr><td colspan="8" style="white-space:normal">${kindsList(t.kinds, hpp)}${entriesList(t.entries, hpp)}</td></tr>`;
     if (pendingTime && pendingTime.key === t.key) html += timeFormRow(t.key);
   }
-  html += `</tbody></table></div></div>` + otherCard(s, hpp) + sprintInfoCard(s) + manualCard(s);
+  html += `</tbody></table></div></div>` + otherCard(s, hpp) + bindingsCard() + sprintInfoCard(s) + manualCard(s);
   el.innerHTML = html;
   bindOverview(el);
   const f = $("#t-min", el); if (f && pendingTime && pendingTime.focus) { f.focus(); pendingTime.focus = false; }
@@ -318,6 +318,16 @@ function sessionCard() {
         <td class="num"><button class="cubi-btn icon" data-unbind="${esc(k)}" title="解除">${ic("x", 14)}</button></td></tr>`; }).join("") + `</tbody></table>` : `<div class="cubi-muted">還沒綁單。</div>`}
     <div class="cubi-row" style="margin-top:10px"><input id="bind-key" placeholder="單號，可多個" size="18"><button class="cubi-btn small" id="bind-btn">${ic("plus", 13)}綁定</button>
       <span class="cubi-muted">自動抓到：${esc(b.auto.join(" ") || "沒有")}</span>${tip("名稱、分支、目錄（" + (b.cwd || "?") + "）裡的單號會自動綁；多張單時數預設平分")}</div></div>`;
+}
+
+// Every session's bound tickets, to unbind from any of them (the island card lists eight).
+function bindingsCard() {
+  const list = state.bindings || [];
+  if (!list.length) return "";
+  return `<details class="cubi-card" id="bindings-overview"><summary class="cubi-card-title" style="cursor:pointer">綁定總覽 ${list.length} 個 session</summary>
+    <table class="cubi-table tight" style="margin-top:8px"><tbody>${list.map(b => `<tr><td class="clip" style="width:220px;max-width:220px" title="${esc(b.name)}">${esc(b.name)}</td>
+      <td style="white-space:normal">${b.keys.map(k => `<span class="cubi-row" style="display:inline-flex;gap:2px;margin:2px 10px 2px 0">${link(k)}${b.keys.length > 1 ? ` <small class="cubi-muted">${Math.round(b.shares[k] ?? 0)}%</small>` : ""}
+        <button class="cubi-btn icon" data-unbind-sid="${esc(b.sid)}" data-unbind-key="${esc(k)}" title="從這個 session 解除 ${esc(k)}">${ic("x", 12)}</button></span>`).join("")}</td></tr>`).join("")}</tbody></table></details>`;
 }
 
 function sprintInfoCard(s) {
@@ -347,7 +357,7 @@ function entriesList(entries, hpp) {
   if (!entries.length) return "";
   return `<table class="cubi-table tight entries"><tbody>${entries.map(x => `<tr><td>${new Date(x.start * 1000).toLocaleString("zh-TW", { dateStyle: "short", timeStyle: "short" })}</td>
       <td><span class="cubi-pill">${esc(x.kind)}</span></td>
-      <td class="num">${x.seconds >= 60 ? fmtH(x.seconds) + asPts(x.seconds, hpp) : x.session ? `<span class="cubi-muted" title="這段時間 session 已經記過，算在「實作」">已算在實作</span>` : `<span class="cubi-muted">本 sprint 內不到 1 分鐘</span>`}${x.pct < 100 ? ` <small class="cubi-muted">（${Math.round(x.pct)}%）</small>` : ""}</td>
+      <td class="num">${x.seconds >= 60 ? fmtH(x.seconds) + asPts(x.seconds, hpp) : x.session ? `<span class="cubi-muted" title="這段時間 session 已經記過，算在「Session」">已算在 Session</span>` : `<span class="cubi-muted">本 sprint 內不到 1 分鐘</span>`}${x.pct < 100 ? ` <small class="cubi-muted">（${Math.round(x.pct)}%）</small>` : ""}</td>
       <td class="note">${esc(x.note) || `<span class="cubi-muted">沒寫備註</span>`}</td></tr>`).join("")}</tbody></table>`;
 }
 
@@ -410,6 +420,7 @@ function bindOverview(el) {
   $("#t-cancel", el)?.addEventListener("click", () => { pendingTime = null; render(); });
   el.querySelectorAll("[data-share]").forEach(i => i.addEventListener("change", () => refresh("session.shares", { shares: currentShares() }, el.querySelectorAll("[data-share]"))));
   el.querySelectorAll("[data-unbind]").forEach(x => x.addEventListener("click", () => refresh("session.unbind", { key: x.dataset.unbind })));
+  el.querySelectorAll("[data-unbind-sid]").forEach(x => x.addEventListener("click", () => refresh("session.unbind", { sid: x.dataset.unbindSid, key: x.dataset.unbindKey })));
   el.querySelectorAll("[data-hours]").forEach(b => b.addEventListener("click", () => { const k = b.dataset.hours; if (!openHours.delete(k)) openHours.add(k); render(); }));
   el.querySelectorAll("[data-push]").forEach(b => b.addEventListener("click", () => refresh("points.push", { key: b.dataset.push })));
   el.querySelectorAll("[data-remove-time]").forEach(b => b.addEventListener("click", () => refresh("time.remove", { id: b.dataset.removeTime })));

@@ -28,8 +28,8 @@ class ReviewTests(unittest.TestCase):
         self.store.save()
         self.dir.cleanup()
 
-    HOURS = {"PROJ-1": {"total": 40_800.0, "session": 40_800.0, "manual": 0.0, "meeting": 0.0, "kinds": {"實作": 40_800.0}},
-             "PROJ-2": {"total": 86_400.0, "session": 82_800.0, "manual": 3600.0, "meeting": 3600.0, "kinds": {"實作": 82_800.0, "會議": 3600.0}}}
+    HOURS = {"PROJ-1": {"total": 40_800.0, "session": 40_800.0, "manual": 0.0, "meeting": 0.0, "kinds": {"Session": 40_800.0}},
+             "PROJ-2": {"total": 86_400.0, "session": 82_800.0, "manual": 3600.0, "meeting": 3600.0, "kinds": {"Session": 82_800.0, "會議": 3600.0}}}
 
     def rows(self):
         return review.ticket_rows(self.sprint, self.store.tickets, self.HOURS, 8)
@@ -39,7 +39,7 @@ class ReviewTests(unittest.TestCase):
         # PROJ-1: 11h20m ÷ 8 = 1.42, the old stored override 3 is ignored; PROJ-3: no hours → no actual.
         self.assertEqual(rows["PROJ-1"]["actual"], 1.42)
         self.assertIsNone(rows["PROJ-3"]["actual"])
-        self.assertEqual(rows["PROJ-2"]["kinds"], {"實作": 82_800.0, "會議": 3600.0})
+        self.assertEqual(rows["PROJ-2"]["kinds"], {"Session": 82_800.0, "會議": 3600.0})
         self.assertEqual(review.ticket_rows(self.sprint, self.store.tickets, self.HOURS, 4)[0]["actual"], 2.83)
 
     def test_remaining_goes_negative_once_the_estimate_is_used_up(self):
@@ -72,7 +72,7 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(m["ratio"], 0.55)
         self.assertEqual(m["seconds"], 127_200.0)
         self.assertEqual(m["meetingSeconds"], 3600.0)
-        self.assertEqual(m["kinds"], {"實作": 123_600.0, "會議": 3600.0})
+        self.assertEqual(m["kinds"], {"Session": 123_600.0, "會議": 3600.0})
         self.assertEqual(m["hoursPerPoint"], round(127_200 / 3600 / 4.42, 1))
 
     def test_metrics_add_counted_work_without_a_ticket(self):
@@ -81,7 +81,7 @@ class ReviewTests(unittest.TestCase):
                  {"start": 0, "end": 3600, "kind": "會議", "counted": False}]   # not counted: shown, adds nothing
         m = review.metrics(self.rows(), other)
         self.assertEqual((m["seconds"], m["meetingSeconds"], m["otherSeconds"]), (127_200.0 + 9000, 3600.0 + 7200, 9000))
-        self.assertEqual(m["kinds"], {"實作": 123_600.0, "會議": 10_800.0, "其他": 1800.0})
+        self.assertEqual(m["kinds"], {"Session": 123_600.0, "會議": 10_800.0, "其他": 1800.0})
         # Points and the ratio stay the tickets' own; so does hours per point.
         self.assertEqual((m["actual"], m["ratio"], m["hoursPerPoint"]), (4.42, 0.55, round(127_200 / 3600 / 4.42, 1)))
 

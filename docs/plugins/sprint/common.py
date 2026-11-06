@@ -1,9 +1,19 @@
 """Helpers every sprint command shares: Jira access, the payload's session, the target sprint."""
+import os
+
 from jira import TICKET_FIELDS, Jira, JiraError, parse_issue
 import review
 
 
+def dry_run():
+    """cubi's offline renders (CUBI_RENDER) on the user's real data: draw, but change nothing,
+    here or in Jira. With test data (CUBI_SPRINT_DIR) a render may write as usual."""
+    return bool(os.environ.get("CUBI_RENDER")) and not os.environ.get("CUBI_SPRINT_DIR")
+
+
 def jira(store):
+    if dry_run():
+        raise JiraError("離線渲染不連 Jira")
     return Jira(store.config["site"], store.config["netrc"])
 
 

@@ -20,7 +20,7 @@ from timers import MAX_ENTRY, ORPHAN_AFTER, TIMER_KIND, TimerMixin  # noqa: F401
 DEFAULT_DIR = "~/Library/Application Support/cubi/sprint"
 KEY_RE = re.compile(r"[A-Z][A-Z0-9_]+-[0-9]+")
 LABEL_RE = re.compile(r"[A-Za-z0-9_-]{1,32}")
-SESSION_KIND = "實作"   # what session stretches are called next to manual kinds
+SESSION_KIND = "Session"   # what session stretches are called next to manual kinds (a session may plan, then build)
 FILES = ("config.json", "sprints.json", "tickets.json", "bindings.json", "segments.json")
 
 DEFAULT_CONFIG = {

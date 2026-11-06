@@ -13,6 +13,8 @@ from store import ORPHAN_AFTER, remaining_seconds, tone_for
 
 # A timer running longer than this is probably forgotten: the card shows it in red.
 LONG_TIMER = 8 * 3600
+# Tickets listed on the card; the rest are counted in one line pointing to the panel.
+MAX_TICKET_ROWS = 8
 
 
 def session_info(store, p, sync=False):
@@ -32,7 +34,9 @@ def session_info(store, p, sync=False):
     timer = store.timer(p["id"])
     now = time.time()
     rows = []
-    for key in keys:
+    # cubi shows 10 rows: room for 今日, 計時中 and a 還有 N 張 line besides the tickets.
+    shown = keys if len(keys) <= MAX_TICKET_ROWS else keys[:MAX_TICKET_ROWS - (1 if timer else 0)]
+    for key in shown:
         t = store.tickets.get(key, {})
         secs = worked.get(key, {}).get("total", 0)
         summary = t.get("summary") or ("Jira 查不到這張單" if t.get("notFound") else "（還沒從 Jira 讀到）")
@@ -53,6 +57,8 @@ def session_info(store, p, sync=False):
             else:
                 row["value"] = f"{remaining_text(left)} · {summary}"
         rows.append(row)
+    if len(shown) < len(keys):
+        rows.append({"label": "還有", "value": f"{len(keys) - len(shown)} 張沒列出：開面板看綁定總覽"})
     if not keys:
         rows.append(["工單", "未綁定；按 ＋ 綁單號"])
     else:

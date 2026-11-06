@@ -29,6 +29,10 @@ if let i = arguments.firstIndex(of: "--render-island"), i + 3 < arguments.count 
 
 // Offline picture of a tool plugin's panel, real web view and bridge, window kept off screen:
 //   --render-panel <tool id> <out.png> [--dark] [--height N] [--eval JS]   (JS runs after load, the shot 2 s later; point the plugin at test data with its own env, e.g. CUBI_SPRINT_DIR)
+// Both renders are dry runs for the plugins they run: CUBI_RENDER tells a plugin not to write its
+// real data (a test-data override is fine). See docs/advanced.md.
+if arguments.contains("--render-panel") || arguments.contains("--render-widget") { setenv("CUBI_RENDER", "1", 1) }
+
 if let i = arguments.firstIndex(of: "--render-panel"), i + 2 < arguments.count {
     let id = arguments[i + 1], out = URL(fileURLWithPath: arguments[i + 2]), dark = arguments.contains("--dark")
     let height = arguments.firstIndex(of: "--height").flatMap { $0 + 1 < arguments.count ? Double(arguments[$0 + 1]) : nil }

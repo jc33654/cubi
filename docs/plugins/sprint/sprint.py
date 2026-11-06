@@ -17,7 +17,7 @@ from datetime import date, datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import review  # noqa: E402
 from card import claude_session_ids, remaining_text, session_info, tick, timer_start  # noqa: E402,F401
-from common import apply_issue, fetch_tickets, jira, pts, rows_for, session_of, target_sprint  # noqa: E402,F401
+from common import apply_issue, dry_run, fetch_tickets, jira, pts, rows_for, session_of, target_sprint  # noqa: E402,F401
 from jira import JiraError, parse_issue, TICKET_FIELDS  # noqa: E402
 from store import Store, empty_review  # noqa: E402
 
@@ -54,6 +54,8 @@ def panel_state(store, p):
                          for s in sorted(store.sprints["sprints"].values(), key=lambda s: (s.get("start") or "", s["label"]))],
              "current": store.sprints.get("current"), "session": binding, "history": review.history(store),
              "today": date.today().isoformat(), "site": store.config["site"], "warnings": list(store.warnings),
+             "bindings": sorted(({"sid": sid, "name": rec.get("name") or sid[:8], "keys": keys, "shares": store.shares(rec)}
+                                 for sid, rec in store.bindings.items() for keys in [store.bound_keys(rec)] if keys), key=lambda b: b["name"]),
              "timers": [{"sid": sid, "name": store.bindings.get(sid, {}).get("name", sid[:8]), "start": t["start"],
                          "keys": list(t["shares"])} for sid, t in store.segments["timers"].items()]}
     if sprint:
@@ -196,11 +198,17 @@ def session_bind(store, p):
 
 
 def session_unbind(store, p):
-    """From the panel: `key`; from the card's 解除 buttons: the key cubi passes back as `input`."""
-    s = session_of(p)
+    """From the panel: `key` (and `sid` from the bindings overview, any session); from the card's
+    ✕ buttons: the key cubi passes back as `input`."""
     keys = store.extract_keys(p.get("key", ""), p.get("input", ""))
     if not keys:
         raise ValueError("要解除哪張單？")
+    if p.get("sid"):
+        if p["sid"] not in store.bindings:
+            raise ValueError("找不到這個 session 的綁定")
+        store.unbind(p["sid"], keys[0])
+        return panel_state(store, p)
+    s = session_of(p)
     store.unbind(s["id"], keys[0])
     return panel_state(store, p) if "session" in p else session_info(store, s)
 
@@ -225,6 +233,8 @@ def review_update(store, p):
 
 
 def review_dir(store):
+    if dry_run():
+        raise ValueError("離線渲染不寫回顧檔")
     folder = os.path.expanduser(store.config["reviewDir"])
     os.makedirs(folder, exist_ok=True)
     return folder
@@ -300,7 +310,8 @@ def main(argv):
     try:
         result = ACTIONS[argv[1]](store, payload)
         # Only a run that got through writes anything: a half-done action leaves the files alone.
-        store.save()
+        if not dry_run():
+            store.save()
     except (JiraError, ValueError) as e:
         result = {"error": str(e)}
     except KeyError as e:

@@ -54,7 +54,7 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(hours["PROJ-1"]["manual"], 3600)
         self.assertEqual(hours["PROJ-1"]["meeting"], 3600)
         self.assertAlmostEqual(hours["PROJ-1"]["total"], 1950 + 3600, places=0)
-        self.assertEqual({k: round(v) for k, v in hours["PROJ-1"]["kinds"].items()}, {"實作": 1950, "會議": 3600})
+        self.assertEqual({k: round(v) for k, v in hours["PROJ-1"]["kinds"].items()}, {"Session": 1950, "會議": 3600})
         # A window cuts the stretches, not the entries' existence.
         self.assertAlmostEqual(self.store.hours_by_key(since=2800, until=4600)["PROJ-1"]["session"], 900, places=0)
 

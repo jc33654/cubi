@@ -41,13 +41,13 @@ final class HookSetupModel {
 
     func previewInstall(plugin: any AgentPlugin = ClaudeCodePlugin()) {
         startAction()
+        refresh()   // read the file again first: an old read error goes, whatever comes next
         do {
             let retire = plugin.id == ClaudeCodePlugin.agentID && retireLegacyNotification ? ["notify-hook.sh"] : []
             guard let p = try HookSetup.installPreview(plugin: plugin, retireCommandsContaining: retire) else {
                 message = "\(plugin.displayName) 要手動安裝。"; return
             }
             if !p.plan.changed { message = "已經裝好了，沒有要改的東西。"; return }
-            refresh()   // the file reads again: an old read error goes
             pending = p
             pendingIsUninstall = false
         } catch { self.error = error.localizedDescription }
@@ -55,10 +55,10 @@ final class HookSetupModel {
 
     func previewUninstall(plugin: any AgentPlugin = ClaudeCodePlugin()) {
         startAction()
+        refresh()   // read the file again first: an old read error goes, whatever comes next
         do {
             guard let p = try HookSetup.uninstallPreview(plugin: plugin) else { message = "\(plugin.displayName) 要手動移除。"; return }
             if !p.plan.changed { message = "\(p.url.lastPathComponent) 裡沒有 Cubi 的東西。"; return }
-            refresh()   // the file reads again: an old read error goes
             pending = p
             pendingIsUninstall = true
         } catch { self.error = error.localizedDescription }

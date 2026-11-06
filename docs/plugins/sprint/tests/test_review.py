@@ -90,6 +90,8 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(review.capacity(self.sprint, self.rows(), 4, today=date(2026, 11, 1))["roomLeft"], 18)   # before the start, 2 pts a day
         self.assertEqual(review.capacity(self.sprint, self.rows(), 8, today=date(2026, 11, 20))["workdaysLeft"], 0)
         self.assertIsNone(review.capacity({"label": "x"}, self.rows(), 8)["room"])
+        rows = self.rows() + [{"estimate": 0, "done": False}, {"estimate": None, "done": False}]
+        self.assertEqual(review.capacity(self.sprint, rows, 8, today=date(2026, 11, 10))["unestimated"], 1)   # 0 points is an estimate
 
     def test_markdown(self):
         self.sprint["review"] = {"summary": "整體順利。", "wentWell": ["一次過"], "toImprove": ["估少了"], "suggestions": ["加 buffer"], "thanks": [{"who": "某人", "why": "幫忙查"}]}

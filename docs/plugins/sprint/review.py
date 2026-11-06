@@ -148,7 +148,7 @@ def capacity(sprint, rows, hours_per_point, today=None):
     WORKDAY_HOURS ÷ hours-per-point points. Room is counted from today (or the start) to the end."""
     out = {"pending": round(sum(r["estimate"] or 0 for r in rows if not r["done"]), 2),
            "planned": round(sum(r["estimate"] or 0 for r in rows), 2),
-           "unestimated": sum(1 for r in rows if not r["done"] and not r["estimate"]),
+           "unestimated": sum(1 for r in rows if not r["done"] and r["estimate"] is None),
            "workdays": None, "workdaysLeft": None, "room": None, "roomLeft": None}
     start, end = parse_date(sprint.get("start")), parse_date(sprint.get("end"))
     if not start or not end or end < start or not hours_per_point:
@@ -156,7 +156,7 @@ def capacity(sprint, rows, hours_per_point, today=None):
     today = today or date.today()
     per_day = WORKDAY_HOURS / hours_per_point
     out["workdays"] = workdays(start, end)
-    out["workdaysLeft"] = workdays(max(start, today), end) if today <= end else 0
+    out["workdaysLeft"] = workdays(max(start, today), end)
     out["room"] = round(out["workdays"] * per_day, 2)
     out["roomLeft"] = round(out["workdaysLeft"] * per_day, 2)
     return out

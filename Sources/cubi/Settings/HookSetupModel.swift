@@ -7,6 +7,9 @@ import CubiKit
 @Observable
 final class HookSetupModel {
     var status: ClaudeHookInstaller.Status?
+    /// Why settings.json could not be read; refresh() owns it.
+    var readError: String?
+    /// The last action's outcome: what it did, or why it failed. Only actions touch these.
     var error: String?
     var message: String?
     var retireLegacyNotification = false
@@ -26,10 +29,10 @@ final class HookSetupModel {
     func refresh() {
         do {
             status = try HookSetup.status()
-            error = nil
+            readError = nil
         } catch {
             status = nil
-            self.error = error.localizedDescription
+            readError = error.localizedDescription
         }
         let dirs = (UserDefaults.standard.stringArray(forKey: Self.projectLocalKey) ?? [])
             .map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath) }
@@ -37,6 +40,7 @@ final class HookSetupModel {
     }
 
     func previewInstall(plugin: any AgentPlugin = ClaudeCodePlugin()) {
+        startAction()
         do {
             let retire = plugin.id == ClaudeCodePlugin.agentID && retireLegacyNotification ? ["notify-hook.sh"] : []
             guard let p = try HookSetup.installPreview(plugin: plugin, retireCommandsContaining: retire) else {
@@ -49,6 +53,7 @@ final class HookSetupModel {
     }
 
     func previewUninstall(plugin: any AgentPlugin = ClaudeCodePlugin()) {
+        startAction()
         do {
             guard let p = try HookSetup.uninstallPreview(plugin: plugin) else { message = "\(plugin.displayName) 要手動移除。"; return }
             if !p.plan.changed { message = "\(p.url.lastPathComponent) 裡沒有 Cubi 的東西。"; return }
@@ -59,33 +64,37 @@ final class HookSetupModel {
 
     func confirmPending() {
         guard let p = pending else { return }
-        var failure: String?
+        startAction()
         do {
             let backup = try HookSetup.apply(p)
             message = (pendingIsUninstall ? "已移除。" : "已安裝。") + (backup.map { "備份：\($0.lastPathComponent)" } ?? "")
             needsRestart = true
             lastWriteSucceeded = true
-            error = nil
         } catch {
             lastWriteSucceeded = false
-            failure = error.localizedDescription
+            self.error = error.localizedDescription
         }
         pending = nil
         revision += 1
         refresh()
-        // refresh() resets `error` from reading the file; a failed write must still say why.
-        if let failure { error = failure }
     }
 
     func cancelPending() { pending = nil }
 
     /// Leaving a settings page: what the last action said belonged to that page.
     func clearFeedback() {
-        message = nil
+        startAction()
         refresh()
     }
 
+    /// A new action: the previous one's message and error no longer apply.
+    private func startAction() {
+        message = nil
+        error = nil
+    }
+
     func stripProjectLocal(_ url: URL) {
+        startAction()
         do {
             try HookSetup.stripProjectLocalHooks(at: url)
             message = "已從 \(url.path) 移除測試用 hooks（備份在同目錄 backups/）。"

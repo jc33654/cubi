@@ -52,6 +52,7 @@ struct HookFeedback: View {
             Label("已開著的 session 要重開才會生效", systemImage: "arrow.clockwise").foregroundStyle(Dash.warning)
         }
         if let m = hooks.message { Text(m).foregroundStyle(.secondary) }
+        if let e = hooks.readError { Text(e).foregroundStyle(Dash.danger) }
         if let e = hooks.error { Text(e).foregroundStyle(Dash.danger) }
     }
 }

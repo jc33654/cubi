@@ -4,6 +4,8 @@ import Foundation
 /// one `<style>` put first in the document (so the page's own rules still win), and
 /// `window.cubiIcon(name)` for a few line icons. Light and dark follow the system. Every class
 /// starts with `cubi-`; the base rules (body, buttons, inputs, tables) only reach pages that asked.
+/// A `cubi-tip`'s `title` shows in a bubble of the kit's own on hover, and stays on a click: the
+/// system's tooltip is not reliable in Cubi's windows.
 enum PanelStyleKit {
     static let script = """
     (function () {
@@ -18,6 +20,38 @@ enum PanelStyleKit {
         var n = size || 16;
         return '<svg class="cubi-icon" width="' + n + '" height="' + n + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
       };
+      var bubble = null;
+      function hide() { if (bubble) { bubble.remove(); bubble = null; } }
+      function show(t, pin) {
+        if (t.hasAttribute('title')) { t.dataset.tip = t.title; t.setAttribute('aria-label', t.title); t.removeAttribute('title'); }
+        if (!bubble || bubble.owner !== t) {
+          hide();
+          if (!t.dataset.tip) return;
+          bubble = document.createElement('div');
+          bubble.className = 'cubi-tip-bubble';
+          bubble.textContent = t.dataset.tip;
+          bubble.owner = t;
+          document.body.appendChild(bubble);
+          var r = t.getBoundingClientRect(), b = bubble.getBoundingClientRect();
+          var top = r.bottom + 6 + b.height > innerHeight - 8 ? r.top - 6 - b.height : r.bottom + 6;
+          bubble.style.left = Math.max(8, Math.min(r.left + r.width / 2 - b.width / 2, innerWidth - b.width - 8)) + 'px';
+          bubble.style.top = Math.max(8, top) + 'px';
+        }
+        if (pin) bubble.pinned = true;
+      }
+      var tipOf = function (e) { return e.target.closest ? e.target.closest('.cubi-tip') : null; };
+      document.addEventListener('mouseover', function (e) {
+        var t = tipOf(e);
+        if (t) show(t, false);
+        else if (bubble && !bubble.pinned) hide();
+      });
+      document.addEventListener('click', function (e) {
+        var t = tipOf(e);
+        if (!t) { hide(); return; }
+        e.preventDefault();   // a tip inside a <label> must not tick or focus its field
+        if (bubble && bubble.owner === t && bubble.pinned) hide(); else show(t, true);
+      }, true);
+      document.addEventListener('scroll', hide, true);
     })();
     """
 
@@ -115,6 +149,10 @@ enum PanelStyleKit {
     .cubi-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .cubi-muted { color: var(--cubi-ink3); font-size: 12px; }
     .cubi-tip { color: var(--cubi-ink3); cursor: help; display: inline-flex; }
+    .cubi-tip:hover { color: var(--cubi-accent); }
+    .cubi-tip-bubble { position: fixed; z-index: 1000; max-width: 280px; padding: 7px 10px; border-radius: 8px; pointer-events: none;
+      background: var(--cubi-ink); color: var(--cubi-card); font-size: 12px; font-weight: 400; line-height: 1.45; white-space: pre-line;
+      text-transform: none; letter-spacing: 0; box-shadow: 0 6px 18px rgba(0, 0, 0, .18); }
 
     .cubi-table { width: 100%; border-collapse: collapse; }
     .cubi-table th { text-align: left; font-size: 11px; font-weight: 600; color: var(--cubi-ink3); text-transform: uppercase; letter-spacing: .05em; padding: 8px 10px; border-bottom: 1px solid var(--cubi-line); white-space: nowrap; }

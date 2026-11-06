@@ -14,13 +14,13 @@ import time
 import uuid
 from pathlib import Path
 
-from review import remaining_seconds, tone_for  # noqa: F401  (re-exported)
+from review import MEETING_KINDS, remaining_seconds, tone_for  # noqa: F401  (re-exported)
 from timers import MAX_ENTRY, ORPHAN_AFTER, TIMER_KIND, TimerMixin  # noqa: F401
 
 DEFAULT_DIR = "~/Library/Application Support/cubi/sprint"
 KEY_RE = re.compile(r"[A-Z][A-Z0-9_]+-[0-9]+")
 LABEL_RE = re.compile(r"[A-Za-z0-9_-]{1,32}")
-MEETING_KINDS = ("會議", "討論")
+SESSION_KIND = "實作"   # what session stretches are called next to manual kinds
 FILES = ("config.json", "sprints.json", "tickets.json", "bindings.json", "segments.json")
 
 DEFAULT_CONFIG = {
@@ -32,7 +32,7 @@ DEFAULT_CONFIG = {
     # are labels on the issues.
     "jql": 'project in ({projects}) AND labels = "{label}" AND assignee = currentUser() ORDER BY key',
     "pointsField": "customfield_10016",
-    # A number field to push the actual points to; empty keeps them local.
+    # A number field to push the actual points (hours ÷ hours-per-point) to; empty: no push button.
     "actualPointsField": "",
     # One point of estimate is this many hours of work.
     "hoursPerPoint": 8,
@@ -121,7 +121,7 @@ class Store(TimerMixin):
 
     def ticket(self, key):
         return self.tickets.setdefault(key, {"key": key, "summary": "", "status": "", "done": False,
-                                             "estimate": None, "actual": None, "doneAt": None, "notes": ""})
+                                             "estimate": None, "doneAt": None, "notes": ""})
 
     def add_to_sprint(self, label, key):
         s = self.sprint(label)
@@ -218,10 +218,11 @@ class Store(TimerMixin):
             if not entry.get("shares"):
                 entry["shares"] = shares
 
-    def add_manual(self, key, start, minutes, kind="開發", note="", calendar=False):
+    def add_manual(self, key, start, minutes, kind="開發", note="", calendar=False, sprint=None, counted=True):
         """One stretch of work cubi did not see. A timer's entry also carries `shares` (split over
         several tickets, `key` the first) and `session` (its own stretches over the same minutes
-        are not counted twice)."""
+        are not counted twice). Work with no ticket has `key` None and belongs to `sprint`;
+        `counted` says whether it adds to the sprint's hours."""
         try:
             start, minutes = float(start), float(minutes)
         except (TypeError, ValueError):
@@ -230,6 +231,8 @@ class Store(TimerMixin):
             raise ValueError("長度要在 1 分鐘到 24 小時之間")
         entry = {"id": uuid.uuid4().hex[:12], "key": key, "start": start, "end": start + minutes * 60,
                  "kind": kind, "note": note, "calendar": bool(calendar)}
+        if key is None:
+            entry.update(sprint=sprint, counted=bool(counted))
         self.segments["manual"].append(entry)
         return entry
 
@@ -258,23 +261,35 @@ class Store(TimerMixin):
                 secs += self._timer_extra(m, since, until) * part(m.get("shares") or {m["key"]: 100})
         return secs
 
+    def other_work(self, label):
+        """The sprint's work that has no ticket."""
+        return [m for m in self.segments["manual"] if m.get("key") is None and m.get("sprint") == label]
+
     def hours_by_key(self, since=None, until=None):
         """Seconds per key within [since, until]: session stretches split by their shares, manual
-        entries whole. 'meeting' is the part of 'manual' whose kind is a meeting or discussion."""
+        entries whole. 'meeting' is the part of 'manual' whose kind is a meeting or discussion;
+        'kinds' is the same seconds by kind, session stretches as SESSION_KIND."""
         out = {}
 
         def bucket(key):
-            return out.setdefault(key, {"session": 0.0, "manual": 0.0, "meeting": 0.0})
+            return out.setdefault(key, {"session": 0.0, "manual": 0.0, "meeting": 0.0, "kinds": {}})
+
+        def add(b, kind, secs):
+            b["kinds"][kind] = b["kinds"].get(kind, 0.0) + secs
 
         for sess in self.segments["sessions"].values():
             for start, seg in sess.items():
                 secs = overlap(float(start), seg["end"], since, until)
                 for key, pct in (seg.get("shares") or {}).items():
                     bucket(key)["session"] += secs * pct / 100
+                    add(bucket(key), SESSION_KIND, secs * pct / 100)
         for m in self.segments["manual"]:
+            if m.get("key") is None:
+                continue
             secs = self._timer_extra(m, since, until)
             for key, pct in (m.get("shares") or {m["key"]: 100}).items():
                 bucket(key)["manual"] += secs * pct / 100
+                add(bucket(key), m.get("kind") or "其他", secs * pct / 100)
                 if m.get("kind") in MEETING_KINDS:
                     bucket(key)["meeting"] += secs * pct / 100
         for b in out.values():
@@ -287,9 +302,9 @@ class Store(TimerMixin):
         entries = []
         for m in self.segments["manual"]:
             if m.get("calendar") and m["end"] >= now - window and 60 <= m["end"] - m["start"] <= MAX_ENTRY:
-                keys = list(m.get("shares") or [m["key"]])
+                keys = list(m.get("shares") or ([m["key"]] if m.get("key") else []))
                 entries.append({
-                    "title": f"{' '.join(keys)} {m.get('note') or ''}（{m.get('kind', '')}）".replace("  ", " "),
+                    "title": f"{' '.join(keys)} {m.get('note') or ''}（{m.get('kind', '')}）".replace("  ", " ").strip(),
                     "start": m["start"], "end": m["end"],
                     "notes": "\n".join(([m["reason"]] if m.get("reason") else []) + [self.browse_url(k) for k in keys]),
                     "marker": f"sprint:manual:{m['id']}",

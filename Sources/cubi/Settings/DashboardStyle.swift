@@ -100,10 +100,33 @@ func switchToggle(_ isOn: Binding<Bool>) -> some View {
     Toggle("", isOn: isOn).labelsHidden().toggleStyle(.switch).controlSize(.small)
 }
 
+/// ⓘ: the explanation pops over on hover and stays on a click. Not `.help`: the system tooltip
+/// did not show in Cubi's windows.
 struct InfoTip: View {
     let text: String
+    @State private var shown = false
+    @State private var pinned = false
+    @State private var closedAt = Date.distantPast
+    @State private var closedPinned = false
+
     var body: some View {
-        Image(systemName: "info.circle").font(.system(size: 11)).foregroundStyle(.secondary).help(text)
+        Image(systemName: "info.circle").font(.system(size: 11))
+            .foregroundStyle(shown ? Dash.accent : .secondary)
+            .contentShape(Rectangle())
+            .onHover { inside in if !pinned { shown = inside } }
+            .onTapGesture {
+                if Date().timeIntervalSince(closedAt) < 0.3 {           // the system closed it on mouse-down
+                    if !closedPinned { pinned = true; shown = true }     // was only hovering: pin it
+                    return                                               // was pinned: the click closed it
+                }
+                pinned.toggle(); shown = pinned
+            }
+            .popover(isPresented: $shown, arrowEdge: .bottom) {
+                Text(text).font(.system(size: 12)).frame(maxWidth: 280, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true).padding(10)
+            }
+            .onChange(of: shown) { _, now in if !now { closedPinned = pinned; pinned = false; closedAt = Date() } }
+            .accessibilityLabel(text)
     }
 }
 

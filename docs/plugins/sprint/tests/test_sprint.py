@@ -3,6 +3,7 @@ import os
 import tempfile
 import time
 import unittest
+from datetime import datetime
 
 import sprint
 from store import Store
@@ -27,6 +28,53 @@ class CardTests(unittest.TestCase):
         self.assertTrue(rows[0]["starred"])
         rows = sprint.ticket_update(self.store, {"key": "PROJ-1", "starred": False})["sprint"]["tickets"]
         self.assertFalse(rows[0]["starred"])
+
+    def test_work_without_a_ticket_goes_to_the_current_sprint(self):
+        with self.assertRaises(ValueError):
+            sprint.time_add(self.store, {"start": "2026-11-06T10:00", "minutes": 60, "note": "SOP 會議"})   # no sprint yet
+        self.store.new_sprint("Sprint7")
+        with self.assertRaises(ValueError):
+            sprint.time_add(self.store, {"start": "2026-11-06T10:00", "minutes": 60, "note": "  "})       # says what it was
+        sprint.time_add(self.store, {"start": "2026-11-06T10:00", "minutes": 60, "kind": "會議", "note": "SOP 會議"})
+        out = sprint.time_add(self.store, {"start": "2026-11-06T11:00", "minutes": 30, "kind": "其他", "note": "面試", "counted": False})
+        s = out["sprint"]
+        self.assertEqual([(m["note"], m["counted"]) for m in s["other"]], [("SOP 會議", True), ("面試", False)])
+        self.assertEqual((s["metrics"]["seconds"], s["metrics"]["meetingSeconds"], s["metrics"]["otherSeconds"]), (3600, 3600, 3600))
+        self.assertEqual(s["manual"], [])
+
+    def test_points_push_sends_the_points_worked_out_from_hours(self):
+        sent = []
+
+        class FakeJira:
+            def set_field(self, key, field, value):
+                sent.append((key, field, value))
+        self.store.config["actualPointsField"] = "customfield_1"
+        self.store.ticket("PROJ-1")["actual"] = 9   # an old override: ignored
+        self.store.new_sprint("Sprint7")
+        self.store.add_to_sprint("Sprint7", "PROJ-1")
+        real, sprint.jira = sprint.jira, lambda store: FakeJira()
+        try:
+            with self.assertRaises(ValueError):
+                sprint.points_push(self.store, {"key": "PROJ-1"})    # nothing worked yet
+            self.store.add_manual("PROJ-1", time.time() - 7200, 120)
+            sprint.points_push(self.store, {"key": "PROJ-1"})
+            # Worked over two sprints: the ticket's field gets all of it, not the current sprint's part.
+            ts = lambda d: datetime.fromisoformat(d).timestamp()   # noqa: E731
+            self.store.new_sprint("Sprint8", "", "2026-11-16", "2026-11-27")
+            self.store.add_to_sprint("Sprint8", "PROJ-1")
+            self.store.add_manual("PROJ-1", ts("2026-11-17T09:00"), 240)
+            sprint.points_push(self.store, {"key": "PROJ-1"})
+        finally:
+            sprint.jira = real
+        self.assertEqual(sent, [("PROJ-1", "customfield_1", 0.25), ("PROJ-1", "customfield_1", 0.75)])
+
+    def test_work_without_a_ticket_goes_to_the_sprint_of_its_date(self):
+        self.store.new_sprint("Sprint7", "", "2026-11-02", "2026-11-13")
+        self.store.new_sprint("Sprint8", "", "2026-11-16", "2026-11-27")   # now current
+        sprint.time_add(self.store, {"start": "2026-11-13T17:00", "minutes": 30, "note": "上一期最後一天的會"})
+        sprint.time_add(self.store, {"start": "2026-12-20T10:00", "minutes": 30, "note": "不在任何一期"})
+        self.assertEqual([m["note"] for m in self.store.other_work("Sprint7")], ["上一期最後一天的會"])
+        self.assertEqual([m["note"] for m in self.store.other_work("Sprint8")], ["不在任何一期"])
 
     def test_unbind_buttons_name_their_ticket(self):
         self.store.ticket("PROJ-2").update(summary="乙", estimate=1.0)

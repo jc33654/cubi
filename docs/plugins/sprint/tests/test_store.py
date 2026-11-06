@@ -54,6 +54,7 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(hours["PROJ-1"]["manual"], 3600)
         self.assertEqual(hours["PROJ-1"]["meeting"], 3600)
         self.assertAlmostEqual(hours["PROJ-1"]["total"], 1950 + 3600, places=0)
+        self.assertEqual({k: round(v) for k, v in hours["PROJ-1"]["kinds"].items()}, {"實作": 1950, "會議": 3600})
         # A window cuts the stretches, not the entries' existence.
         self.assertAlmostEqual(self.store.hours_by_key(since=2800, until=4600)["PROJ-1"]["session"], 900, places=0)
 
@@ -90,6 +91,15 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(entries[0]["title"], "PROJ-1 站會（會議）")
         self.assertEqual(entries[1]["title"], "PROJ-1 登入")
         self.assertEqual(entries[1]["notes"], "https://jira.example/browse/PROJ-1")
+
+    def test_work_without_a_ticket_belongs_to_its_sprint_not_to_any_key(self):
+        e = self.store.add_manual(None, 96_000, 30, kind="會議", note="異常 SOP 會議", calendar=True, sprint="Sprint7", counted=False)
+        self.store.add_manual(None, 96_000, 30, kind="其他", note="別的 sprint", sprint="Sprint6")
+        self.assertEqual((e["sprint"], e["counted"]), ("Sprint7", False))
+        self.assertEqual([m["note"] for m in self.store.other_work("Sprint7")], ["異常 SOP 會議"])
+        self.assertEqual(self.store.hours_by_key(), {})
+        entries = self.store.calendar_entries(100_000.0, window=10_000)
+        self.assertEqual([(x["title"], x["notes"]) for x in entries], [("異常 SOP 會議（會議）", "")])
 
     def test_manual_entries_are_validated(self):
         with self.assertRaises(ValueError):
@@ -132,12 +142,12 @@ class StoreTests(unittest.TestCase):
     def test_save_and_reload_round_trip(self):
         self.store.new_sprint("Sprint7", "Sprint 7", "2026-11-03", "2026-11-14", "目標")
         self.store.add_to_sprint("Sprint7", "PROJ-1")
-        self.store.ticket("PROJ-1")["actual"] = 2.5
+        self.store.ticket("PROJ-1")["notes"] = "備註"
         self.store.save()
         again = Store(self.dir.name)
         self.assertEqual(again.sprints["current"], "Sprint7")
         self.assertEqual(again.sprint("Sprint7")["keys"], ["PROJ-1"])
-        self.assertEqual(again.tickets["PROJ-1"]["actual"], 2.5)
+        self.assertEqual(again.tickets["PROJ-1"]["notes"], "備註")
         self.assertEqual(again.config["site"], "jira.example")
 
 

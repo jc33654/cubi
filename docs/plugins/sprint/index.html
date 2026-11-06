@@ -7,7 +7,12 @@
   /* Only what the cubi style kit (manifest panel.style: "cubi") does not already give. */
   .tight td { padding-top: 8px; padding-bottom: 8px; }
   .key { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; white-space: nowrap; }
-  td input.actual { width: 64px; text-align: right; padding: 3px 6px; }
+  .hours-btn { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+  .hours-btn:hover, .hours-btn.on { color: var(--cubi-accent); }
+  .hours-btn small { color: var(--cubi-ink3); }
+  .kinds { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; }
+  .kinds span { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .kinds b { font-weight: 600; margin-right: 4px; }
   /* Fixed columns: the summary takes what is left (cut with …), so the table never runs past its card. */
   .scroll-x { overflow-x: auto; }
   table.fixed .remain { min-width: 0; }
@@ -67,6 +72,7 @@ const CAT_COLORS = ["var(--cubi-c2)", "var(--cubi-c4)", "var(--cubi-c1)", "var(-
 const TABS = { overview: ["dashboard", "總覽"], review: ["review", "回顧"], settings: ["settings", "設定"] };
 let state = null, session = window.cubiSession || null;
 let pendingSprint = false, selectedCategory = null, pendingTime = null, briefPoll = null;
+const openHours = new Set();   // tickets (and "*", the whole sprint) whose hours are shown by kind
 
 function status(msg, isError) { const el = $("#status"); el.textContent = msg || ""; el.className = "cubi-status" + (isError ? " err" : ""); if (msg && !isError) setTimeout(() => { if (el.textContent === msg) el.textContent = ""; }, 4000); }
 const bridge = () => window.webkit.messageHandlers.cubi;
@@ -179,17 +185,17 @@ function render() {
   if (el) { el.focus(); if (pos !== null) el.setSelectionRange(pos, pos); }
 }
 
-// Clicking a heading sorts by it, again reverses; starred tickets always come first.
+// Clicking a heading sorts by it, again reverses; ★ first puts the starred ones on top.
 let sortBy = null, sortDir = 1;
 function sortTh(key, label, cls = "") {
   const mark = sortBy === key ? (sortDir > 0 ? " ▲" : " ▼") : "";
   return `<th class="${cls}" data-sort="${key}" title="點一下排序">${label}${mark}</th>`;
 }
 function sortedTickets(list) {
+  const val = t => sortBy === "starred" ? (t.starred ? 0 : 1) : t[sortBy];
   const cmp = (a, b) => {
-    if (a.starred !== b.starred) return a.starred ? -1 : 1;
     if (!sortBy) return 0;
-    const x = a[sortBy], y = b[sortBy];
+    const x = val(a), y = val(b);
     if (x == null || y == null) return x == null && y == null ? 0 : x == null ? 1 : -1;   // empty last, either way
     return (typeof x === "number" ? x - y : String(x).localeCompare(String(y), "zh-Hant", { numeric: true })) * sortDir;
   };
@@ -264,9 +270,10 @@ function renderOverview() {
       ${kpi("完成點數", "check", `${pts(m.donePoints)}<span class="cubi-muted"> / ${pts(m.estimate)}</span>`, prev ? `上個 sprint ${pts(prev.donePoints)} 點` : "估點合計", prev ? Math.round((m.donePoints - prev.donePoints) * 10) / 10 : null)}
       ${kpi("完成率", "target", `${rate}%`, `${m.done} / ${m.tickets} 張`, null)}
       ${pendingKpi(s.capacity, hpp)}
-      ${kpi("投入", "clock", fmtH(m.seconds), m.ratio ? `實際 / 估點 ${m.ratio}` : "session＋手動", null)}
+      ${kpi("投入", "clock", hoursButton("*", m.seconds), (m.seconds - m.otherSeconds >= 60 ? `單上 ≈ ${pts((m.seconds - m.otherSeconds) / 3600 / hpp)} 點 · ` : "") + (m.ratio ? `實際 / 估點 ${m.ratio}` : "session＋手動") + (m.otherSeconds ? ` · 含無單 ${fmtH(m.otherSeconds)}` : ""), null)}
       ${kpi("會議", "users", fmtH(m.meetingSeconds), m.seconds ? `佔 ${Math.round(m.meetingSeconds / m.seconds * 100)}%` : "–", null)}
     </div>
+    ${openHours.has("*") ? `<div class="cubi-card"><div class="cubi-card-head"><h2 class="cubi-card-title">投入明細</h2><span class="cubi-muted">${esc(hpp)} 小時 = 1 點</span></div>${kindsList(m.kinds, hpp)}</div>` : ""}
     <div class="cubi-grid">
       <div class="cubi-card"><div class="cubi-card-head"><h2 class="cubi-card-title">任務分類</h2><span class="cubi-spacer"></span>${tip("點一類看那些單")}</div>${categoryBlock(s)}</div>
       <div class="cubi-card"><div class="cubi-card-head"><h2 class="cubi-card-title">剩餘點數</h2><span class="cubi-spacer"></span><span class="cubi-muted">— 理想　● 實際</span></div><div class="chart">${burndownChart(s.burndown)}</div></div>
@@ -274,8 +281,8 @@ function renderOverview() {
     <div class="cubi-card" style="margin-top:16px"><div class="cubi-card-head"><h2 class="cubi-card-title">工單</h2><span class="cubi-muted">${m.tickets} 張</span><span class="cubi-spacer"></span>
       <input id="add-key" placeholder="加單號" size="12"><button class="cubi-btn small" id="add-btn">${ic("plus", 13)}加</button></div>
     <div class="scroll-x"><table class="cubi-table fixed" style="min-width:720px">
-    <colgroup><col style="width:36px"><col style="width:112px"><col><col style="width:104px"><col style="width:44px"><col style="width:88px"><col style="width:150px"><col style="width:64px"><col style="width:${state.config.actualPointsField ? 118 : 84}px"></colgroup>
-    <thead><tr><th title="有星號的永遠排最上面">★</th>${sortTh("key", "單號")}<th>摘要</th>${sortTh("status", "狀態")}${sortTh("estimate", "估", "num")}<th class="num" title="投入 ÷ ${esc(hpp)} 小時，可覆寫">實</th>${sortTh("remaining", "剩餘")}${sortTh("seconds", "投入", "num")}<th></th></tr></thead><tbody>`;
+    <colgroup><col style="width:36px"><col style="width:112px"><col><col style="width:104px"><col style="width:44px"><col style="width:150px"><col style="width:128px"><col style="width:${state.config.actualPointsField ? 118 : 84}px"></colgroup>
+    <thead><tr>${sortTh("starred", "★")}${sortTh("key", "單號")}<th>摘要</th>${sortTh("status", "狀態")}${sortTh("estimate", "估", "num")}${sortTh("remaining", "剩餘")}${sortTh("seconds", "投入", "num")}<th></th></tr></thead><tbody>`;
   for (const t of sortedTickets(s.tickets)) {
     const rt = remainTone(t), budget = (t.estimate || 0) * hpp * 3600;
     const used = budget ? Math.min(100, Math.max(0, (budget - t.remaining) / budget * 100)) : 0;
@@ -284,16 +291,16 @@ function renderOverview() {
       <td class="clip" title="${esc(t.summary)}${t.notes ? "\n" + esc(t.notes) : ""}">${esc(t.summary)}</td>
       <td title="${esc(t.status || "")}"><span class="cubi-pill ${statusTone(t)}">${esc(t.status || "–")}</span></td>
       <td class="num">${pts(t.estimate)}</td>
-      <td class="num"><input class="actual" type="number" step="0.1" min="0" value="${t.override ?? ""}" placeholder="${t.autoActual ?? "–"}" data-actual="${esc(t.key)}" title="${t.override != null ? "手動覆寫；自動算是 " + pts(t.autoActual) : "自動算的；填數字可覆寫"}"></td>
       <td>${t.remaining == null ? `<span class="cubi-muted">未估點</span>` : `<div class="remain"><div class="cubi-bar ${rt}"><i style="width:${used}%"></i></div><span style="color:var(--cubi-${rt || "ink2"})">${t.remaining < 0 ? "超 " + fmtH(-t.remaining) : fmtH(t.remaining)}</span></div>`}</td>
-      <td class="num" title="session ${fmtH(t.sessionSeconds)}，手動 ${fmtH(t.manualSeconds)}">${fmtH(t.seconds)}</td>
+      <td class="num">${hoursButton(t.key, t.seconds, hpp)}</td>
       <td class="num actions"><span class="cubi-row" style="justify-content:flex-end;flex-wrap:nowrap">
         <button class="cubi-btn icon" data-time="${esc(t.key)}" title="補時數（會議、討論）">${ic("plus", 15)}</button>
         <button class="cubi-btn icon" data-transition="${esc(t.key)}" title="換 Jira 狀態">${ic("flag", 15)}</button>
-        ${state.config.actualPointsField ? `<button class="cubi-btn icon" data-push="${esc(t.key)}" title="實際點數寫回 Jira">${ic("download", 15)}</button>` : ""}</span></td></tr>`;
+        ${state.config.actualPointsField ? `<button class="cubi-btn icon" data-push="${esc(t.key)}" title="這張單所有投入（含之前的 sprint）換算的點數寫回 Jira">${ic("download", 15)}</button>` : ""}</span></td></tr>`;
+    if (openHours.has(t.key)) html += `<tr><td colspan="8" style="white-space:normal">${kindsList(t.kinds, hpp)}</td></tr>`;
     if (pendingTime && pendingTime.key === t.key) html += timeFormRow(t.key);
   }
-  html += `</tbody></table></div></div>` + sprintInfoCard(s) + manualCard(s);
+  html += `</tbody></table></div></div>` + otherCard(s, hpp) + sprintInfoCard(s) + manualCard(s);
   el.innerHTML = html;
   bindOverview(el);
   const f = $("#t-min", el); if (f && pendingTime && pendingTime.focus) { f.focus(); pendingTime.focus = false; }
@@ -320,6 +327,30 @@ function sprintInfoCard(s) {
         <button class="cubi-btn" id="sp-resync" title="sprint 變成跟 Jira 查詢結果一模一樣，拿掉不在結果裡的單">重抓並清掉</button></div></div></div></details>`;
 }
 
+// Hours with their points (hours ÷ hours-per-point); a click shows them by kind.
+const asPts = (secs, hpp) => secs >= 60 && hpp ? ` <small>· ${pts(secs / 3600 / hpp)} 點</small>` : "";
+function hoursButton(key, secs, hpp = null) {
+  if (!secs || secs < 60) return "–";
+  return `<button class="hours-btn ${openHours.has(key) ? "on" : ""}" data-hours="${esc(key)}" title="點一下看各類工時">${fmtH(secs)}${asPts(secs, hpp)}</button>`;
+}
+function kindsList(kinds, hpp) {
+  const list = Object.entries(kinds || {}).filter(([, v]) => v >= 60).sort((a, b) => b[1] - a[1]);
+  return list.length ? `<div class="kinds">${list.map(([k, v]) => `<span><b>${esc(k)}</b>${fmtH(v)}${asPts(v, hpp)}</span>`).join("")}</div>` : `<span class="cubi-muted">沒有工時</span>`;
+}
+
+// Work with no ticket (a PM's incident meeting…): kept on the sprint; counted ones add to its hours.
+function otherCard(s, hpp) {
+  const form = pendingTime && pendingTime.key === "" ? `<div style="margin-top:10px">${timeForm("", "沒有單號")}</div>` : "";
+  const rows = s.other.map(x => `<tr><td>${new Date(x.start * 1000).toLocaleString("zh-TW", { dateStyle: "short", timeStyle: "short" })}</td><td class="num">${fmtH(x.end - x.start)}${asPts(x.end - x.start, hpp)}</td>
+      <td class="clip" title="${esc(x.note)}"><span class="cubi-pill">${esc(x.kind)}</span> ${esc(x.note)}</td>
+      <td>${x.counted ? "" : `<span class="cubi-pill" title="不算進投入">不計入</span>`}${x.calendar ? ic("clock", 13) : ""}</td>
+      <td class="num"><button class="cubi-btn icon" data-remove-time="${esc(x.id)}" title="刪除">${ic("x", 14)}</button></td></tr>`).join("");
+  return `<div class="cubi-card"><div class="cubi-card-head"><h2 class="cubi-card-title">沒有單號的工作</h2>${tip("會議、支援、面試…沒有 Jira 單但花了時間的事。記在開始時間落在的那個 sprint（沒有就記在目前的）；勾「計入工時」的會算進上方投入，不算進任何一張單")}
+      <span class="cubi-spacer"></span><button class="cubi-btn small" data-time="">${ic("plus", 13)}記一筆</button></div>
+    ${form}${rows ? `<div class="scroll-x"><table class="cubi-table tight fixed" style="min-width:560px"><colgroup><col style="width:170px"><col style="width:130px"><col><col style="width:84px"><col style="width:44px"></colgroup><tbody>${rows}</tbody></table></div>`
+      : form ? "" : `<div class="cubi-muted">還沒有。</div>`}</div>`;
+}
+
 function manualCard(s) {
   if (!s.manual.length) return "";
   return `<details class="cubi-card" id="manual-times"><summary class="cubi-card-title" style="cursor:pointer">手動時段 ${s.manual.length} 筆</summary><table class="cubi-table tight" style="margin-top:8px"><tbody>` +
@@ -330,22 +361,27 @@ function manualCard(s) {
 
 // The ＋時數 form sits right under its ticket's row and keeps what was typed across re-renders.
 function timeFormRow(key) {
+  return `<tr><td colspan="8" style="white-space:normal;overflow:visible">${timeForm(key, key)}</td></tr>`;
+}
+// key "" is work with no ticket: it needs a note and can be left out of the hours.
+function timeForm(key, title) {
   const p = pendingTime;
-  return `<tr><td colspan="9" style="white-space:normal;overflow:visible"><div class="cubi-inline cubi-row" data-time-form="${esc(key)}"><b>${esc(key)}</b>
+  return `<div class="cubi-inline cubi-row" data-time-form="${esc(key)}"><b>${esc(title)}</b>
     <input id="t-start" type="datetime-local" value="${esc(p.start)}">
     <input id="t-min" type="number" min="1" max="1440" value="${esc(p.minutes)}" style="width:80px"> 分
     <select id="t-kind">${["開發", "會議", "討論", "其他"].map(k => `<option ${k === p.kind ? "selected" : ""}>${k}</option>`).join("")}</select>
-    <input id="t-note" placeholder="備註" value="${esc(p.note)}" size="18">
+    <input id="t-note" placeholder="${key ? "備註" : "做了什麼（必填）"}" value="${esc(p.note)}" size="18">
     <label class="cubi-row" style="gap:4px"><input id="t-cal" type="checkbox" ${p.calendar ? "checked" : ""}> 寫進行事曆</label>
-    <span class="cubi-spacer"></span><button class="cubi-btn primary small" id="t-save">加</button><button class="cubi-btn small" id="t-cancel">取消</button></div></td></tr>`;
+    ${key ? "" : `<label class="cubi-row" style="gap:4px"><input id="t-counted" type="checkbox" ${p.counted ? "checked" : ""}> 計入工時</label>`}
+    <span class="cubi-spacer"></span><button class="cubi-btn primary small" id="t-save">加</button><button class="cubi-btn small" id="t-cancel">取消</button></div>`;
 }
 function keepTimeForm() {
   if (!pendingTime || !$(`[data-time-form="${CSS.escape(pendingTime.key)}"]`)) return;
-  pendingTime = { ...pendingTime, start: $("#t-start").value, minutes: $("#t-min").value, kind: $("#t-kind").value, note: $("#t-note").value, calendar: $("#t-cal").checked };
+  pendingTime = { ...pendingTime, start: $("#t-start").value, minutes: $("#t-min").value, kind: $("#t-kind").value, note: $("#t-note").value, calendar: $("#t-cal").checked, counted: $("#t-counted")?.checked ?? true };
 }
 function openTimeForm(key) {
   const d = new Date(Date.now() - 3600 * 1000), local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-  pendingTime = pendingTime && pendingTime.key === key ? null : { key, start: local, minutes: 60, kind: "會議", note: "", calendar: true, focus: true };
+  pendingTime = pendingTime && pendingTime.key === key ? null : { key, start: local, minutes: 60, kind: "會議", note: "", calendar: true, counted: true, focus: true };
   render();
 }
 
@@ -357,11 +393,11 @@ function bindOverview(el) {
   $("#sp-save", el)?.addEventListener("click", () => refresh("sprint.update", { name: $("#sp-name").value, start: $("#sp-start").value, end: $("#sp-end").value, goal: $("#sp-goal").value }, el.querySelectorAll("[id^=sp-]")));
   $("#sp-resync", el)?.addEventListener("click", () => refresh("sprint.sync", { replace: true }));
   $("#t-save", el)?.addEventListener("click", async () => { keepTimeForm(); const p = pendingTime; pendingTime = null;
-    if (!await refresh("time.add", { key: p.key, start: p.start, minutes: Number(p.minutes), kind: p.kind, note: p.note, calendar: p.calendar })) { pendingTime = p; render(); } });
+    if (!await refresh("time.add", { key: p.key, start: p.start, minutes: Number(p.minutes), kind: p.kind, note: p.note, calendar: p.calendar, counted: p.counted })) { pendingTime = p; render(); } });
   $("#t-cancel", el)?.addEventListener("click", () => { pendingTime = null; render(); });
   el.querySelectorAll("[data-share]").forEach(i => i.addEventListener("change", () => refresh("session.shares", { shares: currentShares() }, el.querySelectorAll("[data-share]"))));
   el.querySelectorAll("[data-unbind]").forEach(x => x.addEventListener("click", () => refresh("session.unbind", { key: x.dataset.unbind })));
-  el.querySelectorAll("[data-actual]").forEach(i => i.addEventListener("change", () => refresh("ticket.update", { key: i.dataset.actual, actual: i.value }, [i])));
+  el.querySelectorAll("[data-hours]").forEach(b => b.addEventListener("click", () => { const k = b.dataset.hours; if (!openHours.delete(k)) openHours.add(k); render(); }));
   el.querySelectorAll("[data-push]").forEach(b => b.addEventListener("click", () => refresh("points.push", { key: b.dataset.push })));
   el.querySelectorAll("[data-remove-time]").forEach(b => b.addEventListener("click", () => refresh("time.remove", { id: b.dataset.removeTime })));
   el.querySelectorAll("[data-time]").forEach(b => b.addEventListener("click", () => openTimeForm(b.dataset.time)));

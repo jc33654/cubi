@@ -8,7 +8,7 @@ def jira(store):
 
 
 def fetch_tickets(store, keys):
-    """Refresh these tickets from Jira; local fields (actual, notes, doneAt) are kept. A key Jira
+    """Refresh these tickets from Jira; local fields (notes, doneAt, starred) are kept. A key Jira
     does not know is remembered as notFound so it is not asked again every minute."""
     if not keys:
         return

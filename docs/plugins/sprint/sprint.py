@@ -57,9 +57,9 @@ def panel_state(store, p):
              "timers": [{"sid": sid, "name": store.bindings.get(sid, {}).get("name", sid[:8]), "start": t["start"],
                          "keys": list(t["shares"])} for sid, t in store.segments["timers"].items()]}
     if sprint:
-        rows = rows_for(store, sprint)
+        rows, other = rows_for(store, sprint), store.other_work(sprint["label"])
         state["sprint"] = {**{k: sprint.get(k) for k in ("label", "name", "start", "end", "goal")}, "review": {**empty_review(), **(sprint.get("review") or {})},
-                           "tickets": rows, "metrics": review.metrics(rows), "burndown": review.burndown(sprint, rows),
+                           "tickets": rows, "metrics": review.metrics(rows, other), "other": other, "burndown": review.burndown(sprint, rows),
                            "capacity": review.capacity(sprint, rows, store.hours_per_point()),
                            "categories": list(review.CATEGORIES),
                            "manual": [m for m in store.segments["manual"] if set(m.get("shares") or [m["key"]]) & set(sprint["keys"])]}
@@ -124,8 +124,6 @@ def ticket_add(store, p):
 
 def ticket_update(store, p):
     t = store.ticket(p["key"])
-    if "actual" in p:
-        t["actual"] = float(p["actual"]) if p["actual"] not in (None, "") else None
     if "notes" in p:
         t["notes"] = p["notes"]
     if "starred" in p:
@@ -146,10 +144,11 @@ def points_push(store, p):
     field = store.config["actualPointsField"]
     if not field:
         raise ValueError("設定裡沒有「實際點數欄位」，先只存本機")
-    t = store.ticket(p["key"])
-    if t.get("actual") is None:
-        raise ValueError("這張單還沒填實際點數")
-    jira(store).set_field(p["key"], field, t["actual"])
+    # The ticket's own field: every hour ever worked on it, not just this sprint's (as `remaining`).
+    actual = review.actual_points(store.hours_by_key().get(p["key"], {}).get("total", 0.0), store.hours_per_point())
+    if actual is None:
+        raise ValueError("這張單還沒有投入時數")
+    jira(store).set_field(p["key"], field, actual)
     return panel_state(store, p)
 
 
@@ -158,8 +157,26 @@ def time_add(store, p):
         start = datetime.fromisoformat(p["start"]).timestamp()
     except (TypeError, ValueError):
         raise ValueError("開始時間格式不對")
-    store.add_manual(p["key"], start, p.get("minutes"), p.get("kind", "開發"), p.get("note", ""), p.get("calendar", False))
+    if p.get("key"):
+        store.add_manual(p["key"], start, p.get("minutes"), p.get("kind", "開發"), p.get("note", ""), p.get("calendar", False))
+    else:
+        s = sprint_at(store, start) or store.current_sprint()
+        if not s:
+            raise ValueError("先建一個 sprint")
+        if not (p.get("note") or "").strip():
+            raise ValueError("沒有單號的工作要寫說明")
+        store.add_manual(None, start, p.get("minutes"), p.get("kind", "會議"), p["note"].strip(), p.get("calendar", False),
+                         sprint=s["label"], counted=p.get("counted", True) is not False)
     return panel_state(store, p)
+
+
+def sprint_at(store, ts):
+    """The sprint whose dates hold `ts`, if any."""
+    for s in store.sprints["sprints"].values():
+        since, until = review.sprint_range(s)
+        if since is not None and until is not None and since <= ts < until:
+            return s
+    return None
 
 
 def time_remove(store, p):
@@ -218,7 +235,7 @@ def review_export(store, p):
     rows = rows_for(store, s)
     path = os.path.join(review_dir(store), f"{s['label']}.md")
     with open(path, "w", encoding="utf-8") as f:
-        f.write(review.markdown(s, rows, review.metrics(rows)))
+        f.write(review.markdown(s, rows, review.metrics(rows, store.other_work(s["label"]))))
     return {"_raw": path}
 
 
@@ -233,7 +250,7 @@ def review_brief(store, p):
     folder = review_dir(store)
     data_path = os.path.join(folder, f"{s['label']}-data.md")
     with open(data_path, "w", encoding="utf-8") as f:
-        f.write(review.brief(s, rows, review.metrics(rows), CUBI, os.path.join(folder, f"{s['label']}.md")))
+        f.write(review.brief(s, rows, review.metrics(rows, store.other_work(s["label"])), CUBI, os.path.join(folder, f"{s['label']}.md")))
     return {"directory": directory, "prompt": review.brief_prompt(s, data_path), "file": data_path}
 
 

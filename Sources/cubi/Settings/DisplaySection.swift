@@ -53,12 +53,18 @@ struct DisplaySection: View {
                             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!)
                         }
                     }
-                    switchToggle($notificationsOn).onChange(of: notificationsOn) { _, v in notifications.wrappedValue = v }
+                    // Switching on asks first (the setter); the check after it then waits for the answer.
+                    switchToggle($notificationsOn).onChange(of: notificationsOn) { _, v in
+                        notifications.wrappedValue = v
+                        Task { await checkPermission() }
+                    }
                 }
-                .task(id: notificationsOn) { await checkPermission() }
-                // Back from System Settings with the permission changed.
-                .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-                    Task { await checkPermission() }
+                // On the page, and again whenever Cubi comes back (say, from System Settings).
+                .task {
+                    await checkPermission()
+                    for await _ in NotificationCenter.default.notifications(named: NSApplication.didBecomeActiveNotification) {
+                        await checkPermission()
+                    }
                 }
                 SettingRow(title: "登入時啟動") {
                     switchToggle($loginOn).onChange(of: loginOn) { _, v in

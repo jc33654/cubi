@@ -7,6 +7,8 @@ import UserNotifications
 @MainActor
 final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     static let enabledKey = "notificationsEnabled"
+    /// The permission question in flight, if any: `isDenied` waits for its answer.
+    private var asking: Task<Void, Never>?
     /// Called with the session id when the user clicks a notification.
     var onActivate: (String) -> Void = { _ in }
 
@@ -25,20 +27,17 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     private func requestAuthorization() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, error in
-            if let error { CubiLog.write("notification authorization failed: \(error)") }
+        asking = Task {
+            do { _ = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) }
+            catch { CubiLog.write("notification authorization failed: \(error)") }
         }
     }
 
-    /// The user said no: notifications stay silent whatever the switch says. Asked while the
-    /// permission question is still on screen, this waits for the answer.
+    /// The user said no: notifications stay silent whatever the switch says. Never asks itself;
+    /// with the switch's question still on screen, it waits for that answer.
     func isDenied() async -> Bool {
-        let center = UNUserNotificationCenter.current()
-        if await center.notificationSettings().authorizationStatus == .notDetermined {
-            do { _ = try await center.requestAuthorization(options: [.alert, .sound]) }
-            catch { CubiLog.write("notification authorization failed: \(error)") }
-        }
-        return await center.notificationSettings().authorizationStatus == .denied
+        await asking?.value
+        return await UNUserNotificationCenter.current().notificationSettings().authorizationStatus == .denied
     }
 
     func notify(title: String, body: String, thread: String) {

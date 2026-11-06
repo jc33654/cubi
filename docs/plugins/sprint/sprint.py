@@ -54,10 +54,9 @@ def panel_state(store, p):
                          for s in sorted(store.sprints["sprints"].values(), key=lambda s: (s.get("start") or "", s["label"]))],
              "current": store.sprints.get("current"), "session": binding, "history": review.history(store),
              "today": date.today().isoformat(), "site": store.config["site"], "warnings": list(store.warnings),
-             "bindings": sorted(({"sid": sid, "name": rec.get("name") or sid[:8], "keys": keys, "shares": store.shares(rec)}
-                                 for sid, rec in store.bindings.items() for keys in [store.bound_keys(rec)] if keys), key=lambda b: b["name"]),
+             "bindings": bindings_overview(store, sprint, session),
              "timers": [{"sid": sid, "name": store.bindings.get(sid, {}).get("name", sid[:8]), "start": t["start"],
-                         "keys": list(t["shares"])} for sid, t in store.segments["timers"].items()]}
+                         "keys": list(store.timer_shares(sid))} for sid, t in store.segments["timers"].items()]}
     if sprint:
         rows, other = rows_for(store, sprint), store.other_work(sprint["label"])
         state["sprint"] = {**{k: sprint.get(k) for k in ("label", "name", "start", "end", "goal")}, "review": {**empty_review(), **(sprint.get("review") or {})},
@@ -66,6 +65,16 @@ def panel_state(store, p):
                            "categories": list(review.CATEGORIES),
                            "manual": [m for m in store.segments["manual"] if set(m.get("shares") or [m["key"]]) & set(sprint["keys"])]}
     return state
+
+
+def bindings_overview(store, sprint, session):
+    """Bound sessions that worked in the sprint (any time, without sprint dates), are timing now,
+    or are the one the panel was opened from."""
+    since, until = review.sprint_range(sprint) if sprint else (None, None)
+    here = session["id"] if session else None
+    return sorted(({"sid": sid, "name": rec.get("name") or sid[:8], "keys": keys, "shares": store.shares(rec)}
+                   for sid, rec in store.bindings.items()
+                   if (keys := store.bound_keys(rec)) and (sid == here or store.active_in(sid, since, until))), key=lambda b: b["name"])
 
 
 def sprint_new(store, p):

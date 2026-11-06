@@ -261,6 +261,11 @@ class Store(TimerMixin):
                 secs += self._timer_extra(m, since, until) * part(m.get("shares") or {m["key"]: 100})
         return secs
 
+    def active_in(self, sid, since, until):
+        """Whether the session worked (stretches or booked timers) in [since, until] (None:
+        open-ended), or is timing now."""
+        return sid in self.segments["timers"] or self.session_seconds(sid, since, until) > 0
+
     def other_work(self, label):
         """The sprint's work that has no ticket."""
         return [m for m in self.segments["manual"] if m.get("key") is None and m.get("sprint") == label]

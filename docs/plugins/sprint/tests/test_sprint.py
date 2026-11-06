@@ -103,8 +103,9 @@ class CardTests(unittest.TestCase):
         self.assertEqual(labels(out), keys[:7] + ["還有", "今日", "計時中"])   # still within cubi's 10 rows
 
     def test_bindings_overview_unbinds_any_session(self):
-        sprint.session_info(self.store, {**self.session, "name": "PROJ-1 PROJ-2"})
-        sprint.session_info(self.store, {**self.session, "id": "s2", "name": "PROJ-3"})
+        worked = [{"start": time.time() - 600, "end": time.time(), "open": False}]
+        sprint.session_info(self.store, {**self.session, "name": "PROJ-1 PROJ-2", "segments": worked})
+        sprint.session_info(self.store, {**self.session, "id": "s2", "name": "PROJ-3", "segments": worked})
         state = sprint.panel_state(self.store, {})
         self.assertEqual([(b["sid"], b["keys"]) for b in state["bindings"]], [("s1", ["PROJ-1", "PROJ-2"]), ("s2", ["PROJ-3"])])
         state = sprint.session_unbind(self.store, {"sid": "s1", "key": "PROJ-2", "session": {**self.session, "id": "s2", "name": "PROJ-3"}})
@@ -155,6 +156,36 @@ class CardTests(unittest.TestCase):
         out = sprint.session_info(self.store, self.session)
         self.assertIn("timer.stop", self.actions(out))
         self.assertTrue(any((r.get("label") if isinstance(r, dict) else r[0]) == "計時中" for r in out["rows"]))
+
+    def test_with_every_ticket_unbound_the_timer_says_it_books_nothing(self):
+        sprint.timer_start(self.store, self.session)
+        sprint.session_unbind(self.store, {"sid": "s1", "key": "PROJ-1"})    # from the panel's overview
+        self.store.timer("s1")["start"] -= 9 * 3600                         # and long forgotten
+        out = sprint.session_info(self.store, self.session)
+        timing = next(r for r in out["rows"] if isinstance(r, dict) and r["label"] == "計時中")
+        self.assertEqual((timing["value"], timing["tone"]), ("超過 8 小時，忘了停？；單都解除了，停下來不會記", "danger"))
+        stop = next(a for a in out["actions"] if a["action"] == "timer.stop")
+        self.assertEqual(stop["label"], "停止計時（沒綁單，不記）")
+        self.assertEqual(sprint.panel_state(self.store, {})["timers"][0]["keys"], [])
+
+    def test_a_session_that_only_timed_shows_in_the_overview(self):
+        self.store.new_sprint("Sprint7", "", "2026-11-02", "2026-11-13")
+        self.store.bind("t1", "PROJ-1")
+        m = self.store.add_manual("PROJ-1", datetime.fromisoformat("2026-11-05T10:00").timestamp(), 60, kind="計時")
+        m.update(session="t1", shares={"PROJ-1": 100.0})
+        self.assertEqual([b["sid"] for b in sprint.panel_state(self.store, {})["bindings"]], ["t1"])
+
+    def test_overview_lists_only_sessions_active_in_the_sprint(self):
+        self.store.new_sprint("Sprint7", "", "2026-11-02", "2026-11-13")
+        def ts(d):
+            return datetime.fromisoformat(d).timestamp()
+        for sid, name, start in (("old", "PROJ-1 上一期", "2026-10-20T10:00"), ("now", "PROJ-1 這一期", "2026-11-05T10:00"), ("idle", "PROJ-1 沒動過", None)):
+            sess = {"id": sid, "name": name, "cwd": None, "segments": [{"start": ts(start), "end": ts(start) + 600, "open": False}] if start else []}
+            self.store.record_segments(sess, self.store.shares(self.store.binding(sess)))
+        self.assertEqual([b["sid"] for b in sprint.panel_state(self.store, {})["bindings"]], ["now"])
+        # The session the panel was opened from is listed even before it did anything.
+        here = {"id": "idle", "name": "PROJ-1 沒動過", "cwd": None, "segments": []}
+        self.assertEqual(sorted(b["sid"] for b in sprint.panel_state(self.store, {"session": here})["bindings"]), ["idle", "now"])
 
     def test_stop_from_the_panel_without_a_sid_is_a_warning(self):
         out = sprint.timer_stop(self.store, {})

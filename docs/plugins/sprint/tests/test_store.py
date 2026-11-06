@@ -173,10 +173,27 @@ class TimerTests(unittest.TestCase):
         self.store.save()
         self.dir.cleanup()
 
+    def start(self, sid, shares, now):
+        for k in shares:
+            self.store.bind(sid, k)
+        self.store.set_shares(sid, shares)
+        self.store.timer_start(sid, now)
+
+    def test_stopping_splits_over_what_is_bound_then(self):
+        self.start("s1", {"PROJ-1": 50.0, "PROJ-2": 50.0}, 1000)
+        self.store.unbind("s1", "PROJ-1")
+        self.store.unbind("s1", "PROJ-2")
+        self.store.bind("s1", "PROJ-2")                                # unbound by mistake, bound again
+        entry, _ = self.store.timer_stop("s1", 1000 + 3600)
+        self.assertEqual(entry["shares"], {"PROJ-2": 100.0})
+        self.start("s1", {"PROJ-2": 100.0}, 9000)
+        self.store.unbind("s1", "PROJ-2")
+        self.assertEqual(self.store.timer_stop("s1", 9000 + 3600), (None, "計時中的單都解除了，沒有記"))
+
     def test_start_stop_books_a_manual_stretch_split_by_shares(self):
         from store import TIMER_KIND
-        self.store.timer_start("s1", {"PROJ-1": 75.0, "PROJ-2": 25.0}, 1000)
-        self.store.timer_start("s1", {"PROJ-9": 100.0}, 2000)          # already running: unchanged
+        self.start("s1", {"PROJ-1": 75.0, "PROJ-2": 25.0}, 1000)
+        self.store.timer_start("s1", 2000)                             # already running: unchanged
         self.assertEqual(self.store.timer("s1")["start"], 1000)
         entry, note = self.store.timer_stop("s1", 1000 + 3600)
         self.assertEqual((entry["kind"], entry["calendar"], entry["session"], note), (TIMER_KIND, True, "s1", ""))
@@ -185,19 +202,19 @@ class TimerTests(unittest.TestCase):
         self.assertIsNone(self.store.timer("s1"))
         self.assertEqual(self.store.timer_stop("s1", 9999), (None, "沒有在計時"))
         with self.assertRaises(ValueError):
-            self.store.timer_start("s2", {}, 0)
+            self.store.timer_start("s2", 0)                            # nothing bound
 
     def test_short_dropped_and_overnight_cut_at_a_day(self):
-        self.store.timer_start("s1", {"PROJ-1": 100.0}, 0)
+        self.start("s1", {"PROJ-1": 100.0}, 0)
         self.assertEqual(self.store.timer_stop("s1", 59), (None, "不到 1 分鐘，沒有記"))
-        self.store.timer_start("s1", {"PROJ-1": 100.0}, 0)
+        self.start("s1", {"PROJ-1": 100.0}, 0)
         entry, note = self.store.timer_stop("s1", 30 * 3600)
         self.assertEqual((entry["end"], note), (24 * 3600, "超過 24 小時，只記 24 小時"))
 
     def test_timer_overlapping_its_own_session_counts_once(self):
         s = {"id": "s1", "name": "PROJ-1", "cwd": None, "segments": [{"start": 1000, "end": 2800, "open": False}]}
         self.store.record_segments(s, {"PROJ-1": 100.0})
-        self.store.timer_start("s1", {"PROJ-1": 100.0}, 2000)
+        self.start("s1", {"PROJ-1": 100.0}, 2000)
         self.store.timer_stop("s1", 5600)                               # 2000–5600, of which 2000–2800 the session saw
         h = self.store.hours_by_key()["PROJ-1"]
         self.assertEqual((h["session"], h["manual"], h["total"]), (1800.0, 2800.0, 4600.0))   # 1000–5600 once
@@ -208,8 +225,8 @@ class TimerTests(unittest.TestCase):
     def test_orphan_timer_stops_at_the_sessions_last_activity(self):
         from store import ORPHAN_AFTER
         self.store.record_segments({"id": "gone", "segments": [{"start": 100, "end": 4000, "open": False}]}, {"PROJ-1": 100.0})
-        self.store.timer_start("gone", {"PROJ-1": 100.0}, 1000)
-        self.store.timer_start("live", {"PROJ-2": 100.0}, 1000)
+        self.start("gone", {"PROJ-1": 100.0}, 1000)
+        self.start("live", {"PROJ-2": 100.0}, 1000)
         # Still reported, or missing for less than the grace: nothing stops (a cubi restart).
         self.assertEqual(self.store.stop_orphan_timers({"gone", "live"}, 5000), [])
         self.assertEqual(self.store.stop_orphan_timers({"live"}, 5000 + ORPHAN_AFTER - 1), [])
@@ -221,7 +238,7 @@ class TimerTests(unittest.TestCase):
     def test_session_seconds_counts_its_own_stretches_and_timers_once(self):
         self.store.record_segments({"id": "s1", "segments": [{"start": 0, "end": 1000, "open": False}]}, {"PROJ-1": 100.0})
         self.store.record_segments({"id": "s2", "segments": [{"start": 0, "end": 5000, "open": False}]}, {"PROJ-1": 100.0})
-        self.store.timer_start("s1", {"PROJ-1": 100.0}, 500)
+        self.start("s1", {"PROJ-1": 100.0}, 500)
         self.store.timer_stop("s1", 2500)                                  # 500–2500, 500–1000 already s1's
         self.store.add_manual("PROJ-1", 0, 30, "會議")                      # someone else's entry: not this session's
         self.assertEqual(self.store.session_seconds("s1"), 2500.0)
@@ -229,14 +246,14 @@ class TimerTests(unittest.TestCase):
 
     def test_a_session_claude_code_still_lists_is_not_an_orphan(self):
         from store import ORPHAN_AFTER
-        self.store.timer_start("idle", {"PROJ-1": 100.0}, 1000)          # never seen by a tick (cubi restarted)
+        self.start("idle", {"PROJ-1": 100.0}, 1000)          # never seen by a tick (cubi restarted)
         self.assertEqual(self.store.stop_orphan_timers(set(), 1000 + ORPHAN_AFTER + 1, still_open={"idle"}), [])
         self.assertIsNotNone(self.store.timer("idle"))
 
     def test_calendar_does_not_show_a_stretch_twice_inside_its_own_timer(self):
         self.store.record_segments({"id": "s1", "name": "PROJ-1", "segments": [{"start": 1000, "end": 3400, "open": False},
                                                                              {"start": 5000, "end": 9000, "open": False}]}, {"PROJ-1": 100.0})
-        self.store.timer_start("s1", {"PROJ-1": 100.0}, 1000)
+        self.start("s1", {"PROJ-1": 100.0}, 1000)
         self.store.timer_stop("s1", 4600)
         entries = self.store.calendar_entries(9000, window=10_000)
         spans = sorted((e["start"], e["end"]) for e in entries)
@@ -246,9 +263,9 @@ class TimerTests(unittest.TestCase):
 
     def test_orphan_reason_goes_to_notes_not_title(self):
         from store import ORPHAN_AFTER
-        self.store.timer_start("gone", {"PROJ-1": 100.0}, 1000)
+        self.start("gone", {"PROJ-1": 100.0}, 1000)
         self.store.stop_orphan_timers(set(), 1000 + 3600)                 # seen at start only → stops at start? no: seen=1000
-        self.store.timer_start("gone2", {"PROJ-1": 100.0}, 1000)
+        self.start("gone2", {"PROJ-1": 100.0}, 1000)
         self.store.stop_orphan_timers({"gone2"}, 5000)                     # seen at 5000
         self.store.stop_orphan_timers(set(), 5000 + ORPHAN_AFTER)
         e = next(x for x in self.store.calendar_entries(9000, window=10_000) if x["marker"].startswith("sprint:manual:"))
@@ -266,7 +283,7 @@ class TimerTests(unittest.TestCase):
         self.assertEqual(subtract((0, 100), []), [(0, 100)])
         # 9:50 the session gets busy, 10:00 ▶, 10:40 it goes quiet, 11:00 ⏸.
         self.store.record_segments({"id": "s1", "name": "PROJ-1", "segments": [{"start": 35400, "end": 38400, "open": False}]}, {"PROJ-1": 100.0})
-        self.store.timer_start("s1", {"PROJ-1": 100.0}, 36000)
+        self.start("s1", {"PROJ-1": 100.0}, 36000)
         self.store.timer_stop("s1", 39600)
         spans = sorted((e["start"], e["end"], e["marker"]) for e in self.store.calendar_entries(40000, window=10_000))
         self.assertEqual([(a, b) for a, b, _ in spans], [(35400, 36000), (36000, 39600)])
@@ -276,7 +293,7 @@ class TimerTests(unittest.TestCase):
         # ▶ at 36000; the session works 35400–38400 and 39000–39300 while the timer is still running.
         self.store.record_segments({"id": "s1", "name": "PROJ-1", "segments": [{"start": 35400, "end": 38400, "open": False},
                                                                              {"start": 39000, "end": 39300, "open": False}]}, {"PROJ-1": 100.0})
-        self.store.timer_start("s1", {"PROJ-1": 100.0}, 36000)
+        self.start("s1", {"PROJ-1": 100.0}, 36000)
         running = sorted((e["start"], e["end"], e["marker"]) for e in self.store.calendar_entries(39600, window=10_000))
         self.assertEqual(running, [(35400, 36000, "sprint:s1:35400")])
         self.store.timer_stop("s1", 39600)
@@ -286,7 +303,7 @@ class TimerTests(unittest.TestCase):
 
     def test_calendar_sends_stretches_past_a_forgotten_timers_24_hours(self):
         from store import MAX_ENTRY
-        self.store.timer_start("s1", {"PROJ-1": 100.0}, 0)
+        self.start("s1", {"PROJ-1": 100.0}, 0)
         self.store.record_segments({"id": "s1", "name": "PROJ-1", "segments": [{"start": MAX_ENTRY + 600, "end": MAX_ENTRY + 4200, "open": False}]}, {"PROJ-1": 100.0})
         spans = [(e["start"], e["end"]) for e in self.store.calendar_entries(MAX_ENTRY + 5000)]
         self.assertEqual(spans, [(MAX_ENTRY + 600, MAX_ENTRY + 4200)])  # past the 24 h the timer will book

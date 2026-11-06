@@ -9,18 +9,23 @@ ORPHAN_AFTER = 15 * 60
 
 
 class TimerMixin:
-    """Store methods for `segments["timers"]` (session id → {start, shares, seen})."""
+    """Store methods for `segments["timers"]` (session id → {start, seen}). A timer is split over
+    what its session is bound to when it stops: unbinding by mistake and binding again loses
+    nothing, and with nothing bound it books nothing."""
 
 
     def timer(self, sid):
         return self.segments["timers"].get(sid)
 
-    def timer_start(self, sid, shares, now):
-        if not shares:
+    def timer_start(self, sid, now):
+        if not self.timer_shares(sid):
             raise ValueError("這個 session 還沒綁單，先綁單再計時")
         if sid not in self.segments["timers"]:
-            self.segments["timers"][sid] = {"start": float(now), "shares": shares, "seen": float(now)}
+            self.segments["timers"][sid] = {"start": float(now), "seen": float(now)}
         return self.segments["timers"][sid]
+
+    def timer_shares(self, sid):
+        return self.shares(self.bindings.get(sid, {}))
 
     @staticmethod
     def timer_end(t, now):
@@ -38,8 +43,11 @@ class TimerMixin:
         minutes = (end - t["start"]) / 60
         if minutes < 1:
             return None, "不到 1 分鐘，沒有記"
-        entry = self.add_manual(next(iter(t["shares"])), t["start"], minutes, TIMER_KIND, "", True)
-        entry.update(shares=t["shares"], session=sid, reason=reason or note)
+        shares = self.timer_shares(sid)
+        if not shares:
+            return None, "計時中的單都解除了，沒有記"
+        entry = self.add_manual(next(iter(shares)), t["start"], minutes, TIMER_KIND, "", True)
+        entry.update(shares=shares, session=sid, reason=reason or note)
         return entry, note
 
     def stop_orphan_timers(self, live_ids, now, still_open=frozenset()):

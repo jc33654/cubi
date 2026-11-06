@@ -261,9 +261,9 @@ function renderOverview() {
   let html = header(s ? (s.name || s.label) : "Sprint");
   if (state.timers.length) {
     html += `<div class="cubi-card"><div class="cubi-card-head">${ic("clock")}<h2 class="cubi-card-title">計時中</h2></div><table class="cubi-table tight"><tbody>` +
-      state.timers.map(t => `<tr><td>${esc(t.name)}</td><td>${t.keys.map(link).join(" ")}</td>
+      state.timers.map(t => `<tr><td>${esc(t.name)}</td><td>${t.keys.length ? t.keys.map(link).join(" ") : `<span style="color:var(--cubi-warning)">單都解除了，停下來不會記</span>`}</td>
         <td class="num"><span class="timer" data-since="${t.start}">${clock(Date.now() / 1000 - t.start)}</span></td>
-        <td class="num"><button class="cubi-btn small" data-stop="${esc(t.sid)}">${ic("pause", 13)}停止並記下</button></td></tr>`).join("") + `</tbody></table></div>`;
+        <td class="num"><button class="cubi-btn small" data-stop="${esc(t.sid)}">${ic("pause", 13)}${t.keys.length ? "停止並記下" : "停止（不記）"}</button></td></tr>`).join("") + `</tbody></table></div>`;
   }
   if (state.session) html += sessionCard();
   if (!s) { el.innerHTML = html + `<div class="cubi-card cubi-muted">還沒有 sprint。按「新 sprint」，再「同步 Jira」。</div>`; bindOverview(el); return; }

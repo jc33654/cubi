@@ -1,4 +1,4 @@
-# cubi 狀態與進度（2026-11-06）
+# cubi 狀態與進度（2026-11-10）
 
 commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字。Sources 約 6,000 多行 Swift。
 
@@ -24,7 +24,7 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 | 活動時段 | `SessionInfo.segments`：真事件開段／依 sleepAfter 切段、tick 收段、SessionEnd 收段、叫醒不算；結束／放生的最後一段保留到下一次 tick | 單元測試 |
 | 第三輪 dashboard（2026-11-05） | 資訊窗：列的 `tone`／`progress`／`clock`、按鈕 `icon`；sprint 的 ▶／⏸ 計時與估點倒數。面板：樣式包 `panel.style:"cubi"`、sprint 面板 dashboard、草稿機制（打到一半不丟、組字中不重畫、亂序回應）。設定頁：左側導覽＋卡片、淺深兩套、`--render-settings` | 單元測試（PluginIO、sprint 35 個）；`--render-panel --eval` 探針（草稿 20 多個情境）；`--render-settings` 六頁 × 淺深；渲染前後 defaults 不變；點按互動待 Jade |
 | 行事曆 | 工具插件選填 `tick{action,every}`：定時餵所有 session，回的 calendar 條目由 `SystemCalendar`（EventKit）寫進設定頁選的行事曆；記號去重、同記號延長、同標題 5 分鐘內合併、每筆 commit、標「空閒」；設定頁「行事曆」區 | `CalendarMerge` 純函式測試；EventKit 真機授權與事件待 Jade |
-| sprint 插件 | `docs/plugins/sprint/`：Python 標準庫；Jira 用 netrc；sprint＝標籤（這個 Jira 沒有 Sprint 欄位）；多專案 JQL（預設只抓受託人是自己的）；自動／手動綁單（資訊窗可直接綁／解除）、多單比例分攤、手動時段、transition；實際點數＝時數÷每點小時數（預設 8，可設欄位寫回）；回顧：五卡、任務分類甜甜圈（提早／準時、超時完成、未完成、超時未完成、未估點，點開列單）、burndown、近幾個 sprint、總結＋四段＋感謝、Markdown 匯出；「用 Claude 整理回顧」寫數據檔並開 Claude Code session（內建 `session.new`）寫好後填回 | 19 個 unittest；CLI 對真 Jira：`session.info`／綁單號 input／`sprint.sync {replace}`（新 JQL 抓到 25 張受託人是 Jade 的單）／`review.brief` 產檔走通；面板畫面待 Jade |
+| sprint 插件 | `docs/plugins/sprint/`：Python 標準庫；Jira 用 netrc；sprint＝標籤（這個 Jira 沒有 Sprint 欄位）；多專案 JQL（預設只抓受託人是自己的）；自動／手動綁單（資訊窗可直接綁／解除）、多單比例分攤、手動時段、transition；▶／⏸ 計時（停下時依當下綁的單分）、面板「綁定總覽」（只列本 sprint 有活動的 session）、資訊窗最多列 8 張；實際點數＝投入時數÷每點小時數（預設 8，不能手動改，可設欄位寫回），「投入」點開看各類工時與每筆手動時段的備註；「沒有單號的工作」（可選計入工時、寫行事曆，不扣容量）；★ 重點標記可排序；狀態色照 Jira 狀態分類；`CUBI_RENDER` 離線渲染乾跑（不存檔、不連 Jira）；回顧：五卡、任務分類甜甜圈（提早／準時、超時完成、未完成、超時未完成、未估點，點開列單）、burndown、近幾個 sprint、總結＋四段＋感謝、Markdown 匯出；「用 Claude 整理回顧」寫數據檔並開 Claude Code session（內建 `session.new`）寫好後填回 | `make plugin-test`（unittest）；CLI 對真 Jira：`session.info`／綁單號 input／`sprint.sync {replace}`（新 JQL 抓到 25 張受託人是 Jade 的單）／`review.brief` 產檔走通；面板畫面待 Jade |
 | 發佈 | `make bundle` strip debug 符號並守門（執行檔裡不得有 `/Users/…`）；`make dist` 產固定檔名 `Cubi.zip`；`scripts/install.sh` 下載、sha256 完整性校驗、`codesign -R` 比對 cubi-dev 憑證 hash 後才裝並拿掉 quarantine；`ci.yml`／`release.yml`（tag 觸發，從 secrets 匯入 .p12 簽） | 真機驗證：v0.1.0 由 release.yml 在 macos-26 建、簽、掛上 Release（1.5 分鐘）；從 `releases/latest/download/` 抓回來 sha256 與 `codesign -R` 都過、OSO 0、版本 0.1.0 |
 | 文件 | README（介紹、機器人表情與島的截圖 `docs/images/`、安裝、操作一覽、解除）、`docs/development.md`（make 目標、CLI、憑證、發版、設計上刻意的事）、`docs/protocol.md`（relay 協定、欄位、manifest 格式）、`docs/plan.md` | 經審查員對帳；圖是 `--render-island` 渲染後裁的 |
 

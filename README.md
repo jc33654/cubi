@@ -131,7 +131,7 @@ open ~/Applications/Cubi.app
 |---|---|
 | 滑鼠靠近瀏海 | 島滑出來成 compact（機器人一排 + 用量） |
 | 點島 | expanded：session 清單（名稱、context %、最近一次編輯的 +N −M）、用量列。高度隨內容長，最多到螢幕七成 |
-| 點清單的一列 | 右邊打開這個 session 的資訊：專案、模型／effort／版本、開始時間、使用時間（Claude Code 回報的時長加上之後經過的時間，每秒走）、回合與工具呼叫數、花費、變更行數、context、終端。按「跳到終端」切到它的分頁，✕ 關閉。底下是有掛 session hook 的插件各一塊（例如 sprint：綁的工單、估／實點數、今日時數，按鈕「綁單號…」「解除」「同步 Jira」「開面板」） |
+| 點清單的一列 | 右邊打開這個 session 的資訊：專案、模型／effort／版本、開始時間、使用時間（Claude Code 回報的時長加上之後經過的時間，每秒走）、回合與工具呼叫數、花費、變更行數、context、終端。按「跳到終端」切到它的分頁，✕ 關閉。底下是有掛 session hook 的插件各一塊（例如 sprint：綁的工單與剩餘時數、每列尾端 ✕ 解除那張、今日時數、計時中，按鈕「綁單號…」「▶／⏸ 計時」「同步 Jira」「開面板」） |
 | 點機器人 | 跳到那個 session 的終端分頁（Terminal.app 用 tty；Ghostty 用分頁標題比對 session 名字，名字先看 Claude Code 自己的登錄檔 `~/.claude/sessions/`，改名立刻生效；標題比不到才看 cwd，而且只在只有一個分頁在那個目錄時才跳，不然寧可不跳；其他 app 只切到 app）；hooks 環境沒有 `TERM_PROGRAM`／tty 的 session 只能用名稱／cwd 猜：先問 Ghostty 再問 Terminal.app，都沒中就不動。沉睡中的機器人點一下會醒 |
 | 有審批 | 島自動打開卡片：**拒絕 / 在終端處理 / 總是允許 / 允許**。「總是允許」會把 Claude Code 自己建議的規則寫進 session 與 `settings.local.json` |
 | 有 AskUserQuestion | 每題一組選項按鈕；多選用勾選；也可「在終端回答」 |

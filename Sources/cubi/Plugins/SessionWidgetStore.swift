@@ -19,7 +19,7 @@ final class SessionWidgetStore {
     /// The session as the plugin should see it; set by the coordinator, which owns the store.
     @ObservationIgnored var input: (String) -> PluginIO.SessionInput? = { _ in nil }
     /// Asks the user for one line (the argument is the prompt); nil when they cancel. Set by the app.
-    @ObservationIgnored var promptForInput: (String) -> String? = { _ in nil }
+    @ObservationIgnored var promptForInput: (String) async -> String? = { _ in nil }
     @ObservationIgnored private var generation: [String: Int] = [:]
 
     init(registry: PluginRegistry) { self.registry = registry }
@@ -43,7 +43,7 @@ final class SessionWidgetStore {
         guard plugin.isHook(action.action) else { return }
         var typed = action.arg
         if let prompt = action.input {
-            guard let line = promptForInput(prompt).flatMap(PluginIO.cleanInput) else { return }
+            guard let line = await promptForInput(prompt).flatMap(PluginIO.cleanInput) else { return }
             typed = line
         }
         CubiLog.write("widget \(plugin.id) \(action.action) session=\(session.prefix(8))\(typed == nil ? "" : " input")")

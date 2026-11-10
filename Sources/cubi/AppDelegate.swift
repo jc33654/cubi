@@ -10,21 +10,70 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var toolPanels: ToolPanels?
     private var ticker: PluginTicker?
     private var showObserver: NSObjectProtocol?
+    private let linePrompt = LinePrompt()
 
     /// Posted by a second launch so the running copy reveals the island (there is no window to show).
     private static let showNotification = Notification.Name("cc.dotdot.cubi.show")
+    /// Touched every second by the main run loop in all common modes (a dialog open still counts),
+    /// so a second launch can tell a stuck copy from a busy one without asking it anything.
+    nonisolated private static let heartbeatPath = CubiPaths.home.path + "/Library/Application Support/cubi/heartbeat"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Only copies started before this one: a later one is still checking on this one.
+        let started = NSRunningApplication.current.launchDate ?? .distantFuture
         let others = NSRunningApplication.runningApplications(withBundleIdentifier: CubiInfo.bundleIdentifier)
-            .filter { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }
-        if !others.isEmpty {
-            CubiLog.write("already running (pid \(others[0].processIdentifier)), asking it to show the island")
-            DistributedNotificationCenter.default().postNotificationName(Self.showNotification, object: nil,
-                                                                         userInfo: nil, deliverImmediately: true)
+            .filter { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier && ($0.launchDate ?? .distantPast) < started }
+        guard others.isEmpty else { Task { await takeOverIfStuck(others) }; return }
+        launch()
+    }
+
+    /// Opening Cubi while it runs shows the island. A copy whose heartbeat has not moved for 3 s is
+    /// stuck (or an older build without one): it is force-quit and this launch carries on, so
+    /// opening Cubi again (or 重開 Cubi) is the way out of a hang.
+    private func takeOverIfStuck(_ others: [NSRunningApplication]) async {
+        let pid = others[0].processIdentifier
+        DistributedNotificationCenter.default().postNotificationName(Self.showNotification, object: nil,
+                                                                     userInfo: nil, deliverImmediately: true)
+        let asked = Date()
+        func beating() -> Bool {
+            let touched = (try? FileManager.default.attributesOfItem(atPath: Self.heartbeatPath))?[.modificationDate] as? Date
+            return touched.map { $0 > asked } ?? false
+        }
+        for _ in 0..<30 where !beating() { try? await Task.sleep(for: .milliseconds(100)) }
+        if beating() {
+            CubiLog.write("already running (pid \(pid)), asked it to show the island")
             NSApp.terminate(nil)
             return
         }
+        CubiLog.write("already running (pid \(pid)) but its heartbeat stopped (stuck, or an older build): force-quitting it")
+        others.forEach { $0.forceTerminate() }
+        for _ in 0..<30 where !others.allSatisfy(\.isTerminated) { try? await Task.sleep(for: .milliseconds(100)) }
+        guard others.allSatisfy(\.isTerminated) else {
+            CubiLog.write("pid \(pid) did not quit; leaving it running and not starting a second copy")
+            NSApp.terminate(nil)
+            return
+        }
+        launch()
+    }
 
+    /// The folder may not exist yet on a first run (the coordinator makes it later), or someone
+    /// deleted it: without the file a second launch would take a healthy copy for a stuck one.
+    /// Only the first attempt logs a failure; the timer retries every second.
+    nonisolated private static func makeHeartbeat(logFailure: Bool) {
+        let url = URL(fileURLWithPath: heartbeatPath)
+        do {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data().write(to: url)
+        } catch {
+            if logFailure { CubiLog.write("heartbeat: cannot create \(heartbeatPath): \(error.localizedDescription)") }
+        }
+    }
+
+    private func launch() {
+        Self.makeHeartbeat(logFailure: true)
+        RunLoop.main.add(Timer(timeInterval: 1, repeats: true) { _ in
+            if utimes(Self.heartbeatPath, nil) != 0 { Self.makeHeartbeat(logFailure: false) }
+        }, forMode: .common)
         NSApp.setActivationPolicy(.accessory)
         NSApp.mainMenu = Self.mainMenu()
         Sounds.prewarm()
@@ -37,7 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.toolPanels = toolPanels
         let widgets = SessionWidgetStore(registry: coordinator.registry)
         widgets.input = { [weak coordinator] in coordinator?.sessionInput(for: $0) }
-        widgets.promptForInput = Self.askForLine
+        widgets.promptForInput = { [linePrompt] in await linePrompt.ask($0) }
         island.state.widgets = widgets
         island.state.onOpenTool = { [toolPanels, weak coordinator] tool, session in
             toolPanels.show(tool, session: coordinator?.sessionInput(for: session))
@@ -100,21 +149,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         main.addItem(appItem)
         main.addItem(item)
         return main
-    }
-
-    /// A one-line question from a plugin's card (the island has no text fields of its own).
-    static func askForLine(_ prompt: String) -> String? {
-        let alert = NSAlert()
-        alert.messageText = prompt
-        alert.addButton(withTitle: "確定")
-        alert.addButton(withTitle: "取消").keyEquivalent = "\u{1b}"
-        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-        field.usesSingleLineMode = true
-        field.cell?.isScrollable = true
-        alert.accessoryView = field
-        alert.window.initialFirstResponder = field
-        NSApp.activate(ignoringOtherApps: true)
-        return alert.runModal() == .alertFirstButtonReturn ? field.stringValue : nil
     }
 
     /// Clicking the app in the Dock/Finder while it runs also reveals the island.

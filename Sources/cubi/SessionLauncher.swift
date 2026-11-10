@@ -39,12 +39,7 @@ enum SessionLauncher {
     }
 
     static func alert(_ error: String) {
-        let alert = NSAlert()
-        alert.messageText = "開不了終端"
-        alert.informativeText = error + "\n\n第一次用會需要在「系統設定 → 隱私與安全性 → 自動化」允許 Cubi 控制終端。詳細在 ~/Library/Logs/cubi.log。"
-        alert.alertStyle = .warning
-        NSApp.activate(ignoringOtherApps: true)
-        alert.runModal()
+        Notice.show("開不了終端", error + "\n\n第一次用會需要在「系統設定 → 隱私與安全性 → 自動化」允許 Cubi 控制終端。詳細在 ~/Library/Logs/cubi.log。")
     }
 
     private static func script(for terminal: TerminalKind, directory: String, command: String) -> String {

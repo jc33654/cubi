@@ -140,8 +140,8 @@ private final class ToolBridge: NSObject, WKScriptMessageHandlerWithReply {
 
     /// What the agent will be told is shown in full up to 400 characters, so agreeing means seeing it.
     static func confirmSession(tool: String, directory: String, prompt: String?) async -> Bool {
-        let shown = prompt.map { $0.count > 400 ? $0.prefix(400) + "…（共 \($0.count) 字）" : $0 } ?? "（沒有第一句話）"
-        return await question.confirm("\(tool) 想開一個 Claude Code session", "目錄：\(directory)\n第一句話：\(shown)", button: "開啟")
+        let shown = prompt.map { $0.count > 400 ? $0.prefix(400) + "…（共 \($0.count) 字）" : $0 } ?? "（沒有）"
+        return await question.confirm("\(tool) 想開一個 Claude Code session", "目錄：\(directory)\n要交給 Claude 的話：\(shown)", button: "開啟")
     }
 
     func userContentController(_ ucc: WKUserContentController, didReceive message: WKScriptMessage,

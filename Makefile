@@ -52,6 +52,8 @@ dist: bundle
 install: bundle
 	mkdir -p $(HOME)/Applications
 	rsync -a --delete build/Cubi.app/ "$(APP_DEST)/"
+	# 「重開 Cubi」: a fresh process even while Cubi runs (Finder only re-activates it); a stuck copy is replaced.
+	osacompile -o "$(HOME)/Applications/重開 Cubi.app" -e 'do shell script "open -n " & quoted form of "$(APP_DEST)"'
 	@echo "installed $(APP_DEST)"
 
 run: install

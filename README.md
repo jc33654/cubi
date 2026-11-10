@@ -129,6 +129,7 @@ open ~/Applications/Cubi.app
 
 | 動作 | 效果 |
 |---|---|
+| Cubi 卡住、關不掉 | Spotlight 打「重開 Cubi」（安裝時一起放在 `~/Applications/`）：舊的 3 秒沒在動就強制結束、換成新的；沒卡住的話只是叫出島。從 Finder 再點 Cubi.app 不行，macOS 只會叫醒卡住的那個 |
 | 滑鼠靠近瀏海 | 島滑出來成 compact（機器人一排 + 用量） |
 | 點島 | expanded：session 清單（名稱、context %、最近一次編輯的 +N −M）、用量列。高度隨內容長，最多到螢幕七成 |
 | 點清單的一列 | 右邊打開這個 session 的資訊：專案、模型／effort／版本、開始時間、使用時間（Claude Code 回報的時長加上之後經過的時間，每秒走）、回合與工具呼叫數、花費、變更行數、context、終端。按「跳到終端」切到它的分頁，✕ 關閉。底下是有掛 session hook 的插件各一塊（例如 sprint：綁的工單與剩餘時數、每列尾端 ✕ 解除那張、今日時數、計時中，按鈕「綁單號…」「▶／⏸ 計時」「同步 Jira」「開面板」） |
@@ -165,6 +166,8 @@ open ~/Applications/Cubi.app
 | `~/.cubi/bin/cubi-hook` | relay 本體，app 啟動時從 bundle 複製、內容不同就更新；路徑刻意無空白 |
 | `~/.cubi/agents/claude-code.json` | 串接前的 `statusLine`，解除安裝時還原 |
 | `~/Library/Application Support/cubi/cubi.sock` | app 的 unix socket（0600，只收同 UID） |
+| `~/Library/Application Support/cubi/heartbeat` | 每秒更新修改時間的空檔，「重開 Cubi」靠它分辨卡住還是正常 |
+| `~/Applications/重開 Cubi.app` | 安裝時產生的小 app，只做 `open -n ~/Applications/Cubi.app` |
 | `~/Library/Application Support/cubi/plugins/` | 插件；`cubi/sprint/` 是 sprint 插件自己的資料 |
 | 你選的行事曆 | 有 tick hook 的插件要求時才寫事件（備註最後一行 `由 Cubi 記錄 · …` 是去重記號） |
 | `~/Library/Logs/cubi.log` | 事件與錯誤 log，出問題先看這裡 |
@@ -191,7 +194,7 @@ open ~/Applications/Cubi.app
 
 1. 設定頁按 **解除安裝…**（或 `cubi --uninstall-hooks`）：移除 Cubi 的 hook 條目、還原 `statusLine`。
 2. 「登入時啟動」有開的話先在設定頁關掉。
-3. 結束 app，刪 `~/Applications/Cubi.app`、`~/.cubi/`、`~/Library/Application Support/cubi/`、`~/Library/Logs/cubi.log`。
+3. 結束 app，刪 `~/Applications/Cubi.app`、`~/Applications/重開 Cubi.app`、`~/.cubi/`、`~/Library/Application Support/cubi/`、`~/Library/Logs/cubi.log`。
 4. 偏好設定：`defaults delete cc.dotdot.cubi`。
 5. 有存過 plugin 的 API key 的話，Keychain Access 搜尋 service `cc.dotdot.cubi` 刪掉。
 6. `~/.claude/backups/cubi/` 是 settings.json 的歷史備份，可留。

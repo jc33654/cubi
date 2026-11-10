@@ -79,6 +79,9 @@ main() {
   # Not notarized by Apple, so Gatekeeper would refuse to open it. The signature check above is
   # what we trust instead; this is the step Gatekeeper would otherwise have blocked.
   xattr -dr com.apple.quarantine "$DEST" 2>/dev/null || true
+  # 「重開 Cubi」: a fresh process even while Cubi runs (Finder only re-activates it); a stuck copy is replaced.
+  osacompile -o "$HOME/Applications/重開 Cubi.app" -e "do shell script \"open -n \" & quoted form of \"$DEST\"" \
+    || echo "warn: 沒能建立「重開 Cubi.app」，Cubi 本身已裝好" >&2
   # $work stays in $TMPDIR (macOS purges it); on failure it is what you inspect.
 
   open "$DEST"

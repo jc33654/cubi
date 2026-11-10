@@ -136,15 +136,12 @@ private final class ToolBridge: NSObject, WKScriptMessageHandlerWithReply {
 
     init(isEnabled: @escaping () -> Bool) { self.isEnabled = isEnabled }
 
-    static func confirmSession(tool: String, directory: String, prompt: String?) -> Bool {
-        let alert = NSAlert()
-        alert.messageText = "\(tool) 想開一個 Claude Code session"
-        let first = prompt?.split(separator: "\n").first.map { String($0.prefix(160)) } ?? "（沒有第一句話）"
-        alert.informativeText = "目錄：\(directory)\n第一句話：\(first)"
-        alert.addButton(withTitle: "開啟")
-        alert.addButton(withTitle: "取消").keyEquivalent = "\u{1b}"
-        NSApp.activate(ignoringOtherApps: true)
-        return alert.runModal() == .alertFirstButtonReturn
+    private static let question = LinePrompt()
+
+    /// What the agent will be told is shown in full up to 400 characters, so agreeing means seeing it.
+    static func confirmSession(tool: String, directory: String, prompt: String?) async -> Bool {
+        let shown = prompt.map { $0.count > 400 ? $0.prefix(400) + "…（共 \($0.count) 字）" : $0 } ?? "（沒有第一句話）"
+        return await question.confirm("\(tool) 想開一個 Claude Code session", "目錄：\(directory)\n第一句話：\(shown)", button: "開啟")
     }
 
     func userContentController(_ ucc: WKUserContentController, didReceive message: WKScriptMessage,
@@ -180,12 +177,23 @@ private final class ToolBridge: NSObject, WKScriptMessageHandlerWithReply {
                 return
             }
             let prompt = (spec["prompt"] as? String).flatMap { $0.isEmpty ? nil : String($0.prefix(ToolPlugin.textLimit)) }
-            guard Self.confirmSession(tool: tool.displayName, directory: directory, prompt: prompt) else {
-                replyHandler(["ok": false, "err": "已取消", "cancelled": true], nil)
-                return
-            }
-            CubiLog.write("tool \(tool.id) session.new in \(directory)")
             Task { @MainActor in
+                // One question at a time, across plugins: a second request must not replace the
+                // panel under the user's cursor and get the click meant for the first.
+                guard !Self.question.isAsking else {
+                    replyHandler(["ok": false, "err": "已有一個開 session 的確認在等你回答"], nil)
+                    return
+                }
+                guard await Self.confirmSession(tool: tool.displayName, directory: directory, prompt: prompt) else {
+                    replyHandler(["ok": false, "err": "已取消", "cancelled": true], nil)
+                    return
+                }
+                // The app kept running while the question was open: the plugin may have been turned off.
+                guard self.isEnabled() else {
+                    replyHandler(["ok": false, "err": "這個插件已在設定頁關閉"], nil)
+                    return
+                }
+                CubiLog.write("tool \(tool.id) session.new in \(directory)")
                 let error = await SessionLauncher.launch(LaunchRequest(directory: directory, prompt: prompt, resume: .none, terminal: .automatic))
                 replyHandler(error.map { ["ok": false, "err": $0] } ?? ["ok": true], nil)
             }

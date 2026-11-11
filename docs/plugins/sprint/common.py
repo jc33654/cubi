@@ -1,5 +1,6 @@
 """Helpers every sprint command shares: Jira access, the payload's session, the target sprint."""
 import os
+from datetime import date
 
 from jira import TICKET_FIELDS, Jira, JiraError, parse_issue
 import review

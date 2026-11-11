@@ -5,7 +5,7 @@ import sys
 import tempfile
 import time
 import unittest
-from datetime import datetime
+from datetime import date, datetime
 
 import common
 import sprint
@@ -23,6 +23,15 @@ class CardTests(unittest.TestCase):
     def tearDown(self):
         self.store.save()
         self.dir.cleanup()
+
+    def test_a_ticket_done_without_a_resolution_date_is_done_today(self):
+        # Jira marks a status category done but leaves resolutiondate empty (no resolution set on the
+        # transition): the sync used to die on NameError here, before the state was written.
+        done = {"key": "PROJ-1", "fields": {"summary": "甲", "status": {"name": "Done", "statusCategory": {"key": "done"}}}}
+        common.apply_issue(self.store, common.parse_issue(done, "customfield_1"))
+        self.assertEqual(self.store.ticket("PROJ-1")["doneAt"], date.today().isoformat())
+        common.apply_issue(self.store, common.parse_issue({"key": "PROJ-1", "fields": {"status": {"statusCategory": {"key": "indeterminate"}}}}, "customfield_1"))
+        self.assertIsNone(self.store.ticket("PROJ-1")["doneAt"])
 
     def test_star_a_ticket(self):
         self.store.new_sprint("Sprint7")

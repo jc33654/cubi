@@ -7,6 +7,8 @@ import CubiKit
 ///                   registry has the freshest one), else the one terminal whose cwd matches:
 ///                   several tabs in the same project are ambiguous, and a wrong jump is worse
 ///                   than none
+///   Claude.app    → the app's `claude://code/continue?session=` link, with the app's own id for
+///                   the session (its claude-code-sessions records), else just the app
 ///   anything else → activate the app by bundle id (tab-level focus is not scriptable)
 ///   no identity   → the hooks ran without TERM_PROGRAM/tty: try Ghostty then Terminal.app by
 ///                   name and cwd, and only switch to what actually matched
@@ -15,6 +17,7 @@ import CubiKit
 enum TerminalFocus {
     static let ghosttyBundle = "com.mitchellh.ghostty"
     static let terminalBundle = "com.apple.Terminal"
+    static let desktopBundle = "com.anthropic.claudefordesktop"
 
     /// The scriptable terminal a session runs in, from the identity its hooks reported.
     static func kind(for info: SessionInfo) -> TerminalKind? {
@@ -43,6 +46,8 @@ enum TerminalFocus {
             Task { await run(terminalScript(tty: tty), label: "Terminal \(tty)", fallbackBundle: terminalBundle) }
         case .ghostty:
             Task { await run(ghosttyScript(name: name, cwd: cwd, anyClaude: true), label: "Ghostty \(info.name)", fallbackBundle: ghosttyBundle) }
+        case nil where bundle == desktopBundle:
+            focusDesktop(info)
         case nil where !bundle.isEmpty:
             activate(bundle: bundle)
         case nil:
@@ -58,6 +63,32 @@ enum TerminalFocus {
         if isRunning(terminalBundle), !name.isEmpty,
            await run(terminalByTitleScript(name: name), label: "Terminal? \(label)", fallbackBundle: nil).ok { return }
         CubiLog.write("focus: nothing matched for \(label)")
+    }
+
+    /// A session inside the Claude app: its deep link, handed to the app itself (not whichever app
+    /// owns `claude://`), switches it to that conversation. Without a live record for it (a
+    /// just-started session, an archived conversation, or an app version that files things
+    /// elsewhere) the app only comes to the front. The records are big, so the lookup runs off
+    /// the main thread like the scripts do.
+    private static func focusDesktop(_ info: SessionInfo) {
+        Task {
+            let id = info.id, short = id.prefix(8)
+            let directory = ClaudeDesktopSessions.directory(home: CubiPaths.home.path)
+            let entries = await Task.detached(priority: .userInitiated) { ClaudeDesktopSessions.entries(in: directory) }.value
+            guard let entry = ClaudeDesktopSessions.entry(for: id, in: entries), let link = ClaudeDesktopSessions.continueLink(entry.localID) else {
+                CubiLog.write("focus Claude.app \(short): no live app record for the session (\(entries.count) read); activating the app")
+                return activate(bundle: desktopBundle)
+            }
+            guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: desktopBundle) else {
+                return CubiLog.write("focus Claude.app \(short): app \(desktopBundle) not found")
+            }
+            CubiLog.write("focus Claude.app \(short): \(entry.localID)")
+            NSWorkspace.shared.open([link], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration()) { _, error in
+                guard let error else { return }
+                CubiLog.write("focus Claude.app \(short): link refused (\(error.localizedDescription)); activating the app")
+                Task { @MainActor in activate(bundle: desktopBundle) }
+            }
+        }
     }
 
     private static func isRunning(_ bundle: String) -> Bool {

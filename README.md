@@ -56,7 +56,7 @@
 - 🔍 **看它改了什麼** — 清單上的 `+N −M` 徽章點開就是那次 Edit / Write 的 diff。
 - 📊 **plan 用量** — 右翼顯示 5h / 7d 用掉的百分比，跨 session 合併，快到上限會變色。
 - 🪫 **context 快滿會露出疲憊表情** — 不用自己去看 status line。
-- 🧭 **點 Cubiii 跳到它的終端** — Terminal.app、Ghostty 都認得分頁。
+- 🧭 **點 Cubiii 跳到它的終端** — Terminal.app、Ghostty 都認得分頁；在 Claude app 裡開的 session 會切到那段對話。
 - ➕ **從瀏海開新 session** — 選專案、填第一句話、要不要接續上次，⌘↩ 就開在你的終端裡。
 - 🌙 **晚安區** — 放著不管的 session 自動進晚安區不佔位子；也可以手動「去睡覺」或「放生」。
 - 🎨 **換形狀、換顏色、拖著排順序** — 全部記得住，Cubi 重啟、session 回來都還在。
@@ -133,7 +133,7 @@ open ~/Applications/Cubi.app
 | 滑鼠靠近瀏海 | 島滑出來成 compact（機器人一排 + 用量） |
 | 點島 | expanded：session 清單（名稱、context %、最近一次編輯的 +N −M）、用量列。高度隨內容長，最多到螢幕七成 |
 | 點清單的一列 | 右邊打開這個 session 的資訊：專案、模型／effort／版本、開始時間、使用時間（Claude Code 回報的時長加上之後經過的時間，每秒走）、回合與工具呼叫數、花費、變更行數、context、終端。按「跳到終端」切到它的分頁，✕ 關閉。底下是有掛 session hook 的插件各一塊（例如 sprint：綁的工單與剩餘時數、每列尾端 ✕ 解除那張、今日時數、計時中，按鈕「綁單號…」「▶／⏸ 計時」「同步 Jira」「開面板」） |
-| 點機器人 | 跳到那個 session 的終端分頁（Terminal.app 用 tty；Ghostty 用分頁標題比對 session 名字，名字先看 Claude Code 自己的登錄檔 `~/.claude/sessions/`，改名立刻生效；標題比不到才看 cwd，而且只在只有一個分頁在那個目錄時才跳，不然寧可不跳；其他 app 只切到 app）；hooks 環境沒有 `TERM_PROGRAM`／tty 的 session 只能用名稱／cwd 猜：先問 Ghostty 再問 Terminal.app，都沒中就不動。沉睡中的機器人點一下會醒 |
+| 點機器人 | 跳到那個 session 的終端分頁（Terminal.app 用 tty；Ghostty 用分頁標題比對 session 名字，名字先看 Claude Code 自己的登錄檔 `~/.claude/sessions/`，改名立刻生效；標題比不到才看 cwd，而且只在只有一個分頁在那個目錄時才跳，不然寧可不跳；Claude app 裡的 session 用它的 `claude://code/continue` 連結切到那段對話，對照表在 `~/Library/Application Support/Claude/claude-code-sessions/`，找不到就只切到 app；其他 app 只切到 app）；hooks 環境沒有 `TERM_PROGRAM`／tty 的 session 只能用名稱／cwd 猜：先問 Ghostty 再問 Terminal.app，都沒中就不動。沉睡中的機器人點一下會醒 |
 | 有審批 | 島自動打開卡片：**拒絕 / 在終端處理 / 總是允許 / 允許**。「總是允許」會把 Claude Code 自己建議的規則寫進 session 與 `settings.local.json` |
 | 有 AskUserQuestion | 每題一組選項按鈕；多選用勾選；也可「在終端回答」 |
 | 終端自己答了或按 Esc | 卡片自動收回 |

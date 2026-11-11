@@ -1,4 +1,4 @@
-# cubi 狀態與進度（2026-11-10）
+# cubi 狀態與進度（2026-11-11）
 
 commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字。Sources 約 6,000 多行 Swift。
 
@@ -16,7 +16,7 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 | 工作中／晚安／放生 | 沉睡 12 小時（可調）自動進晚安區；右鍵「去睡覺」「起床上班」「放生」；放生後只有送訊息、被問、SessionStart 會回來；兩個集合存 UserDefaults | 放生與拉回真機以 fixture 重播驗證；右鍵待 Jade 親手試 |
 | 開新 session | 右鍵「開新 session…」對話框（最近專案／瀏覽、第一句話、接續、終端）、機器人右鍵「再開一個」「在新分頁接續這個 session」（`--resume <id>`）、右翼用量旁的 ＋（compact 就能按）；Ghostty 走 AppleScript `new surface configuration` + `input text`（不用 `initial input`，見已知限制），Terminal.app 走 `do script`；`cubi --new-session` CLI 同一條路 | CLI 真機驗證（Ghostty 帶第一句話 → 4 秒內 SessionStart + prompt；Terminal.app `--continue` → 接到同一個 session；`--resume <id>` 真機驗證；終端開不了時的警告路徑沒驗）；對話框與右鍵待 Jade 親手試 |
 | 用量 | 5h / 7d / cost 跨 session 合併，最近活動的 session 才能覆寫 | 真機驗證 |
-| 聚焦終端 | Terminal.app（tty）、Ghostty（標題／cwd）、其他 app 只切 app；沒有終端身分時用名稱／cwd 猜 Ghostty 再 Terminal.app；點沉睡的機器人會叫醒 | 有身分路徑真機驗證；猜測路徑只有腳本語法驗證 |
+| 聚焦終端 | Terminal.app（tty）、Ghostty（標題／cwd）、Claude app 裡的 session 走 `claude://code/continue?session=local_…`（對照表 `~/Library/Application Support/Claude/claude-code-sessions/*/*/local_*.json` 的 `cliSessionId`，沒對到只切 app）、其他 app 只切 app；沒有終端身分時用名稱／cwd 猜 Ghostty 再 Terminal.app；點沉睡的機器人會叫醒 | 有身分路徑真機驗證；Claude app 連結真機驗證過（`open` 那條連結，目標 session 的 `lastFocusedAt` 更新、其他不動），Cubi 內點擊待 Jade 親手試；猜測路徑只有腳本語法驗證 |
 | 安裝器 UI | 設定頁：Claude Code hooks 安裝／解除（看 diff 再寫）、退役舊 notify hook、Agents 開關與 API key、顯示（保持顯示、滑入就展開、機器人大小 28／36／44）、睡眠（沉睡 5–60 分鐘、晚安 1–24 小時或從不；改了立刻 tick：調短立刻生效，調長只有自動進晚安區的會回來、已沉睡的不叫醒）、範圍、插件（Agents／工具） | 真機驗證；三個新設定 Jade 真機驗證（2026-11-03：關滑入展開、切大小後拖曳、沉睡 5 分鐘） |
 | Plugin 架構 | `AgentPlugin` 協定；`ClaudeCodePlugin` 內建；`ManifestPlugin` 以 JSON 接新 agent（只能監看） | 單元測試＋假 manifest 真機 |
 | 工具插件 | `kind: tool` manifest：HTML 面板 + 白名單指令表（`ToolPlugin` 解析／型別驗證、`ToolPanel` 執行不經 shell、bridge 名可設）；選單與設定頁入口；`cubi --tool-run`；原本寫死在 app 裡的那個管理面板改成 Jade 本機的私用插件（manifest 放 plugins/，不進 repo） | 6 個單元測試；真機 `--tool-run`：私用插件的 status／asset.read 走通、`../x` 與未宣告 action 被擋；面板點擊待 Jade 親手試 |
@@ -58,11 +58,13 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 23. 資訊窗綁超過 8 張單：只列 8 張（計時中時 7 張），下一列「還有 N 張沒列出」；面板總覽分頁「綁定總覽」只列這個 sprint 有活動的 session（上一期的不出現），展開後每個 session 一列、每張單有 ✕，解掉別的 session 的單也行；計時停下來時依當下綁的單分（計時中解掉一張再綁回來，照樣分到）；全解掉的話資訊窗「計時中」寫「單都解除了，停下來不會記」、按鈕與面板寫「不記」；投入明細裡 session 自動記的那類改叫「Session」。
 24. Sprint 面板按一次「同步 Jira」：同樣是「進行中」的單都變藍（之前抓的單沒存狀態分類，畫成灰）；手動加、JQL 查不到的單也會跟著更新。
 25. 11-10：資訊窗「綁單號…」跳出的輸入框浮在島上面、切到別的 app 也不會消失、開著時 Cubi 其他東西照動；點下去能直接打字（不用再點一次輸入框）；用注音組字時按 Return 是選字、不會直接送出；開著時再按一次「綁單號…」換成新的那個。島上接續 session 開不了終端時，錯誤訊息也浮在島上面、按「好」收掉。Cubi 主執行緒真的卡死時（不是開著對話框；探針用 SIGSTOP 驗過），Spotlight 打「重開 Cubi」（`~/Applications/重開 Cubi.app`，`make install` 與 install.sh 都會產生；直接點 Cubi.app 不會開新程序）：心跳 3 秒沒動的那份被強制結束、換成新的；沒卡死時再開一次只會叫出島，開著選資料夾等對話框也不會被誤殺。看不到的視窗不在這個範圍內：島上叫出的輸入框與錯誤訊息、面板「用 Claude 整理回顧」開 session 前的確認框都已改成浮在島上面的面板，剩系統的選資料夾視窗（從前景視窗開）。確認框：要用滑鼠點「開啟」才開 session（Return 不算，Esc＝取消），取消或關掉回「已取消」；「要交給 Claude 的話」最多顯示 400 字並寫總字數；確認框開著時插件再要開 session 會被拒（「已有一個開 session 的確認在等你回答」），開著的框不變。心跳待驗：長時間閒置（App Nap）與睡眠剛喚醒時，再開一次 Cubi 不會誤殺健康的那份。
+26. 11-11：點 Claude app 裡開的 session 的機器人（或資訊面板「跳到終端」），Claude app 到前景並切到那段對話，不是停在原本看的對話；剛開、app 還沒寫下紀錄的 session 點了只會切到 app（log 有 `focus Claude.app …: no live app record`）。
 
 ## 已知限制
 
 - `cost.total_duration_ms`、`total_api_duration_ms`、`total_lines_*`、`version` 依官方文件解，實錄沒有 statusline 樣本。
 - 回合數、工具呼叫數只算 Cubi 看到的；Cubi 重啟歸零。
+- Claude app 裡的 session 在 /clear 或 compact 換了 CLI session id 後，app 會把紀錄的 `cliSessionId` 改成新的、舊的進 `previousCliSessionIds`（讀 5.1231.0 的 app.asar：`Mapping internal session … to CLI session …`、`preClearCliSessionId`、`cliSessionIdMoves`；沒親手按過）。Cubi 只比對現在的 `cliSessionId`，所以新 id 的機器人能跳、舊 id 的機器人（session 已結束）只切到 app。
 - Ghostty 的 AppleScript 沒有 tty／pid 可比對（sdef 查過：terminal 只有 id、name、working directory），所以只能靠分頁標題；名字取自 Claude Code 的 `~/.claude/sessions/<pid>.json`（改名立刻有），標題比不到時 cwd 只在唯一時採用。同一目錄多個 session 且都沒名字的話，點了只會把 Ghostty 帶到前面、不切分頁。
 - hooks 環境沒有 `TERM_PROGRAM`／tty 的 session（來源不明，log 曾出現）只能用名稱／cwd 猜終端，猜不到就不動。
 - 離線渲染（`--render-island`）畫不出 `ScrollView` 內容，清單只能真機看。

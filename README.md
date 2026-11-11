@@ -130,6 +130,7 @@ open ~/Applications/Cubi.app
 | 動作 | 效果 |
 |---|---|
 | Cubi 卡住、關不掉 | Spotlight 打「重開 Cubi」（安裝時一起放在 `~/Applications/`）：舊的 3 秒沒在動就強制結束、換成新的；沒卡住的話只是叫出島。從 Finder 再點 Cubi.app 不行，macOS 只會叫醒卡住的那個 |
+| Dock 點 Cubi、Spotlight／Finder 再開 Cubi.app | 沒有開著的視窗就打開設定頁（有沒有啟用、插件、hooks 狀態）；已經有設定頁或插件面板開著就只是把它帶到前面。Cubi 在 Dock 與 ⌘Tab 都找得到；⌘Tab 只是切到 Cubi（選單列變 Cubi），不會自己開設定頁 |
 | 滑鼠靠近瀏海 | 島滑出來成 compact（機器人一排 + 用量） |
 | 點島 | expanded：session 清單（名稱、context %、最近一次編輯的 +N −M）、用量列。高度隨內容長，最多到螢幕七成 |
 | 點清單的一列 | 右邊打開這個 session 的資訊：專案、模型／effort／版本、開始時間、使用時間（Claude Code 回報的時長加上之後經過的時間，每秒走）、回合與工具呼叫數、花費、變更行數、context、終端。按「跳到終端」切到它的分頁，✕ 關閉。底下是有掛 session hook 的插件各一塊（例如 sprint：綁的工單與剩餘時數、每列尾端 ✕ 解除那張、今日時數、計時中，按鈕「綁單號…」「▶／⏸ 計時」「同步 Jira」「開面板」） |

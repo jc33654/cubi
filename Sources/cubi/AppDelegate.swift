@@ -74,7 +74,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         RunLoop.main.add(Timer(timeInterval: 1, repeats: true) { _ in
             if utimes(Self.heartbeatPath, nil) != 0 { Self.makeHeartbeat(logFailure: false) }
         }, forMode: .common)
-        NSApp.setActivationPolicy(.accessory)
+        // A regular app from here on: in the Dock and ⌘Tab, so Cubi is findable when its windows are
+        // lost behind others. The plist keeps LSUIElement so the launch itself does not activate Cubi
+        // (which would open the settings below) and the --render-* runs never show a Dock icon.
+        NSApp.setActivationPolicy(.regular)
         NSApp.mainMenu = Self.mainMenu()
         Sounds.prewarm()
 
@@ -151,9 +154,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return main
     }
 
-    /// Clicking the app in the Dock/Finder while it runs also reveals the island.
+    /// A Dock click (or opening Cubi.app again) with nothing open opens the settings: the island is
+    /// always where it is, the settings are what a user looks for (is it on, which plugins). Reopen,
+    /// not activation: macOS also activates Cubi on its own when the app in front quits, and that
+    /// must not pop the settings. The island's overlays and the status item's window cannot be key,
+    /// so they do not count as something to land on; a minimised window is AppKit's to bring back.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        island?.showBriefly()
+        if NSApp.windows.contains(where: { $0.isMiniaturized }) { return true }
+        guard let settings, !NSApp.windows.contains(where: { $0.isVisible && $0.canBecomeKey && !($0 is OverlayPanel) }) else { return false }
+        CubiLog.write("reopened with no window open: showing settings")
+        settings.show()
         return false
     }
 

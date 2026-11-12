@@ -6,15 +6,17 @@ from datetime import datetime
 import review
 from card import session_info
 from common import session_of
+from hours import check_minutes
 from panel import panel_state
 from sprints import sprint_at
 
 
 def time_add(store, p):
-    try:
-        start = datetime.fromisoformat(p["start"]).timestamp()
-    except (TypeError, ValueError):
-        raise ValueError("開始時間格式不對")
+    if p.get("key") and not p.get("start"):
+        # The quick way for work on a ticket: only how long. It ended now.
+        start = time.time() - check_minutes(p.get("minutes")) * 60
+    else:
+        start = parse_start(p.get("start"))
     if p.get("key"):
         store.add_manual(p["key"], start, p.get("minutes"), p.get("kind", "開發"), p.get("note", ""), p.get("calendar", False))
     else:
@@ -26,6 +28,54 @@ def time_add(store, p):
         store.add_manual(None, start, p.get("minutes"), p.get("kind", "會議"), p["note"].strip(), p.get("calendar", False),
                          sprint=s["label"], counted=p.get("counted", True) is not False)
     return panel_state(store, p)
+
+
+def parse_start(text):
+    try:
+        return datetime.fromisoformat(text).timestamp()
+    except (TypeError, ValueError):
+        raise ValueError("開始時間格式不對")
+
+
+# What the panel says after an edit the calendar will not follow.
+CALENDAR_STALE = "行事曆上的舊事件不會自動更新，請手動調整或刪除"
+# cubi's calendar only ever grows an event it wrote (same start, later end), and the plugin only
+# sends stretches that ended in the last 48 hours (store.calendar_entries).
+CALENDAR_WINDOW = 48 * 3600
+
+
+def time_update(store, p):
+    """Change a manual stretch: `minutes`, `start`, `kind`, `note`, each only if given. One a
+    timer booked (it has `session`) keeps its start, kind and note: its minutes are matched
+    against that session's own stretches, and only its length can be corrected."""
+    m = next((m for m in store.segments["manual"] if m["id"] == p["id"]), None)
+    if m is None:
+        raise ValueError("找不到這筆時段")
+    timed = bool(m.get("session"))
+    start = m["start"]
+    if p.get("start"):
+        asked = parse_start(p["start"])
+        # The panel shows minutes; the stored start has seconds. Under a minute apart: not a move.
+        if abs(asked - start) >= 60:
+            if timed:
+                raise ValueError("計時產生的時段不能改開始時間，只能改長度或刪除")
+            start = asked
+    length = check_minutes(p["minutes"]) * 60 if p.get("minutes") is not None else m["end"] - m["start"]
+    kind = p["kind"] if p.get("kind") else m.get("kind")
+    note = p["note"].strip() if p.get("note") is not None else m.get("note", "")
+    if timed and (kind != m.get("kind") or note != m.get("note", "")):
+        raise ValueError("計時產生的時段只能改長度或刪除")
+    if m.get("key") is None and not note:
+        raise ValueError("沒有單號的工作要寫說明")
+    end = start + length
+    changed = (start, end, kind, note) != (m["start"], m["end"], m.get("kind"), m.get("note", ""))
+    only_longer = start == m["start"] and end >= m["end"] and (kind, note) == (m.get("kind"), m.get("note", "")) and end >= time.time() - CALENDAR_WINDOW
+    stale = bool(m.get("calendar")) and changed and not only_longer
+    m.update(start=start, end=end, kind=kind, note=note)
+    state = panel_state(store, p)
+    if stale:
+        state["notices"] = [CALENDAR_STALE]
+    return state
 
 
 def time_remove(store, p):

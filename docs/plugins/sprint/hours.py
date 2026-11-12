@@ -28,11 +28,12 @@ class HoursMixin:
         are not counted twice). Work with no ticket has `key` None and belongs to `sprint`;
         `counted` says whether it adds to the sprint's hours."""
         try:
-            start, minutes = float(start), float(minutes)
+            start = float(start)
         except (TypeError, ValueError):
             raise ValueError("開始時間與長度要是數字")
-        if not (1 <= minutes <= MAX_ENTRY / 60) or start != start:
-            raise ValueError("長度要在 1 分鐘到 24 小時之間")
+        minutes = check_minutes(minutes)
+        if start != start:
+            raise ValueError("開始時間與長度要是數字")
         entry = {"id": uuid.uuid4().hex[:12], "key": key, "start": start, "end": start + minutes * 60,
                  "kind": kind, "note": note, "calendar": bool(calendar)}
         if key is None:
@@ -161,6 +162,17 @@ class HoursMixin:
         # Newest first, manual entries ahead of stretches, so a busy week never starves a fresh meeting.
         entries.sort(key=lambda e: (not e["marker"].startswith("sprint:manual:"), -e["start"]))
         return entries[:50]
+
+
+def check_minutes(minutes):
+    """A stretch's length in minutes as a number, or ValueError saying what it must be."""
+    try:
+        minutes = float("x" if isinstance(minutes, bool) else minutes)   # true is not one minute
+    except (TypeError, ValueError):
+        raise ValueError("開始時間與長度要是數字")
+    if not 1 <= minutes <= MAX_ENTRY / 60:   # nan fails the comparison too
+        raise ValueError("長度要在 1 分鐘到 24 小時之間")
+    return minutes
 
 
 def subtract(span, cuts):

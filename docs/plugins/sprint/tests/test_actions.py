@@ -35,6 +35,7 @@ CASES = {
     "ticket.transition": ({"key": "PROJ-1"}, (), NO_JIRA),
     "points.push": ({"key": "PROJ-1"}, (), "實際點數欄位"),
     "time.add": ({"key": "PROJ-1", "start": "2026-11-05T10:00", "minutes": 30}, ("sprint",), None),
+    "time.update": ({"id": "nope", "minutes": 30}, (), "找不到這筆時段"),
     "time.remove": ({"id": "nope"}, ("sprint",), None),
     "review.update": ({"summary": "總結"}, ("sprint",), None),
     "timer.start": (SESSION, ("rows",), None),

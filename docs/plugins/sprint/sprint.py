@@ -24,7 +24,7 @@ from reviews import review_brief, review_export, review_update  # noqa: E402
 from sprints import sprint_at, sprint_new, sprint_select, sprint_sync, sprint_update  # noqa: E402,F401
 from store import Store  # noqa: E402
 from tickets import points_push, ticket_add, ticket_transition, ticket_update  # noqa: E402
-from worklog import session_bind, session_shares, session_unbind, time_add, time_remove, timer_stop  # noqa: E402
+from worklog import session_bind, session_shares, session_unbind, time_add, time_remove, time_update, timer_stop  # noqa: E402
 
 ACTIONS = {
     "session.info": session_info, "session.sync": lambda s, p: session_info(s, p, sync=True),
@@ -33,7 +33,7 @@ ACTIONS = {
     "tick": tick, "panel.state": panel_state,
     "sprint.new": sprint_new, "sprint.update": sprint_update, "sprint.select": sprint_select, "sprint.sync": sprint_sync,
     "ticket.add": ticket_add, "ticket.update": ticket_update, "ticket.transition": ticket_transition, "points.push": points_push,
-    "time.add": time_add, "time.remove": time_remove,
+    "time.add": time_add, "time.update": time_update, "time.remove": time_remove,
     "review.update": review_update, "review.export": review_export,
     "config.set": config_set, "hint.seen": hint_seen,
 }

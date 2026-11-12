@@ -74,7 +74,7 @@ const pts = v => v == null ? "–" : String(Math.round(v * 100) / 100);
 const CAT_COLORS = ["var(--cubi-c2)", "var(--cubi-c4)", "var(--cubi-c1)", "var(--cubi-c3)", "var(--cubi-c5)"];
 const TABS = { overview: ["dashboard", "總覽"], review: ["review", "回顧"], settings: ["settings", "設定"] };
 let state = null, session = window.cubiSession || null;
-let pendingSprint = false, selectedCategory = null, pendingTime = null, briefPoll = null;
+let pendingSprint = false, selectedCategory = null, pendingTime = null, editTime = null, briefPoll = null;
 const shownHints = [];         // one-time notes from the plugin: kept while this page lives, until closed
 const weekday = d => d ? "日一二三四五六"[new Date(d + "T00:00").getDay()] : "";
 const openHours = new Set();   // tickets (and "*", the whole sprint) whose hours are shown by kind
@@ -165,6 +165,7 @@ function render() {
   if (composing) { renderLater = true; return; }
   renderLater = false;
   keepTimeForm();
+  keepEditForm();
   const a = document.activeElement, ident = `${state.current}|${state.session?.id ?? ""}`;
   const focus = isField(a) ? fieldSel(a) : null, pos = a?.selectionStart ?? null;
   const moved = ident !== draftsFor;
@@ -178,6 +179,7 @@ function render() {
   renderOverview(); renderReview(); renderSettings();
   for (const id of open) document.getElementById(id)?.setAttribute("open", "");
   if (state.warnings && state.warnings.length) status(state.warnings.join("；"), true);
+  else if (state.notices && state.notices.length) status(state.notices.join("；"), true);   // stays until the next thing is said
   for (const [sel, d] of drafts) {
     const el = document.querySelector(sel);
     if (!el || fieldValue(el) === d.value) { drafts.delete(sel); carried.delete(sel); continue; }
@@ -324,7 +326,7 @@ function renderOverview() {
   html += `</tbody></table></div></div>` + otherCard(s, hpp) + bindingsCard() + sprintInfoCard(s) + manualCard(s);
   el.innerHTML = html;
   bindOverview(el);
-  const f = $("#t-min", el); if (f && pendingTime && pendingTime.focus) { f.focus(); pendingTime.focus = false; }
+  const f = $("#t-hours", el) || $("#t-min", el); if (f && pendingTime && pendingTime.focus) { f.focus(); pendingTime.focus = false; }
 }
 
 function sessionCard() {
@@ -387,44 +389,97 @@ function otherCard(s, hpp) {
   const rows = s.other.map(x => `<tr><td>${new Date(x.start * 1000).toLocaleString("zh-TW", { dateStyle: "short", timeStyle: "short" })}</td><td class="num">${fmtH(x.end - x.start)}${asPts(x.end - x.start, hpp)}</td>
       <td class="clip" title="${esc(x.note)}"><span class="cubi-pill">${esc(x.kind)}</span> ${esc(x.note)}</td>
       <td>${x.counted ? "" : `<span class="cubi-pill" title="不算進投入">不計入</span>`}${x.calendar ? ic("clock", 13) : ""}</td>
-      <td class="num"><button class="cubi-btn icon" data-remove-time="${esc(x.id)}" title="刪除">${ic("x", 14)}</button></td></tr>`).join("");
+      <td class="num"><span class="cubi-row" style="justify-content:flex-end;flex-wrap:nowrap">${editButton(x)}<button class="cubi-btn icon" data-remove-time="${esc(x.id)}" title="刪除">${ic("x", 14)}</button></span></td></tr>${editRow(x, 5)}`).join("");
   return `<div class="cubi-card"><div class="cubi-card-head"><h2 class="cubi-card-title">沒有單號的工作</h2>${tip("會議、支援、面試…沒有 Jira 單但花了時間的事。記在開始時間落在的那個 sprint（沒有就記在目前的）；勾「計入工時」的會算進上方投入，不算進任何一張單")}
       <span class="cubi-spacer"></span><button class="cubi-btn small" data-time="">${ic("plus", 13)}記一筆</button></div>
-    ${form}${rows ? `<div class="scroll-x"><table class="cubi-table tight fixed" style="min-width:560px"><colgroup><col style="width:170px"><col style="width:130px"><col><col style="width:84px"><col style="width:44px"></colgroup><tbody>${rows}</tbody></table></div>`
+    ${form}${rows ? `<div class="scroll-x"><table class="cubi-table tight fixed" style="min-width:560px"><colgroup><col style="width:170px"><col style="width:130px"><col><col style="width:84px"><col style="width:84px"></colgroup><tbody>${rows}</tbody></table></div>`
       : form ? "" : `<div class="cubi-muted">還沒有。</div>`}</div>`;
 }
 
 function manualCard(s) {
   if (!s.manual.length) return "";
-  return `<details class="cubi-card" id="manual-times"><summary class="cubi-card-title" style="cursor:pointer">手動時段 ${s.manual.length} 筆</summary><table class="cubi-table tight" style="margin-top:8px"><tbody>` +
+  return `<details class="cubi-card" id="manual-times"${editTime && s.manual.some(x => x.id === editTime.id) ? " open" : ""}><summary class="cubi-card-title" style="cursor:pointer">手動時段 ${s.manual.length} 筆</summary><table class="cubi-table tight" style="margin-top:8px"><tbody>` +
     s.manual.map(x => `<tr><td>${(Object.keys(x.shares || { [x.key]: 100 })).map(esc).join(" ")}</td><td>${new Date(x.start * 1000).toLocaleString("zh-TW")}</td><td class="num">${fmtH(x.end - x.start)}</td>
       <td><span class="cubi-pill">${esc(x.kind)}</span> ${esc(x.note || x.reason || "")}</td><td>${x.calendar ? ic("clock", 13) : ""}</td>
-      <td class="num"><button class="cubi-btn icon" data-remove-time="${esc(x.id)}" title="刪除">${ic("x", 14)}</button></td></tr>`).join("") + `</tbody></table></details>`;
+      <td class="num"><span class="cubi-row" style="justify-content:flex-end;flex-wrap:nowrap">${editButton(x)}<button class="cubi-btn icon" data-remove-time="${esc(x.id)}" title="刪除">${ic("x", 14)}</button></span></td></tr>${editRow(x, 6)}`).join("") + `</tbody></table></details>`;
 }
 
 // The ＋時數 form sits right under its ticket's row and keeps what was typed across re-renders.
 function timeFormRow(key) {
   return `<tr><td colspan="8" style="white-space:normal;overflow:visible">${timeForm(key, key)}</td></tr>`;
 }
-// key "" is work with no ticket: it needs a note and can be left out of the hours.
+// key "" is work with no ticket: it needs a start, a note, and can be left out of the hours. For a
+// ticket how long is enough (it ended just now, the usual kind, on the calendar); the rest is 進階.
 function timeForm(key, title) {
   const p = pendingTime;
-  return `<div class="cubi-inline cubi-row" data-time-form="${esc(key)}"><b>${esc(title)}</b>
+  const kinds = `<select id="t-kind">${["開發", "會議", "討論", "其他"].map(k => `<option ${k === p.kind ? "selected" : ""}>${k}</option>`).join("")}</select>`;
+  const cal = `<label class="cubi-row" style="gap:4px"><input id="t-cal" type="checkbox" ${p.calendar ? "checked" : ""}> 寫進行事曆</label>`;
+  const buttons = `<span class="cubi-spacer"></span><button class="cubi-btn primary small" id="t-save">加</button><button class="cubi-btn small" id="t-cancel">取消</button>`;
+  if (!key) return `<div class="cubi-inline cubi-row" data-time-form=""><b>${esc(title)}</b>
     <input id="t-start" type="datetime-local" value="${esc(p.start)}">
     <input id="t-min" type="number" min="1" max="1440" value="${esc(p.minutes)}" style="width:80px"> 分
-    <select id="t-kind">${["開發", "會議", "討論", "其他"].map(k => `<option ${k === p.kind ? "selected" : ""}>${k}</option>`).join("")}</select>
-    <input id="t-note" placeholder="${key ? "備註" : "做了什麼（必填）"}" value="${esc(p.note)}" size="18">
-    <label class="cubi-row" style="gap:4px"><input id="t-cal" type="checkbox" ${p.calendar ? "checked" : ""}> 寫進行事曆</label>
-    ${key ? "" : `<label class="cubi-row" style="gap:4px"><input id="t-counted" type="checkbox" ${p.counted ? "checked" : ""}> 計入工時</label>`}
-    <span class="cubi-spacer"></span><button class="cubi-btn primary small" id="t-save">加</button><button class="cubi-btn small" id="t-cancel">取消</button></div>`;
+    ${kinds}
+    <input id="t-note" placeholder="做了什麼（必填）" value="${esc(p.note)}" size="18">
+    ${cal}
+    <label class="cubi-row" style="gap:4px"><input id="t-counted" type="checkbox" ${p.counted ? "checked" : ""}> 計入工時</label>
+    ${buttons}</div>`;
+  return `<div class="cubi-inline cubi-row" data-time-form="${esc(key)}"><b>${esc(title)}</b>
+    <input id="t-hours" type="number" min="0.02" max="24" step="0.25" value="${esc(p.hours)}" style="width:80px"> 小時
+    ${p.more ? `<input id="t-start" type="datetime-local" value="${esc(p.start)}" title="開始時間。不填就是剛剛結束（現在往前推這段時數）">
+        ${kinds}<input id="t-note" placeholder="備註" value="${esc(p.note)}" size="18">${cal}`
+      : `<span class="cubi-muted">剛剛結束 · ${esc(p.kind)}${p.calendar ? " · 寫進行事曆" : ""}</span>
+        <button class="cubi-btn small" id="t-more" title="開始時間、種類、備註、要不要寫進行事曆">進階</button>`}
+    ${buttons}</div>`;
 }
 function keepTimeForm() {
   if (!pendingTime || !$(`[data-time-form="${CSS.escape(pendingTime.key)}"]`)) return;
-  pendingTime = { ...pendingTime, start: $("#t-start").value, minutes: $("#t-min").value, kind: $("#t-kind").value, note: $("#t-note").value, calendar: $("#t-cal").checked, counted: $("#t-counted")?.checked ?? true };
+  const p = pendingTime, v = (id, was) => { const f = $(id); return f ? f.value : was; };
+  pendingTime = { ...p, start: v("#t-start", p.start), minutes: v("#t-min", p.minutes), hours: v("#t-hours", p.hours), kind: v("#t-kind", p.kind), note: v("#t-note", p.note),
+    calendar: $("#t-cal")?.checked ?? p.calendar, counted: $("#t-counted")?.checked ?? p.counted };
+}
+
+// Changing a stretch that is already there: its form sits under its row. One a timer booked keeps
+// its start, kind and note (its minutes are matched against the session's own): only how long.
+const localTime = ts => { const d = new Date(ts * 1000); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
+const editButton = x => `<button class="cubi-btn small" data-edit-time="${esc(x.id)}" title="改時數、開始時間、種類、備註">改</button>`;
+function editRow(x, columns) {
+  if (!editTime || editTime.id !== x.id) return "";
+  const e = editTime, off = e.timed ? "disabled" : "";
+  return `<tr><td colspan="${columns}" style="white-space:normal;overflow:visible"><div class="cubi-inline cubi-row" data-time-form="edit"><b>修改</b>
+    <input id="e-hours" type="number" min="0.02" max="24" step="0.25" value="${esc(e.hours)}" style="width:80px"> 小時
+    <input id="e-start" type="datetime-local" value="${esc(e.start)}" ${off}>
+    <select id="e-kind" ${off}>${[...new Set([x.kind, "開發", "會議", "討論", "其他"])].map(k => `<option ${k === e.kind ? "selected" : ""}>${esc(k)}</option>`).join("")}</select>
+    <input id="e-note" placeholder="${x.key ? "備註" : "做了什麼（必填）"}" value="${esc(e.note)}" size="18" ${off}>
+    ${e.timed ? `<span class="cubi-muted">計時記下的，只能改長度</span>` : ""}
+    <span class="cubi-spacer"></span><button class="cubi-btn primary small" id="e-save">儲存</button><button class="cubi-btn small" id="e-cancel">取消</button></div></td></tr>`;
+}
+function keepEditForm() {
+  if (!editTime || !$(`[data-time-form="edit"]`)) return;
+  editTime = { ...editTime, hours: $("#e-hours").value, start: $("#e-start").value, kind: $("#e-kind").value, note: $("#e-note").value };
+}
+function openEditForm(id) {
+  const x = [...(state.sprint?.manual || []), ...(state.sprint?.other || [])].find(m => m.id === id);
+  if (!x || (editTime && editTime.id === id)) { editTime = null; render(); return; }
+  const hours = String(Math.round((x.end - x.start) / 36) / 100), start = localTime(x.start);
+  // `was`: what the form opened with. Only what the user changed is sent, so a length with seconds
+  // in it or a start between two minutes is not rounded just by opening and saving.
+  editTime = { id, hours, start, kind: x.kind, note: x.note || "", timed: !!x.session, was: { hours, start } };
+  render();
+}
+async function saveEditForm() {
+  keepEditForm();
+  const e = editTime, payload = { id: e.id };
+  if (e.hours !== e.was.hours) payload.minutes = Math.round(Number(e.hours) * 60);
+  if (!e.timed) {
+    if (e.start !== e.was.start) payload.start = e.start;
+    payload.kind = e.kind; payload.note = e.note;
+  }
+  editTime = null;
+  if (!await refresh("time.update", payload)) { editTime = e; render(); }
 }
 function openTimeForm(key) {
   const d = new Date(Date.now() - 3600 * 1000), local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-  pendingTime = pendingTime && pendingTime.key === key ? null : { key, start: local, minutes: 60, kind: "會議", note: "", calendar: true, counted: true, focus: true };
+  pendingTime = pendingTime && pendingTime.key === key ? null : { key, start: key ? "" : local, minutes: 60, hours: 1, more: false, kind: "會議", note: "", calendar: true, counted: true, focus: true };
   render();
 }
 
@@ -437,7 +492,13 @@ function bindOverview(el) {
   $("#sp-save", el)?.addEventListener("click", () => refresh("sprint.update", { name: $("#sp-name").value, start: $("#sp-start").value, end: $("#sp-end").value, goal: $("#sp-goal").value }, el.querySelectorAll("[id^=sp-]")));
   $("#sp-resync", el)?.addEventListener("click", () => refresh("sprint.sync", { replace: true }));
   $("#t-save", el)?.addEventListener("click", async () => { keepTimeForm(); const p = pendingTime; pendingTime = null;
-    if (!await refresh("time.add", { key: p.key, start: p.start, minutes: Number(p.minutes), kind: p.kind, note: p.note, calendar: p.calendar, counted: p.counted })) { pendingTime = p; render(); } });
+    const payload = p.key ? { key: p.key, minutes: Math.round(Number(p.hours) * 60), kind: p.kind, note: p.note, calendar: p.calendar, ...(p.more && p.start ? { start: p.start } : {}) }
+      : { key: p.key, start: p.start, minutes: Number(p.minutes), kind: p.kind, note: p.note, calendar: p.calendar, counted: p.counted };
+    if (!await refresh("time.add", payload)) { pendingTime = p; render(); } });
+  $("#t-more", el)?.addEventListener("click", () => { keepTimeForm(); pendingTime = { ...pendingTime, more: true }; render(); });
+  el.querySelectorAll("[data-edit-time]").forEach(b => b.addEventListener("click", () => openEditForm(b.dataset.editTime)));
+  $("#e-save", el)?.addEventListener("click", saveEditForm);
+  $("#e-cancel", el)?.addEventListener("click", () => { editTime = null; render(); });
   $("#t-cancel", el)?.addEventListener("click", () => { pendingTime = null; render(); });
   el.querySelectorAll("[data-share]").forEach(i => i.addEventListener("change", () => refresh("session.shares", { shares: currentShares() }, el.querySelectorAll("[data-share]"))));
   el.querySelectorAll("[data-unbind]").forEach(x => x.addEventListener("click", () => refresh("session.unbind", { key: x.dataset.unbind })));

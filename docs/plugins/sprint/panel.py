@@ -2,13 +2,14 @@
 import os
 from datetime import date
 
+import autopush
 import cadence
 import remind
 import review
 from common import FIELD_RE, rows_for
 from store import empty_review
 
-CONFIG_KEYS = ("site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "actualHoursField", "hoursPerPoint", "cadenceAnchor", "reviewEventStart", "reviewEventMinutes", "reviewDir", "reviewSessionDir")
+CONFIG_KEYS = ("site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "actualHoursField", "autoPushHours", "hoursPerPoint", "cadenceAnchor", "reviewEventStart", "reviewEventMinutes", "reviewDir", "reviewSessionDir")
 
 
 def panel_state(store, p):
@@ -36,7 +37,7 @@ def panel_state(store, p):
                            "manual": [m for m in store.segments["manual"] if set(m.get("shares") or [m["key"]]) & set(sprint["keys"])],
                            "reviewDay": iso(cadence.review_day(sprint)), "planningDay": iso(cadence.planning_day(sprint)),
                            "reviewDue": remind.is_due(sprint, cadence.today()), "reviewEvent": sprint.get("reviewEvent")}
-    state.update(proposals(store, sprint), hints=hints(store))
+    state.update(proposals(store, sprint), hints=hints(store), hoursPush=autopush.status(store))
     return state
 
 
@@ -102,6 +103,10 @@ def config_set(store, p):
     for k in CONFIG_KEYS:
         if k in p:
             new[k] = str(p[k]).strip()
+    if "autoPushHours" in new:
+        if not isinstance(p["autoPushHours"], bool):
+            raise ValueError("「自動寫回時數」要是開或關")
+        new["autoPushHours"] = p["autoPushHours"]
     if "hoursPerPoint" in new:
         try:
             new["hoursPerPoint"] = max(0.1, float(new["hoursPerPoint"]))
@@ -126,4 +131,10 @@ def config_set(store, p):
         if name in new and (new[name] or required) and not FIELD_RE.fullmatch(new[name]):
             raise ValueError(f"「{label}」要是 customfield_<數字>（例如 customfield_10016）" + ("" if required else "，或留空"))
     store.config.update(new)
+    return panel_state(store, p)
+
+
+def hours_retry(store, p):
+    """Tickets whose hours Jira refused wait again; the next tick tries them."""
+    autopush.retry(store)
     return panel_state(store, p)

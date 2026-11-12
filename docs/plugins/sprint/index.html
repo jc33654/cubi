@@ -280,6 +280,7 @@ function renderOverview() {
   html += shownHints.map(h => `<div class="cubi-card"><div class="cubi-row" style="flex-wrap:nowrap;align-items:flex-start">${ic("info")}<span style="flex:1;white-space:normal">${esc(h.text)}</span>
       <button class="cubi-btn icon" data-hint="${esc(h.id)}" title="知道了">${ic("x", 15)}</button></div></div>`).join("");
   if (s && s.reviewDue) html += reviewBanner(s);
+  html += hoursPushNotice();
   if (state.timers.length) {
     html += `<div class="cubi-card"><div class="cubi-card-head">${ic("clock")}<h2 class="cubi-card-title">計時中</h2></div><table class="cubi-table tight"><tbody>` +
       state.timers.map(t => `<tr><td>${esc(t.name)}</td><td>${t.keys.length ? t.keys.map(link).join(" ") : `<span style="color:var(--cubi-warning)">單都解除了，停下來不會記</span>`}</td>
@@ -342,6 +343,16 @@ function reviewBanner(s) {
        ${ev ? `<button class="cubi-btn small" id="review-resend" title="行事曆上沒看到事件時用：下一分鐘再寫一次。舊事件若被移動過，或 review 日、時段設定改過，行事曆上會多出一筆，請手動刪除舊的。">重新寫入行事曆</button>` : ""}`;
   return `<div class="cubi-card"><div class="cubi-row">${ic("review")}<b>${when}</b>${calendar}<span class="cubi-spacer"></span>
       <button class="cubi-btn primary" id="review-go" title="把這一期的數據交給 Claude Code 寫回顧（受限模式，會先問你）">${ic("sparkles")}產生回顧</button></div></div>`;
+}
+
+// Hours that still wait to be written to Jira on their own (tick writes a few each minute), and the
+// ones Jira refused: those stay until 重試.
+function hoursPushNotice() {
+  const h = state.hoursPush || {}, waiting = (h.pending || []).length, stopped = (h.stopped || []).length;
+  if (!waiting && !stopped) return "";
+  return `<div class="cubi-card"><div class="cubi-row">${ic("hourglass")}<b>${waiting + stopped} 張時數尚未寫回</b>
+      <span class="cubi-muted" style="white-space:normal">${waiting ? `${waiting} 張等下一分鐘自動寫` : ""}${waiting && stopped ? "，" : ""}${stopped ? `${stopped} 張被 Jira 拒絕、已停止重試（${h.stopped.map(esc).join("、")}）` : ""}${h.error ? `。最後一次錯誤：${esc(h.error)}` : ""}${h.on ? "" : "。自動寫回目前是關的，不會再寫"}</span>
+      <span class="cubi-spacer"></span>${stopped ? `<button class="cubi-btn" id="hours-retry" title="讓被拒絕的那幾張再排進去，下一分鐘重寫一次">重試</button>` : ""}</div></div>`;
 }
 
 function sessionCard() {
@@ -505,6 +516,7 @@ function bindOverview(el) {
   $("#shares-btn", el)?.addEventListener("click", () => refresh("session.shares", { shares: currentShares(), applyToSprint: true }, el.querySelectorAll("[data-share]")));
   el.querySelectorAll("[data-hint]").forEach(b => b.addEventListener("click", () => { shownHints.splice(shownHints.findIndex(h => h.id === b.dataset.hint), 1); render(); }));
   $("#review-go", el)?.addEventListener("click", startBrief);
+  $("#hours-retry", el)?.addEventListener("click", () => refresh("hours.retry"));
   $("#review-resend", el)?.addEventListener("click", () => refresh("review.resend"));
   $("#sp-save", el)?.addEventListener("click", () => refresh("sprint.update", { name: $("#sp-name").value, start: $("#sp-start").value, end: $("#sp-end").value, goal: $("#sp-goal").value }, el.querySelectorAll("[id^=sp-]")));
   $("#sp-resync", el)?.addEventListener("click", () => refresh("sprint.sync", { replace: true }));
@@ -685,6 +697,8 @@ function renderSettings() {
       ${field("pointsField", "估點欄位", "Story point estimate 通常是 customfield_10016")}
       ${field("actualPointsField", "實際點數欄位", "留空就只存本機；填了表格才有寫回")}
       ${field("actualHoursField", "實際時數欄位", "Jira 上放實際時數的數字欄位（customfield_…）。填了工單那列才有「寫回時數」；留空就不寫")}
+      <div class="cubi-field"><label for="c-autoPushHours">自動寫回時數 ${tip("開了以後，停止計時、新增／修改／刪除手動時段時，那張單的總投入時數會在一分鐘內自己寫進上面那個欄位，蓋掉 Jira 原有的數字（別人手填的也會被蓋掉）。要先填實際時數欄位才有作用")}</label>
+        <label class="cubi-row" style="gap:6px"><input id="c-autoPushHours" type="checkbox" ${c.autoPushHours ? "checked" : ""}> 開</label></div>
     </div>${state.netrcFound ? "" : `<div class="cubi-row" style="margin-top:10px"><span class="cubi-pill danger">找不到帳密檔</span></div>`}
     <div class="cubi-section-title">同步</div><div class="cubi-form">
       <div class="cubi-field" style="grid-column: 1 / -1"><label for="c-jql">JQL ${tip("本期會送出：" + sent)}</label><input id="c-jql" value="${esc(c.jql ?? "")}"></div>
@@ -697,7 +711,7 @@ function renderSettings() {
       ${field("reviewDir", "Markdown 資料夾", "匯出 <資料夾>/<標籤>.md；整理用的資料檔也在這")}
       ${field("reviewSessionDir", "整理用的 session 開在", "「用 Claude 整理」在這裡開 Claude Code")}
     </div></div>`;
-  $("#c-save", el).onclick = () => { const p = {}; ["site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "actualHoursField", "hoursPerPoint", "cadenceAnchor", "reviewEventStart", "reviewEventMinutes", "reviewDir", "reviewSessionDir"].forEach(k => { p[k] = $("#c-" + k).value; }); refresh("config.set", p, el.querySelectorAll("[id^=c-]")); };
+  $("#c-save", el).onclick = () => { const p = {}; ["site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "actualHoursField", "hoursPerPoint", "cadenceAnchor", "reviewEventStart", "reviewEventMinutes", "reviewDir", "reviewSessionDir"].forEach(k => { p[k] = $("#c-" + k).value; }); p.autoPushHours = $("#c-autoPushHours").checked; refresh("config.set", p, el.querySelectorAll("[id^=c-]")); };
 }
 
 // ---------- boot ----------

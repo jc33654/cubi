@@ -36,6 +36,7 @@ CASES = {
     "points.push": ({"key": "PROJ-1"}, (), "實際點數欄位"),
     "estimate.set": ({"key": "PROJ-1", "value": "3"}, (), NO_JIRA),
     "hours.push": ({"key": "PROJ-1"}, (), "實際時數欄位"),
+    "hours.retry": ({}, ("sprint", "hoursPush"), None),
     "time.add": ({"key": "PROJ-1", "start": "2026-11-05T10:00", "minutes": 30}, ("sprint",), None),
     "time.update": ({"id": "nope", "minutes": 30}, (), "找不到這筆時段"),
     "time.remove": ({"id": "nope"}, ("sprint",), None),

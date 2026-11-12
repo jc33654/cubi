@@ -198,6 +198,9 @@ class CadenceActions(unittest.TestCase):
         self.assertIsNone(sprint.panel_state(self.store, {})["period"])           # Sprint7 has dates
         with tempfile.TemporaryDirectory() as d:
             fresh = Store(d)
+            self.assertEqual(fresh.config["cadenceAnchor"], "")
+            self.assertIsNone(sprint.panel_state(fresh, {})["period"])            # no anchor set (the default): nothing proposed
+            fresh.config["cadenceAnchor"] = "2026-11-02"
             self.assertEqual(sprint.panel_state(fresh, {})["period"], {"start": "2026-11-02", "end": "2026-11-15"})   # no sprint at all
             fresh.new_sprint("Sprint6")
             self.assertEqual(sprint.panel_state(fresh, {})["period"], {"start": "2026-11-02", "end": "2026-11-15"})

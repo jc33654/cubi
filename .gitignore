@@ -6,3 +6,5 @@ build/
 # Per-machine Claude Code settings (capture hooks point at a local build path)
 .claude/settings.local.json
 __pycache__/
+# Requirement drafts and acceptance checklists: kept on this machine only
+docs/prd/

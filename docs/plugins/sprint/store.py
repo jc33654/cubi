@@ -35,11 +35,14 @@ DEFAULT_CONFIG = {
     "actualPointsField": "",
     # A number field to push the hours worked on the ticket to; empty: no push button.
     "actualHoursField": "",
+    # Write those hours on its own whenever a timer stops or a manual stretch is added, changed or
+    # removed (off: only the button does). It replaces the field, someone else's figure included.
+    "autoPushHours": False,
     # One point of estimate is this many hours of work.
     "hoursPerPoint": 8,
     # The Monday some sprint began: periods are counted from it in two-week steps, to propose
     # dates. Empty: nothing is proposed.
-    "cadenceAnchor": "2026-11-02",
+    "cadenceAnchor": "",
     # The "Sprint review" calendar event on each sprint's review day: when it starts (HH:MM;
     # empty: no event) and how many minutes it runs.
     "reviewEventStart": "10:00",
@@ -79,13 +82,18 @@ class Store(TimerMixin, HoursMixin):
     def _dump(self):
         return [json.dumps(data, sort_keys=True) for data in self._data()]
 
-    def away(self, work):
+    def away(self, work, save_first=False):
         """Run `work()` — a call to Jira, which may take its whole timeout — without the lock, so
         the session card and tick are not kept waiting behind it; then take the lock again and
         read the files afresh. Whatever the caller wants stored it applies after this returns, to
         the data as it is then: nothing another action wrote in the meantime is overwritten.
-        Changes made before going away would be lost, so there must be none."""
-        if self._dump() != self._taken:
+        Changes made before going away would be lost, so there must be none — or, with
+        `save_first`, they are written out first (tick: its own work is done and stored before
+        Jira is asked)."""
+        if save_first:
+            for name, data in zip(FILES, self._data()):
+                self._write(name, data)
+        elif self._dump() != self._taken:
             raise RuntimeError("the store was changed before releasing its lock")
         self.close()
         try:

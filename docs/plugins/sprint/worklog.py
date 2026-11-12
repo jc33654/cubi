@@ -6,6 +6,7 @@ from datetime import datetime
 import review
 from card import session_info
 from common import session_of
+import autopush
 from hours import check_minutes
 from panel import panel_state
 from sprints import sprint_at
@@ -19,6 +20,7 @@ def time_add(store, p):
         start = parse_start(p.get("start"))
     if p.get("key"):
         store.add_manual(p["key"], start, p.get("minutes"), p.get("kind", "開發"), p.get("note", ""), p.get("calendar", False))
+        autopush.queue(store, [p["key"]])
     else:
         s = sprint_at(store, start) or store.current_sprint()
         if not s:
@@ -72,6 +74,8 @@ def time_update(store, p):
     only_longer = start == m["start"] and end >= m["end"] and (kind, note) == (m.get("kind"), m.get("note", "")) and end >= time.time() - CALENDAR_WINDOW
     stale = bool(m.get("calendar")) and changed and not only_longer
     m.update(start=start, end=end, kind=kind, note=note)
+    if changed:
+        autopush.queue(store, autopush.keys_of(m))
     state = panel_state(store, p)
     if stale:
         state["notices"] = [CALENDAR_STALE]
@@ -79,6 +83,7 @@ def time_update(store, p):
 
 
 def time_remove(store, p):
+    autopush.queue(store, [k for m in store.segments["manual"] if m["id"] == p["id"] for k in autopush.keys_of(m)])
     store.remove_manual(p["id"])
     return panel_state(store, p)
 
@@ -87,7 +92,9 @@ def timer_stop(store, p):
     """From the card (the session itself) or the panel (`sid` of any running timer)."""
     from_panel = "session" in p or "sid" in p or "id" not in p
     sid = p.get("sid") or session_of(p).get("id", "")
-    _, note = store.timer_stop(sid, time.time()) if sid else (None, "要停哪個計時？")
+    entry, note = store.timer_stop(sid, time.time()) if sid else (None, "要停哪個計時？")
+    if entry:
+        autopush.queue(store, autopush.keys_of(entry))
     if from_panel:
         state = panel_state(store, p)
         if note:

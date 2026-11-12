@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from card import claude_session_ids, session_info, tick, timer_start  # noqa: E402,F401
 from common import check_payload, dry_run, jira  # noqa: E402,F401
 from jira import JiraError  # noqa: E402
-from panel import CONFIG_KEYS, config_set, hint_seen, panel_state  # noqa: E402,F401
+from panel import CONFIG_KEYS, config_set, hint_seen, hours_retry, panel_state  # noqa: E402,F401
 from reviews import review_brief, review_export, review_resend, review_update  # noqa: E402
 from sprints import sprint_at, sprint_new, sprint_select, sprint_sync, sprint_update  # noqa: E402,F401
 from store import Store  # noqa: E402
@@ -32,7 +32,7 @@ ACTIONS = {
     "review.brief": review_brief, "timer.start": timer_start, "timer.stop": timer_stop,
     "tick": tick, "panel.state": panel_state,
     "sprint.new": sprint_new, "sprint.update": sprint_update, "sprint.select": sprint_select, "sprint.sync": sprint_sync,
-    "ticket.add": ticket_add, "ticket.update": ticket_update, "ticket.transition": ticket_transition, "points.push": points_push, "hours.push": hours_push, "estimate.set": estimate_set,
+    "ticket.add": ticket_add, "ticket.update": ticket_update, "ticket.transition": ticket_transition, "points.push": points_push, "hours.push": hours_push, "hours.retry": hours_retry, "estimate.set": estimate_set,
     "time.add": time_add, "time.update": time_update, "time.remove": time_remove,
     "review.update": review_update, "review.export": review_export, "review.resend": review_resend,
     "config.set": config_set, "hint.seen": hint_seen,

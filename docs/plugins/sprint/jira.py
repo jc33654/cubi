@@ -42,7 +42,7 @@ class Jira:
         except urllib.error.HTTPError as e:
             detail = e.read().decode(errors="replace")[:300]
             if e.code in (401, 403):
-                raise JiraError("Jira 認證失敗（401/403），檢查 netrc 的帳號與 token")
+                raise JiraError("Jira 認證失敗（401/403），檢查 netrc 的帳號與 token", e.code)
             raise JiraError(f"{method} {path} → HTTP {e.code} {detail}", e.code)
         except (urllib.error.URLError, TimeoutError, OSError) as e:
             raise JiraError(f"連不上 Jira：{e}")

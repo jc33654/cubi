@@ -5,6 +5,7 @@ import sys
 import time
 from datetime import date, datetime
 
+import autopush
 import cadence
 import remind
 import review
@@ -108,11 +109,16 @@ def tick(store, p):
         rec = store.binding(session)
         store.record_segments(session, store.shares(rec))
     for sid, entry in store.stop_orphan_timers({s["id"] for s in p.get("sessions") or []}, now, claude_session_ids()):
+        if entry:
+            autopush.queue(store, autopush.keys_of(entry))
         print(f"timer of session {sid[:8]} stopped: session gone for {ORPHAN_AFTER // 60} min"
               + (f", booked {review.fmt_hours(entry['end'] - entry['start'])}" if entry else ", nothing booked (under a minute, or no ticket left)"), file=sys.stderr)
     running = store.sprint(store.sprint_of({"start": now}) or "")
     event = remind.calendar_event(running, store.config, now)
-    return {"calendar": ([event] if event else []) + store.calendar_entries(now)[:49 if event else 50]}
+    out = {"calendar": ([event] if event else []) + store.calendar_entries(now)[:49 if event else 50]}
+    # Last, with everything above already stored: the hours that wait to be written to Jira.
+    autopush.push_waiting(store)
+    return out
 
 
 def claude_session_ids():

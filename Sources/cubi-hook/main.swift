@@ -119,6 +119,9 @@ struct Args {
     var event: String? = nil
     var tool: String? = nil
     var capture = false
+    /// The session was started by Cubi in Claude Code's restricted mode (its hooks come from
+    /// Cubi's own settings file, which adds this flag).
+    var restricted = false
     var statusline = false
     var thenCommand: String? = nil
 }
@@ -133,6 +136,7 @@ func parseArgs() -> Args {
         case "--event":   a.event = argv.first; argv = argv.dropFirst()
         case "--tool":    a.tool = argv.first; argv = argv.dropFirst()
         case "--capture": a.capture = true
+        case "--restricted": a.restricted = true
         case "statusline": a.statusline = true; a.event = "statusline"
         case "--then":
             // The installer passes the previous command as one shell-quoted argument. Older
@@ -173,6 +177,7 @@ func buildEnvelope(args: Args, payload: [UInt8]) -> [UInt8] {
     s += ",\"bundle_id\":" + jsonOptional(env("__CFBundleIdentifier"))
     s += ",\"term_session_id\":" + jsonOptional(env("TERM_SESSION_ID"))
     s += ",\"tty\":" + jsonOptional(findAncestorTTY())
+    if args.restricted { s += ",\"restricted\":true" }   // absent otherwise: the envelope is what it always was
     s += "}"
     s += ",\"payload\":" + payloadText
     s += "}\n"

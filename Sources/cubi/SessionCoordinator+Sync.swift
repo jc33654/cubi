@@ -119,7 +119,7 @@ extension SessionCoordinator {
         switch request.kind {
         case .approval(let tool, let input, let suggestions):
             let summary = ApprovalSummary.describe(tool: tool, input: input)
-            let canAlways = (suggestions.array?.isEmpty == false)
+            let canAlways = (info?.client ?? HookClient()).offersAlwaysAllow(suggestions: suggestions)
             return PendingCard(id: request.id, sessionName: name, color: color,
                                content: .approval(title: summary.title, detail: summary.detail, canAlways: canAlways))
         case .question(let questions, _, _):

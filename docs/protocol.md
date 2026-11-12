@@ -25,6 +25,7 @@
 | `client.bundle_id` | `__CFBundleIdentifier`（LaunchServices 給的） |
 | `client.term_session_id` | `TERM_SESSION_ID`（Terminal.app 才有） |
 | `client.tty` | 沿 `pbi_ppid` 往上最多 8 層，第一個有 `e_tdev` 的程序 |
+| `client.restricted` | 只有 relay 帶 `--restricted` 時才有，值是 `true`；沒帶就沒有這個欄位（信封與以前逐字相同）。Cubi 用受限模式開的 session，它的 hooks 來自 `~/.cubi/restricted-settings.json`，那份檔的指令都帶這個旗標；app 據此不在審批卡給「總是允許」。舊版 relay 不認得旗標會直接忽略 |
 | `payload` | stdin；空 stdin 為 `null` |
 
 ## 回覆（app → relay）

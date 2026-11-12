@@ -8,6 +8,8 @@ enum HookSetup {
     static var settingsURL: URL { home.appendingPathComponent(".claude/settings.json") }
     static var backupDir: URL { home.appendingPathComponent(".claude/backups/cubi") }
     static var agentRecordURL: URL { home.appendingPathComponent(".cubi/agents/claude-code.json") }
+    /// Only Cubi's hooks, for restricted sessions (`claude --restricted --settings <this>`).
+    static var restrictedSettingsURL: URL { home.appendingPathComponent(".cubi/restricted-settings.json") }
 
     struct Preview {
         let plan: ClaudeHookInstaller.Plan
@@ -44,6 +46,32 @@ enum HookSetup {
         return Preview(plan: plan, snapshot: snapshot, url: url, pluginID: plugin.id)
     }
 
+    /// The settings file a restricted session is started with, written afresh each time so it
+    /// always matches this build's hooks and the user's deny rules as they are now. nil when
+    /// Cubi's hooks are not installed: the session then runs without this file, and its approvals
+    /// come up in the terminal only. A settings.json that cannot be read is an error, never an
+    /// empty set of deny rules.
+    ///
+    /// `directory` is where the session starts: its `.claude/settings.json` gives its deny rules
+    /// too, and so does the `.claude/settings.local.json` Claude Code would read for it (the git
+    /// repository root's, when the directory is inside a repository).
+    static func writeRestrictedSettings(directory: String) throws -> URL? {
+        let user = try SettingsFile.read(at: settingsURL).object
+        guard ClaudeHookInstaller.status(user).hooksInstalled else { return nil }
+        let shared = URL(fileURLWithPath: directory).appendingPathComponent(".claude/settings.json")
+        let localRoot = ClaudeHookInstaller.localSettingsDirectory(for: directory, home: home.path) { FileManager.default.fileExists(atPath: $0) }
+        let local = URL(fileURLWithPath: localRoot).appendingPathComponent(".claude/settings.local.json")
+        let layers: [ClaudeHookInstaller.DenyLayer] = [
+            .user(user),
+            .project(try SettingsFile.read(at: shared).object, workingDirectory: directory),
+            .project(try SettingsFile.read(at: local).object, workingDirectory: directory),
+        ]
+        let url = restrictedSettingsURL
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try SettingsFile.serialize(ClaudeHookInstaller.restrictedSettings(denyingAs: layers)).write(to: url, options: .atomic)
+        return url
+    }
+
     /// Writes the previewed result. Fails if the file changed since the preview.
     @discardableResult
     static func apply(_ preview: Preview) throws -> URL? {
@@ -55,6 +83,9 @@ enum HookSetup {
                 savePreviousStatusLine(previous)
             } else if !ClaudeHookInstaller.status(preview.plan.after).statuslineChained {
                 try? FileManager.default.removeItem(at: agentRecordURL)
+            }
+            if !ClaudeHookInstaller.status(preview.plan.after).hooksInstalled {
+                try? FileManager.default.removeItem(at: restrictedSettingsURL)
             }
         }
         CubiLog.write("\(preview.url.lastPathComponent) written for \(preview.pluginID) (backup: \(backup?.lastPathComponent ?? "none"))")

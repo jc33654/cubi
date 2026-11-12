@@ -66,9 +66,6 @@ def sprint_sync(store, p):
 
 
 def sprint_at(store, ts):
-    """The sprint whose dates hold `ts`, if any."""
-    for s in store.sprints["sprints"].values():
-        since, until = review.sprint_range(s)
-        if since is not None and until is not None and since <= ts < until:
-            return s
-    return None
+    """The sprint whose dates hold `ts`, if any (the same reading the hours are counted by)."""
+    label = store.sprint_of({"start": ts})
+    return store.sprint(label) if label else None

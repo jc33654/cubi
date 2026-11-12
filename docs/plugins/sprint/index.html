@@ -528,7 +528,7 @@ async function startBrief() {
   try { b = await call("review.brief"); } catch (_) { return; }
   status("正在開 Claude Code…");
   let r;
-  try { r = await bridge().postMessage({ action: "session.new", args: [JSON.stringify({ directory: b.directory, prompt: b.prompt })] }); }
+  try { r = await bridge().postMessage({ action: "session.new", args: [JSON.stringify({ directory: b.directory, prompt: b.prompt, restricted: true, readDirs: b.readDirs })] }); }
   catch (e) { status(String(e.message || e), true); return; }
   if (!r.ok) { status(r.cancelled ? "" : (r.err || "開不了 session"), !r.cancelled); return; }
   status(`已在 ${b.directory} 開 session；每 30 秒看一次，寫好就出現（資料檔 ${b.file}）`);

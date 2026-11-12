@@ -94,14 +94,16 @@ def weekend_gaps(sprints):
     return out
 
 
-def due_switch(sprints, today):
-    """The sprint to switch to on its own: one made as "the next one" (it waits) whose days now
-    hold today. Each waits once; after that the choice is the user's."""
+def started(sprints, today):
+    """Sprints made as "the next one" (they wait) whose first day has come, oldest first, each
+    with whether today is still inside it: [(sprint, running)]. One whose days all went by with
+    cubi closed is no longer waiting for anything, and is not the one to switch to either."""
+    out = []
     for s in sorted(sprints, key=lambda s: (s.get("start") or "", s["label"])):
         start, end = parse_date(s.get("start")), parse_date(s.get("end"))
-        if s.get("waiting") and start and start <= today and (not end or today <= end):
-            return s
-    return None
+        if s.get("waiting") and start and start <= today:
+            out.append((s, not end or today <= end))
+    return out
 
 
 def today():

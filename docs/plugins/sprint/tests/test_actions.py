@@ -39,7 +39,7 @@ CASES = {
     "review.update": ({"summary": "總結"}, ("sprint",), None),
     "timer.start": (SESSION, ("rows",), None),
     "timer.stop": (SESSION, ("rows",), "沒有在計時"),
-    "review.brief": ({}, ("directory", "prompt", "file"), None),
+    "review.brief": ({}, ("directory", "prompt", "file", "readDirs"), None),
     "review.export": ({}, (), None),
     "config.set": ({"hoursPerPoint": "6"}, ("config",), None),
     "hint.seen": ({"id": "weekendGap:Sprint7"}, ("ok",), None),

@@ -111,6 +111,84 @@ public enum ClaudeHookInstaller {
         return Plan(before: settings, after: after, diff: diff(settings, after), changed: after != settings, previousStatusLine: previous)
     }
 
+    /// Settings holding nothing but Cubi's hooks, for a restricted session's `--settings`: that
+    /// mode ignores the user's settings file, and with it the hooks that put the session on the island.
+    /// Each command carries `--restricted`, which the relay passes on, so the app knows the
+    /// session's approvals must not offer "always allow".
+    ///
+    /// One of the settings files Claude Code would have read for the session, with where a rule
+    /// path that starts with a single slash is counted from in that file.
+    public struct DenyLayer {
+        public var settings: JSONValue
+        public var anchor: String
+
+        /// ~/.claude/settings.json: `/x` there means `~/.claude/x`.
+        public static func user(_ settings: JSONValue) -> DenyLayer { .init(settings: settings, anchor: "~/.claude") }
+        /// A project's `.claude/settings.json` or `.claude/settings.local.json`: `/x` there means
+        /// `<the session's working directory>/x`, written from the file system's root as `//…`.
+        public static func project(_ settings: JSONValue, workingDirectory: String) -> DenyLayer {
+            .init(settings: settings, anchor: "/" + workingDirectory)
+        }
+    }
+
+    /// The tools whose rules are paths (as opposed to commands or domains).
+    public static let pathTools: Set<String> = ["Read", "Edit", "Write", "MultiEdit", "NotebookEdit", "Glob", "Grep"]
+
+    /// A deny rule as it must be written in another settings file to mean the same thing. In a
+    /// path rule a single leading slash is counted from the file the rule sits in (`//` is the
+    /// file system's root), so copied as it is into ~/.cubi it would point under ~/.cubi and deny
+    /// nothing. `//…`, `~/…`, `**/…`, `./…` and bare paths mean the same anywhere, and rules of
+    /// other tools (`Bash(/usr/bin/x:*)`) are not paths: all of those are left as they are.
+    public static func portableDenyRule(_ rule: String, anchor: String) -> String {
+        guard rule.hasSuffix(")"), let open = rule.firstIndex(of: "(") else { return rule }
+        let tool = String(rule[..<open]), spec = rule[rule.index(after: open)...].dropLast()
+        guard pathTools.contains(tool), spec.hasPrefix("/"), !spec.hasPrefix("//") else { return rule }
+        return "\(tool)(\(anchor)\(spec))"
+    }
+
+    /// The `permissions.deny` of each layer comes along, in that order, each rule once and
+    /// rewritten where it would otherwise change meaning; nothing else of those files does — no
+    /// allow rules, no ask rules, no status line. Restricted mode drops them whole, and a session
+    /// meant to be safer must not get to read what the user forbade.
+    public static func restrictedSettings(denyingAs layers: [DenyLayer]) -> JSONValue {
+        var root = hooksOnlySettings().object ?? [:]
+        var deny: [JSONValue] = []
+        for layer in layers {
+            for rule in layer.settings["permissions"]?["deny"]?.array ?? [] {
+                let carried = rule.string.map { JSONValue.string(portableDenyRule($0, anchor: layer.anchor)) } ?? rule
+                if !deny.contains(carried) { deny.append(carried) }
+            }
+        }
+        if !deny.isEmpty { root["permissions"] = .object(["deny": .array(deny)]) }
+        return .object(root)
+    }
+
+    /// Where Claude Code reads `.claude/settings.local.json` from for a session started in
+    /// `directory`: the root of the git repository that holds it (the nearest folder upwards with
+    /// a `.git`), else the directory itself. The home directory and the file system's root are
+    /// never taken for a repository root.
+    public static func localSettingsDirectory(for directory: String, home: String, exists: (String) -> Bool) -> String {
+        var dir = directory
+        while dir != "/" && dir != home && !dir.isEmpty {
+            if exists(dir + "/.git") { return dir }
+            dir = (dir as NSString).deletingLastPathComponent
+        }
+        return directory
+    }
+
+    public static func hooksOnlySettings() -> JSONValue {
+        let plain = "--agent claude-code --event ", marked = "--agent claude-code --restricted --event "
+        func mark(_ value: JSONValue) -> JSONValue {
+            switch value {
+            case .string(let s): return .string(s.replacingOccurrences(of: plain, with: marked))
+            case .array(let a): return .array(a.map(mark))
+            case .object(let o): return .object(o.mapValues(mark))
+            default: return value
+            }
+        }
+        return .object(["hooks": mark(installPlan(settings: .object([:])).after["hooks"] ?? .object([:]))])
+    }
+
     public static func uninstallPlan(settings: JSONValue, previousStatusLine: JSONValue?) -> Plan {
         var root = settings.object ?? [:]
         if var hooks = root["hooks"]?.object {

@@ -92,11 +92,11 @@ def remaining_text(left):
 
 def tick(store, p):
     now = p.get("now") or time.time()
-    due = cadence.due_switch(store.sprints["sprints"].values(), date.fromtimestamp(now))
-    if due:
+    for s, running in cadence.started(store.sprints["sprints"].values(), date.fromtimestamp(now)):
         # Once per sprint: after this, going back to an older one is the user's choice and stays.
-        del due["waiting"]
-        store.sprints["current"] = due["label"]
+        del s["waiting"]
+        if running:
+            store.sprints["current"] = s["label"]
     for session in p.get("sessions") or []:
         rec = store.binding(session)
         store.record_segments(session, store.shares(rec))

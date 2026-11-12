@@ -27,7 +27,7 @@ class CadenceRules(unittest.TestCase):
 
     def test_F1_1_the_next_sprint_starts_the_monday_after_and_runs_fourteen_days(self):
         self.assertEqual(cadence.next_sprint({"label": "Sprint7", "end": "2026-11-29"}), {"label": "Sprint8", "start": "2026-11-30", "end": "2026-12-13"})
-        # An older sprint that ends on its Friday: still the Monday after.
+        # F1-17: an older sprint that ends on its Friday: the Monday after, not the Saturday.
         self.assertEqual(cadence.next_sprint({"label": "Sprint6", "end": "2026-11-13"})["start"], "2026-11-16")
         self.assertIsNone(cadence.next_sprint({"label": "Sprint7"}))
         self.assertIsNone(cadence.next_sprint(None))
@@ -111,6 +111,29 @@ class CadenceActions(unittest.TestCase):
         sprint.sprint_new(self.store, {"label": "Sprint8", "start": "2026-11-30", "end": "2026-12-13"})
         self.tick("2026-12-03T14:00:00")
         self.assertEqual(self.store.sprints["current"], "Sprint8")
+
+    def test_F1_18_a_sprint_whose_days_all_went_by_unseen_stops_waiting_and_is_not_switched_to(self):
+        sprint.sprint_new(self.store, {"label": "Sprint8", "start": "2026-11-30", "end": "2026-12-13"})
+        sprint.sprint_new(self.store, {"label": "Sprint9", "start": "2026-12-14", "end": "2026-12-27"})
+        self.tick("2026-12-20T09:00:00")   # cubi was closed through all of Sprint8
+        state = sprint.panel_state(self.store, {})
+        self.assertEqual(state["current"], "Sprint9")
+        self.assertEqual([s["waiting"] for s in state["sprints"]], [False, False, False])
+        # …and when every one of them is over: nothing waits, nothing is switched to.
+        with tempfile.TemporaryDirectory() as d:
+            late = Store(d)
+            late.new_sprint("Sprint7", "", "2026-11-16", "2026-11-29")
+            sprint.sprint_new(late, {"label": "Sprint8", "start": "2026-11-30", "end": "2026-12-13"})
+            sprint.tick(late, {"now": ts("2027-01-05T09:00:00"), "sessions": []})
+            self.assertEqual((late.sprints["current"], late.sprint("Sprint8").get("waiting")), ("Sprint7", None))
+            late.close()
+
+    def test_tick_takes_a_time_a_date_can_hold(self):
+        import common
+        for now in (1e300, 1e11, 0, -5):
+            with self.assertRaisesRegex(ValueError, "now 要是 epoch 秒"):
+                common.check_payload({"now": now, "sessions": []})
+        common.check_payload({"now": 1794448000.5, "sessions": []})
 
     def test_only_a_sprint_made_ahead_waits(self):
         # Made on or after its first day, or without dates: current right away, as before.

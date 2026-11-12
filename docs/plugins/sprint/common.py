@@ -16,6 +16,7 @@ FIELD_KINDS = {"key": TEXT, "input": TEXT, "label": TEXT, "name": TEXT, "goal": 
                "notes": TEXT, "note": TEXT, "kind": TEXT, "summary": TEXT, "cwd": TEXT,
                "now": NUMBER, "shares": OBJECT, "session": OBJECT, "sessions": LIST, "segments": LIST}
 KIND_OF = {TEXT: str, NUMBER: (int, float), OBJECT: dict, LIST: list}
+MAX_EPOCH = 1e11   # the year 5138: far past any clock, well inside what a date can hold
 
 
 def check_payload(p):
@@ -29,6 +30,8 @@ def check_payload(p):
             continue
         if not isinstance(v, KIND_OF[kind]) or isinstance(v, bool) or (kind == NUMBER and not math.isfinite(v)):
             raise ValueError(f"{name} 要是{kind}")
+    if p.get("now") is not None and not 0 < p["now"] < MAX_EPOCH:
+        raise ValueError("now 要是 epoch 秒")
     # A session's id, a manual entry's, a Jira transition's: text, or a number Jira handed out.
     if isinstance(p.get("id"), (list, dict, bool)):
         raise ValueError("id 要是文字或數字")

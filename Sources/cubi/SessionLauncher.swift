@@ -17,6 +17,8 @@ struct LaunchRequest {
     var prompt: String?
     var resume: SessionLaunch.Resume
     var terminal: TerminalKind
+    /// Set: the session starts in Claude Code's restricted mode (see `SessionLaunch.Restricted`).
+    var restricted: SessionLaunch.Restricted? = nil
 }
 
 /// Opens a terminal tab in the project directory and types the `claude` command into it, as if
@@ -26,9 +28,10 @@ enum SessionLauncher {
     /// nil when a terminal opened; otherwise what went wrong, for the caller to show.
     /// Ghostty refusing (not scriptable, Automation denied, hung) falls back to Terminal.app.
     static func launch(_ request: LaunchRequest) async -> String? {
-        let command = SessionLaunch.command(directory: request.directory, prompt: request.prompt, resume: request.resume)
+        let command = SessionLaunch.command(directory: request.directory, prompt: request.prompt, resume: request.resume, restricted: request.restricted)
         let promptNote = request.prompt.map { " prompt=\($0.count) chars" } ?? ""
-        CubiLog.write("launch \(request.terminal.rawValue) in \(request.directory) resume=\(request.resume)\(promptNote)")
+        let modeNote = request.restricted.map { " restricted hooks=\($0.settingsFile != nil) readDirs=\($0.readDirs.count)" } ?? ""
+        CubiLog.write("launch \(request.terminal.rawValue) in \(request.directory) resume=\(request.resume)\(promptNote)\(modeNote)")
         var result = await TerminalFocus.run(script(for: request.terminal, directory: request.directory, command: command),
                                              label: "launch \(request.terminal.rawValue)", fallbackBundle: nil)
         if !result.ok, request.terminal == .ghostty {

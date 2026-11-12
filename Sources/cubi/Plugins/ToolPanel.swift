@@ -139,9 +139,9 @@ private final class ToolBridge: NSObject, WKScriptMessageHandlerWithReply {
     private static let question = LinePrompt()
 
     /// What the agent will be told is shown in full up to 400 characters, so agreeing means seeing it.
-    static func confirmSession(tool: String, directory: String, prompt: String?) async -> Bool {
-        let shown = prompt.map { $0.count > 400 ? $0.prefix(400) + "…（共 \($0.count) 字）" : $0 } ?? "（沒有）"
-        return await question.confirm("\(tool) 想開一個 Claude Code session", "目錄：\(directory)\n要交給 Claude 的話：\(shown)", button: "開啟")
+    static func confirmSession(tool: String, spec: SessionNewSpec, hooksInstalled: Bool) async -> Bool {
+        await question.confirm("\(tool) 想開一個\(spec.restricted ? "受限模式的" : "") Claude Code session",
+                               spec.confirmation(hooksInstalled: hooksInstalled), button: "開啟")
     }
 
     func userContentController(_ ucc: WKUserContentController, didReceive message: WKScriptMessage,
@@ -164,19 +164,17 @@ private final class ToolBridge: NSObject, WKScriptMessageHandlerWithReply {
                 replyHandler(["ok": false, "err": "manifest 沒有宣告 builtins: [\"session.new\"]"], nil)
                 return
             }
-            guard let raw = (body["args"] as? [String])?.first, let data = raw.data(using: .utf8),
-                  let spec = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let dir = spec["directory"] as? String, !dir.isEmpty else {
-                replyHandler(["ok": false, "err": "session.new 要 args[0] 是 {\"directory\", \"prompt\"} 的 JSON"], nil)
+            let spec: SessionNewSpec
+            do {
+                spec = try SessionNewSpec.parse((body["args"] as? [String])?.first, promptLimit: ToolPlugin.textLimit) { path in
+                    var isDir: ObjCBool = false
+                    return FileManager.default.fileExists(atPath: path, isDirectory: &isDir) && isDir.boolValue
+                }
+            } catch {
+                replyHandler(["ok": false, "err": (error as? SessionNewSpec.ParseError)?.message ?? "\(error)"], nil)
                 return
             }
-            let directory = ((dir as NSString).expandingTildeInPath as NSString).standardizingPath
-            var isDir: ObjCBool = false
-            guard directory.hasPrefix("/"), FileManager.default.fileExists(atPath: directory, isDirectory: &isDir), isDir.boolValue else {
-                replyHandler(["ok": false, "err": "找不到目錄 \(directory)"], nil)
-                return
-            }
-            let prompt = (spec["prompt"] as? String).flatMap { $0.isEmpty ? nil : String($0.prefix(ToolPlugin.textLimit)) }
+            let directory = spec.directory, prompt = spec.prompt
             Task { @MainActor in
                 // One question at a time, across plugins: a second request must not replace the
                 // panel under the user's cursor and get the click meant for the first.
@@ -184,7 +182,8 @@ private final class ToolBridge: NSObject, WKScriptMessageHandlerWithReply {
                     replyHandler(["ok": false, "err": "已有一個開 session 的確認在等你回答"], nil)
                     return
                 }
-                guard await Self.confirmSession(tool: tool.displayName, directory: directory, prompt: prompt) else {
+                let hooksInstalled = (try? HookSetup.status())?.hooksInstalled == true
+                guard await Self.confirmSession(tool: tool.displayName, spec: spec, hooksInstalled: hooksInstalled) else {
                     replyHandler(["ok": false, "err": "已取消", "cancelled": true], nil)
                     return
                 }
@@ -193,8 +192,18 @@ private final class ToolBridge: NSObject, WKScriptMessageHandlerWithReply {
                     replyHandler(["ok": false, "err": "這個插件已在設定頁關閉"], nil)
                     return
                 }
-                CubiLog.write("tool \(tool.id) session.new in \(directory)")
-                let error = await SessionLauncher.launch(LaunchRequest(directory: directory, prompt: prompt, resume: .none, terminal: .automatic))
+                var restricted: SessionLaunch.Restricted?
+                if spec.restricted {
+                    do {
+                        restricted = .init(settingsFile: try HookSetup.writeRestrictedSettings(directory: directory)?.path, readDirs: spec.readDirs)
+                    } catch {
+                        // Never fall back to an ordinary session: the plugin asked for the restricted one.
+                        replyHandler(["ok": false, "err": "寫不出受限模式的設定檔：\(error.localizedDescription)"], nil)
+                        return
+                    }
+                }
+                CubiLog.write("tool \(tool.id) session.new in \(directory)\(spec.restricted ? " (restricted)" : "")")
+                let error = await SessionLauncher.launch(LaunchRequest(directory: directory, prompt: prompt, resume: .none, terminal: .automatic, restricted: restricted))
                 replyHandler(error.map { ["ok": false, "err": $0] } ?? ["ok": true], nil)
             }
             return

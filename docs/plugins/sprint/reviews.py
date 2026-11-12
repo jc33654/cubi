@@ -37,7 +37,7 @@ def review_export(store, p):
 
 def review_brief(store, p):
     """Write the data file for a Claude Code session and say where to open it; the panel then
-    asks cubi (built-in session.new) to open the session with `prompt`."""
+    asks cubi (built-in session.new) to open a restricted session with `prompt`."""
     s = target_sprint(store, p)
     directory = os.path.expanduser(store.config["reviewSessionDir"])
     if not os.path.isdir(directory):
@@ -46,5 +46,7 @@ def review_brief(store, p):
     folder = review_dir(store)
     data_path = os.path.join(folder, f"{s['label']}-data.md")
     with open(data_path, "w", encoding="utf-8") as f:
-        f.write(review.brief(s, rows, review.metrics(rows, store.other_work(s["label"])), CUBI, os.path.join(folder, f"{s['label']}.md")))
-    return {"directory": directory, "prompt": review.brief_prompt(s, data_path), "file": data_path}
+        f.write(review.brief(s, rows, review.metrics(rows, store.other_work(s["label"])), CUBI))
+    # The session is opened restricted (the data holds text other people wrote in Jira): it reads
+    # the data file from `readDirs`, hands the result back with one command, and writes no files.
+    return {"directory": directory, "prompt": review.brief_prompt(s, data_path), "file": data_path, "readDirs": [folder]}

@@ -121,18 +121,22 @@ def metrics(rows, other=()):
 
 
 def burndown(sprint, rows, today=None):
-    """One point per sprint day: the ideal straight line and what was actually left, by estimate.
-    The actual line stops at today."""
+    """One point per sprint day: the ideal line and what was actually left, by estimate. The ideal
+    line falls on workdays only and reaches zero on the sprint's last workday; the actual line
+    stops at today."""
     start, end = parse_date(sprint.get("start")), parse_date(sprint.get("end"))
     if not start or not end or end < start:
         return []
     today = today or date.today()
     total = sum(r["estimate"] or 0 for r in rows)
     days = (end - start).days
-    out = []
+    steps = workdays(start, end) - 1   # from the first workday (all of it left) to the last (none)
+    out, worked = [], 0
     for i in range(days + 1):
         d = start + timedelta(days=i)
-        ideal = round(total * (1 - i / days), 2) if days else 0
+        worked += d.weekday() < 5
+        # A weekend keeps the value of the workday before it; before the first workday: all of it.
+        ideal = round(total * (1 - max(0, worked - 1) / steps), 2) if steps > 0 else (total if not worked else 0)
         left = None
         if d <= today:
             burnt = sum(r["estimate"] or 0 for r in rows if r["done"] and r["doneAt"] and date.fromisoformat(r["doneAt"]) <= d)

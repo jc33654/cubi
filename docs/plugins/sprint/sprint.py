@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from card import claude_session_ids, session_info, tick, timer_start  # noqa: E402,F401
 from common import check_payload, dry_run, jira  # noqa: E402,F401
 from jira import JiraError  # noqa: E402
-from panel import CONFIG_KEYS, config_set, panel_state  # noqa: E402,F401
+from panel import CONFIG_KEYS, config_set, hint_seen, panel_state  # noqa: E402,F401
 from reviews import review_brief, review_export, review_update  # noqa: E402
 from sprints import sprint_at, sprint_new, sprint_select, sprint_sync, sprint_update  # noqa: E402,F401
 from store import Store  # noqa: E402
@@ -35,7 +35,7 @@ ACTIONS = {
     "ticket.add": ticket_add, "ticket.update": ticket_update, "ticket.transition": ticket_transition, "points.push": points_push,
     "time.add": time_add, "time.remove": time_remove,
     "review.update": review_update, "review.export": review_export,
-    "config.set": config_set,
+    "config.set": config_set, "hint.seen": hint_seen,
 }
 # Their stdout is a path for cubi's `reveal`, so an error must go to stderr with a non-zero exit.
 RAW_ACTIONS = {"review.export"}

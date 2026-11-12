@@ -35,6 +35,9 @@ DEFAULT_CONFIG = {
     "actualPointsField": "",
     # One point of estimate is this many hours of work.
     "hoursPerPoint": 8,
+    # The Monday some sprint began: periods are counted from it in two-week steps, to propose
+    # dates. Empty: nothing is proposed.
+    "cadenceAnchor": "2026-11-02",
     "reviewDir": "~/Documents/sprint-reviews",
     # Where the "用 Claude 整理回顧" session opens.
     "reviewSessionDir": "~/Documents",

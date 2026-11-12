@@ -2,7 +2,7 @@
 per ticket, and what of it belongs on the calendar."""
 import uuid
 
-from review import MEETING_KINDS
+from review import MEETING_KINDS, sprint_range
 from timers import MAX_ENTRY
 
 SESSION_KIND = "Session"   # what session stretches are called next to manual kinds (a session may plan, then build)
@@ -72,7 +72,17 @@ class HoursMixin:
 
     def other_work(self, label):
         """The sprint's work that has no ticket."""
-        return [m for m in self.segments["manual"] if m.get("key") is None and m.get("sprint") == label]
+        return [m for m in self.segments["manual"] if m.get("key") is None and self.sprint_of(m) == label]
+
+    def sprint_of(self, entry):
+        """The sprint a stretch with no ticket counts in: the one whose days hold its start, read
+        from the dates as they are now (a sprint made afterwards gets what fell in its days); the
+        label noted when it was written only where no sprint holds that time."""
+        for s in sorted(self.sprints["sprints"].values(), key=lambda s: (s.get("start") or "", s["label"])):
+            since, until = sprint_range(s)
+            if since is not None and until is not None and since <= entry["start"] < until:
+                return s["label"]
+        return entry.get("sprint")
 
     def hours_by_key(self, since=None, until=None):
         """Seconds per key within [since, until]: session stretches split by their shares, manual

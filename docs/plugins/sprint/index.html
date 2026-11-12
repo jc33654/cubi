@@ -75,6 +75,8 @@ const CAT_COLORS = ["var(--cubi-c2)", "var(--cubi-c4)", "var(--cubi-c1)", "var(-
 const TABS = { overview: ["dashboard", "總覽"], review: ["review", "回顧"], settings: ["settings", "設定"] };
 let state = null, session = window.cubiSession || null;
 let pendingSprint = false, selectedCategory = null, pendingTime = null, briefPoll = null;
+const shownHints = [];         // one-time notes from the plugin: kept while this page lives, until closed
+const weekday = d => d ? "日一二三四五六"[new Date(d + "T00:00").getDay()] : "";
 const openHours = new Set();   // tickets (and "*", the whole sprint) whose hours are shown by kind
 
 function status(msg, isError) { const el = $("#status"); el.textContent = msg || ""; el.className = "cubi-status" + (isError ? " err" : ""); if (msg && !isError) setTimeout(() => { if (el.textContent === msg) el.textContent = ""; }, 4000); }
@@ -222,19 +224,23 @@ function kpi(title, icon, value, sub, delta) {
 
 function header(title) {
   const s = state.sprint;
-  const options = state.sprints.map(x => `<option value="${esc(x.label)}" ${x.label === state.current ? "selected" : ""}>${esc(x.name || x.label)}</option>`).join("");
+  const options = state.sprints.map(x => `<option value="${esc(x.label)}" ${x.label === state.current ? "selected" : ""}>${esc(x.name || x.label)}${x.waiting ? "（尚未開始）" : ""}</option>`).join("");
+  const pre = pendingSprint || {}, next = state.nextSprint;
+  const days = s && s.reviewDay ? ` title="review ${esc(s.reviewDay)}（${weekday(s.reviewDay)}）、planning ${esc(s.planningDay)}（${weekday(s.planningDay)}）"` : "";
   return `<div class="cubi-header"><h1 class="cubi-title">${esc(title)}</h1>
-      ${s ? `<span class="cubi-pill">${ic("clock", 13)}${esc(s.start || "?")} – ${esc(s.end || "?")}</span>` : ""}
+      ${s ? `<span class="cubi-pill"${days}>${ic("clock", 13)}${esc(s.start || "?")} – ${esc(s.end || "?")}</span>` : ""}
       <span class="cubi-spacer"></span>
       ${state.sprints.length ? `<select id="sprint-select" title="切換 sprint">${options}</select>` : ""}
+      ${next ? `<button class="cubi-btn" id="next-btn" title="預填下一期：${esc(next.start)} – ${esc(next.end)}（可以改）">${ic("plus")}建下一期</button>` : ""}
       <button class="cubi-btn" id="new-btn">${ic("plus")}新 sprint</button>
       ${s ? `<button class="cubi-btn primary" id="sp-sync" title="照設定的 JQL 從 Jira 抓這個 sprint 的單">${ic("refresh")}同步 Jira</button>` : ""}
     </div>${pendingSprint ? `<div class="cubi-card"><div class="cubi-form">
-      <div class="cubi-field"><label>Jira 標籤 ${tip("要跟 Jira 上的標籤一模一樣，例如 Sprint7")}</label><input id="new-label" placeholder="Sprint7"></div>
+      <div class="cubi-field"><label>Jira 標籤 ${tip("要跟 Jira 上的標籤一模一樣，例如 Sprint7")}</label><input id="new-label" placeholder="Sprint7" value="${esc(pre.label || "")}"></div>
       <div class="cubi-field"><label>名稱</label><input id="new-name" placeholder="Sprint 7"></div>
-      <div class="cubi-field"><label>開始</label><input id="new-start" type="date"></div>
-      <div class="cubi-field"><label>結束</label><input id="new-end" type="date"></div>
-      <div class="cubi-field" style="align-self:end"><div class="cubi-row"><button class="cubi-btn primary" id="new-save">建立</button><button class="cubi-btn" id="new-cancel">取消</button></div></div></div></div>` : ""}`;
+      <div class="cubi-field"><label>開始</label><input id="new-start" type="date" value="${esc(pre.start || "")}"></div>
+      <div class="cubi-field"><label>結束</label><input id="new-end" type="date" value="${esc(pre.end || "")}"></div>
+      <div class="cubi-field" style="align-self:end"><div class="cubi-row"><button class="cubi-btn primary" id="new-save">建立</button><button class="cubi-btn" id="new-cancel">取消</button></div></div></div>
+      <div class="cubi-muted" style="margin-top:10px">新的一期在 Jira 工單貼上這個標籤並「同步 Jira」之前是空的。開始日還沒到的話，面板會停在目前這期，到開始日自動切過去。${pre.start ? "日期是照兩週一期預填的，可以改。" : ""}</div></div>` : ""}`;
 }
 
 function bindHeader(el) {
@@ -243,10 +249,15 @@ function bindHeader(el) {
     drafts.delete("#sprint-select");
     const sel = $("#sprint-select"); if (sel) sel.value = state.current;
   });
-  $("#new-btn", el)?.addEventListener("click", () => { pendingSprint = !pendingSprint; render(); });
+  // The form opens empty, or filled in with a proposal: the first sprint's dates (counted from the
+  // anchor), or the sprint after the current one. Nothing is stored until 建立.
+  const openForm = pre => { for (const id of ["#new-label", "#new-name", "#new-start", "#new-end"]) drafts.delete(id); pendingSprint = pre; render(); };
+  $("#new-btn", el)?.addEventListener("click", () => openForm(pendingSprint ? false : (!state.sprint && state.period) || {}));
+  $("#next-btn", el)?.addEventListener("click", () => openForm({ ...state.nextSprint }));
   $("#new-save", el)?.addEventListener("click", async () => {
+    const pre = pendingSprint;
     pendingSprint = false;
-    if (!await refresh("sprint.new", { label: $("#new-label").value.trim(), name: $("#new-name").value, start: $("#new-start").value, end: $("#new-end").value }, el.querySelectorAll("[id^=new-]"))) { pendingSprint = true; render(); }
+    if (!await refresh("sprint.new", { label: $("#new-label").value.trim(), name: $("#new-name").value, start: $("#new-start").value, end: $("#new-end").value }, el.querySelectorAll("[id^=new-]"))) { pendingSprint = pre; render(); }
   });
   $("#new-cancel", el)?.addEventListener("click", () => { pendingSprint = false; render(); });
   $("#sp-sync", el)?.addEventListener("click", () => refresh("sprint.sync"));
@@ -259,6 +270,13 @@ function prevSprint() { const h = state.history; const i = h.findIndex(x => x.la
 function renderOverview() {
   const el = $("#tab-overview"), s = state.sprint;
   let html = header(s ? (s.name || s.label) : "Sprint");
+  // Each is on screen from here on: tell the plugin, so it is not said again in a later panel.
+  for (const h of state.hints || []) if (!shownHints.some(x => x.id === h.id)) {
+    shownHints.push(h);
+    bridge().postMessage({ action: "hint.seen", args: [JSON.stringify({ id: h.id })] }).catch(() => {});
+  }
+  html += shownHints.map(h => `<div class="cubi-card"><div class="cubi-row" style="flex-wrap:nowrap;align-items:flex-start">${ic("info")}<span style="flex:1;white-space:normal">${esc(h.text)}</span>
+      <button class="cubi-btn icon" data-hint="${esc(h.id)}" title="知道了">${ic("x", 15)}</button></div></div>`).join("");
   if (state.timers.length) {
     html += `<div class="cubi-card"><div class="cubi-card-head">${ic("clock")}<h2 class="cubi-card-title">計時中</h2></div><table class="cubi-table tight"><tbody>` +
       state.timers.map(t => `<tr><td>${esc(t.name)}</td><td>${t.keys.length ? t.keys.map(link).join(" ") : `<span style="color:var(--cubi-warning)">單都解除了，停下來不會記</span>`}</td>
@@ -331,10 +349,12 @@ function bindingsCard() {
 }
 
 function sprintInfoCard(s) {
-  return `<details class="cubi-card" id="sprint-info"><summary class="cubi-card-title" style="cursor:pointer">Sprint 資訊</summary><div class="cubi-form" style="margin-top:12px">
+  const p = !s.start && !s.end && state.period;   // dates counted from the anchor: shown, stored only by 儲存
+  return `<details class="cubi-card" id="sprint-info"${p ? " open" : ""}><summary class="cubi-card-title" style="cursor:pointer">Sprint 資訊</summary>
+    ${p ? `<div class="cubi-muted" style="margin-top:10px">這一期還沒有日期。已照兩週一期預填 ${esc(p.start)} – ${esc(p.end)}，按「儲存」才生效。</div>` : ""}<div class="cubi-form" style="margin-top:12px">
       <div class="cubi-field"><label>名稱</label><input id="sp-name" value="${esc(s.name || "")}"></div>
-      <div class="cubi-field"><label>開始</label><input id="sp-start" type="date" value="${esc(s.start || "")}"></div>
-      <div class="cubi-field"><label>結束</label><input id="sp-end" type="date" value="${esc(s.end || "")}"></div>
+      <div class="cubi-field"><label>開始</label><input id="sp-start" type="date" value="${esc(s.start || (p && p.start) || "")}"></div>
+      <div class="cubi-field"><label>結束</label><input id="sp-end" type="date" value="${esc(s.end || (p && p.end) || "")}"></div>
       <div class="cubi-field" style="grid-column: span 2"><label>目標</label><input id="sp-goal" value="${esc(s.goal || "")}"></div>
       <div class="cubi-field" style="align-self:end"><div class="cubi-row"><button class="cubi-btn primary" id="sp-save">儲存</button>
         <button class="cubi-btn" id="sp-resync" title="sprint 變成跟 Jira 查詢結果一模一樣，拿掉不在結果裡的單">重抓並清掉</button></div></div></div></details>`;
@@ -413,6 +433,7 @@ function bindOverview(el) {
   $("#add-btn", el)?.addEventListener("click", () => refresh("ticket.add", { key: $("#add-key").value }, [$("#add-key")]));
   $("#bind-btn", el)?.addEventListener("click", () => refresh("session.bind", { key: $("#bind-key").value }, [$("#bind-key")]));
   $("#shares-btn", el)?.addEventListener("click", () => refresh("session.shares", { shares: currentShares(), applyToSprint: true }, el.querySelectorAll("[data-share]")));
+  el.querySelectorAll("[data-hint]").forEach(b => b.addEventListener("click", () => { shownHints.splice(shownHints.findIndex(h => h.id === b.dataset.hint), 1); render(); }));
   $("#sp-save", el)?.addEventListener("click", () => refresh("sprint.update", { name: $("#sp-name").value, start: $("#sp-start").value, end: $("#sp-end").value, goal: $("#sp-goal").value }, el.querySelectorAll("[id^=sp-]")));
   $("#sp-resync", el)?.addEventListener("click", () => refresh("sprint.sync", { replace: true }));
   $("#t-save", el)?.addEventListener("click", async () => { keepTimeForm(); const p = pendingTime; pendingTime = null;
@@ -583,12 +604,13 @@ function renderSettings() {
     <div class="cubi-section-title">同步</div><div class="cubi-form">
       <div class="cubi-field" style="grid-column: 1 / -1"><label for="c-jql">JQL ${tip("本期會送出：" + sent)}</label><input id="c-jql" value="${esc(c.jql ?? "")}"></div>
       ${field("hoursPerPoint", "每點小時數", "實際點數＝投入時數 ÷ 這個數", "number")}
+      ${field("cadenceAnchor", "節奏錨點", "某一期開始的那個週一。兩週一期從這天往後算，用來預填每期的起訖；留空就不預填", "date")}
     </div>
     <div class="cubi-section-title">回顧</div><div class="cubi-form">
       ${field("reviewDir", "Markdown 資料夾", "匯出 <資料夾>/<標籤>.md；整理用的資料檔也在這")}
       ${field("reviewSessionDir", "整理用的 session 開在", "「用 Claude 整理」在這裡開 Claude Code")}
     </div></div>`;
-  $("#c-save", el).onclick = () => { const p = {}; ["site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "hoursPerPoint", "reviewDir", "reviewSessionDir"].forEach(k => { p[k] = $("#c-" + k).value; }); refresh("config.set", p, el.querySelectorAll("[id^=c-]")); };
+  $("#c-save", el).onclick = () => { const p = {}; ["site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "hoursPerPoint", "cadenceAnchor", "reviewDir", "reviewSessionDir"].forEach(k => { p[k] = $("#c-" + k).value; }); refresh("config.set", p, el.querySelectorAll("[id^=c-]")); };
 }
 
 // ---------- boot ----------

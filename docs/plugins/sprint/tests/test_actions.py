@@ -42,6 +42,7 @@ CASES = {
     "review.brief": ({}, ("directory", "prompt", "file"), None),
     "review.export": ({}, (), None),
     "config.set": ({"hoursPerPoint": "6"}, ("config",), None),
+    "hint.seen": ({"id": "weekendGap:Sprint7"}, ("ok",), None),
 }
 
 

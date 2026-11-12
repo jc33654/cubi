@@ -1,4 +1,5 @@
 """Sprint actions: create, edit, select, pull the tickets from Jira."""
+import cadence
 import common
 import review
 from common import apply_issue, fetch_tickets, jira_field, target_sprint
@@ -10,15 +11,28 @@ def sprint_new(store, p):
     label = (p.get("label") or "").strip()
     if not label:
         raise ValueError("要給 sprint 的標籤（例如 Sprint7）")
-    store.new_sprint(label, p.get("name", ""), p.get("start", ""), p.get("end", ""), p.get("goal", ""))
+    start, end = (p.get("start") or "").strip(), (p.get("end") or "").strip()
+    cadence.check_dates(store.sprints["sprints"].values(), label, start, end)
+    before, known = store.sprints.get("current"), label in store.sprints["sprints"]
+    s = store.new_sprint(label, p.get("name") or "", start, end, p.get("goal") or "")
+    first_day = review.parse_date(start)
+    if before and not known and first_day and first_day > cadence.today():
+        # The next sprint, made ahead of its first day (at Friday's planning): the panel stays on
+        # the running one, and tick moves over when the new one's days begin.
+        store.sprints["current"] = before
+        s["waiting"] = True
     return panel_state(store, p)
 
 
 def sprint_update(store, p):
     s = target_sprint(store, p)
+    if "start" in p or "end" in p:
+        start = (p["start"] if "start" in p else s.get("start")) or ""
+        end = (p["end"] if "end" in p else s.get("end")) or ""
+        cadence.check_dates(store.sprints["sprints"].values(), s["label"], start.strip(), end.strip())
     for k in ("name", "start", "end", "goal"):
         if k in p:
-            s[k] = p[k]
+            s[k] = (p[k] or "").strip() if k in ("start", "end") else p[k]
     return panel_state(store, p)
 
 

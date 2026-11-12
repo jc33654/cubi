@@ -8,7 +8,7 @@ import review
 from common import FIELD_RE, rows_for
 from store import empty_review
 
-CONFIG_KEYS = ("site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "hoursPerPoint", "cadenceAnchor", "reviewEventStart", "reviewEventMinutes", "reviewDir", "reviewSessionDir")
+CONFIG_KEYS = ("site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "actualHoursField", "hoursPerPoint", "cadenceAnchor", "reviewEventStart", "reviewEventMinutes", "reviewDir", "reviewSessionDir")
 
 
 def panel_state(store, p):
@@ -122,7 +122,7 @@ def config_set(store, p):
             raise ValueError("review 事件長度要是分鐘數")
         if not 5 <= new["reviewEventMinutes"] <= 480:
             raise ValueError("review 事件長度要在 5 到 480 分鐘之間")
-    for name, label, required in (("pointsField", "估點欄位", True), ("actualPointsField", "實際點數欄位", False)):
+    for name, label, required in (("pointsField", "估點欄位", True), ("actualPointsField", "實際點數欄位", False), ("actualHoursField", "實際時數欄位", False)):
         if name in new and (new[name] or required) and not FIELD_RE.fullmatch(new[name]):
             raise ValueError(f"「{label}」要是 customfield_<數字>（例如 customfield_10016）" + ("" if required else "，或留空"))
     store.config.update(new)

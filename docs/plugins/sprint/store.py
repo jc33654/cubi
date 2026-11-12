@@ -33,6 +33,8 @@ DEFAULT_CONFIG = {
     "pointsField": "customfield_10016",
     # A number field to push the actual points (hours ÷ hours-per-point) to; empty: no push button.
     "actualPointsField": "",
+    # A number field to push the hours worked on the ticket to; empty: no push button.
+    "actualHoursField": "",
     # One point of estimate is this many hours of work.
     "hoursPerPoint": 8,
     # The Monday some sprint began: periods are counted from it in two-week steps, to propose
@@ -55,6 +57,10 @@ class Store(TimerMixin, HoursMixin):
     def __init__(self, root=None):
         self.root = Path(root or os.environ.get("CUBI_SPRINT_DIR") or DEFAULT_DIR).expanduser()
         self.root.mkdir(parents=True, exist_ok=True)
+        self._take()
+
+    def _take(self):
+        """Take the lock and read the files as they are now."""
         self._lock = open(self.root / ".lock", "w")
         fcntl.flock(self._lock, fcntl.LOCK_EX)
         self._loaded = {}
@@ -65,6 +71,27 @@ class Store(TimerMixin, HoursMixin):
         self.bindings = self._read("bindings.json", {})
         self.segments = self._read("segments.json", {"sessions": {}, "manual": []})
         self.segments.setdefault("timers", {})
+        self._taken = self._dump()
+
+    def _data(self):
+        return (self.config, self.sprints, self.tickets, self.bindings, self.segments)
+
+    def _dump(self):
+        return [json.dumps(data, sort_keys=True) for data in self._data()]
+
+    def away(self, work):
+        """Run `work()` — a call to Jira, which may take its whole timeout — without the lock, so
+        the session card and tick are not kept waiting behind it; then take the lock again and
+        read the files afresh. Whatever the caller wants stored it applies after this returns, to
+        the data as it is then: nothing another action wrote in the meantime is overwritten.
+        Changes made before going away would be lost, so there must be none."""
+        if self._dump() != self._taken:
+            raise RuntimeError("the store was changed before releasing its lock")
+        self.close()
+        try:
+            return work()
+        finally:
+            self._take()
 
     # ---------- files ----------
 
@@ -98,7 +125,7 @@ class Store(TimerMixin, HoursMixin):
         """Write what changed and release the lock; harmless to call twice."""
         if self._lock.closed:
             return
-        for name, data in zip(FILES, (self.config, self.sprints, self.tickets, self.bindings, self.segments)):
+        for name, data in zip(FILES, self._data()):
             self._write(name, data)
         self.close()
 

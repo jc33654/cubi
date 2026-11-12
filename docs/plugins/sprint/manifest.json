@@ -22,6 +22,8 @@
     "ticket.add":        { "run": ["/usr/bin/python3", "$plugin/sprint.py", "ticket.add"],        "args": ["text"], "stdin": 1 },
     "ticket.update":     { "run": ["/usr/bin/python3", "$plugin/sprint.py", "ticket.update"],     "args": ["text"], "stdin": 1 },
     "ticket.transition": { "run": ["/usr/bin/python3", "$plugin/sprint.py", "ticket.transition"], "args": ["text"], "stdin": 1 },
+    "estimate.set":      { "run": ["/usr/bin/python3", "$plugin/sprint.py", "estimate.set"],      "args": ["text"], "stdin": 1 },
+    "hours.push":        { "run": ["/usr/bin/python3", "$plugin/sprint.py", "hours.push"],        "args": ["text"], "stdin": 1 },
     "points.push":       { "run": ["/usr/bin/python3", "$plugin/sprint.py", "points.push"],       "args": ["text"], "stdin": 1 },
     "time.add":          { "run": ["/usr/bin/python3", "$plugin/sprint.py", "time.add"],          "args": ["text"], "stdin": 1 },
     "time.update":       { "run": ["/usr/bin/python3", "$plugin/sprint.py", "time.update"],       "args": ["text"], "stdin": 1 },

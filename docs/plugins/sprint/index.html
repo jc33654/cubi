@@ -305,7 +305,7 @@ function renderOverview() {
     <div class="cubi-card" style="margin-top:16px"><div class="cubi-card-head"><h2 class="cubi-card-title">工單</h2><span class="cubi-muted">${m.tickets} 張</span><span class="cubi-spacer"></span>
       <input id="add-key" placeholder="加單號" size="12"><button class="cubi-btn small" id="add-btn">${ic("plus", 13)}加</button></div>
     <div class="scroll-x"><table class="cubi-table fixed" style="min-width:720px">
-    <colgroup><col style="width:36px"><col style="width:112px"><col><col style="width:104px"><col style="width:44px"><col style="width:150px"><col style="width:128px"><col style="width:${state.config.actualPointsField ? 118 : 84}px"></colgroup>
+    <colgroup><col style="width:36px"><col style="width:112px"><col><col style="width:104px"><col style="width:68px"><col style="width:150px"><col style="width:128px"><col style="width:${84 + (state.config.actualPointsField ? 34 : 0) + (state.config.actualHoursField ? 34 : 0)}px"></colgroup>
     <thead><tr>${sortTh("starred", "★")}${sortTh("key", "單號")}<th>摘要</th>${sortTh("status", "狀態")}${sortTh("estimate", "估", "num")}${sortTh("remaining", "剩餘")}${sortTh("seconds", "投入", "num")}<th></th></tr></thead><tbody>`;
   for (const t of sortedTickets(s.tickets)) {
     const rt = remainTone(t), budget = (t.estimate || 0) * hpp * 3600;
@@ -314,13 +314,15 @@ function renderOverview() {
       <td><span class="key"><span class="cubi-dot ${statusTone(t)}"></span>${link(t.key)}</span></td>
       <td class="clip" title="${esc(t.summary)}${t.notes ? "\n" + esc(t.notes) : ""}">${esc(t.summary)}</td>
       <td title="${esc(t.status || "")}"><span class="cubi-pill ${statusTone(t)}">${esc(t.status || "–")}</span></td>
-      <td class="num">${pts(t.estimate)}</td>
+      <td class="num"><input class="est" data-est="${esc(t.key)}" value="${esc(t.estimate ?? "")}" inputmode="decimal" autocomplete="off" placeholder="–"
+        title="估點。改了（按 Enter 或離開這一格）就寫回 Jira；清空代表未估點" style="width:52px;text-align:right"></td>
       <td>${t.remaining == null ? `<span class="cubi-muted">未估點</span>` : `<div class="remain"><div class="cubi-bar ${rt}"><i style="width:${used}%"></i></div><span style="color:var(--cubi-${rt || "ink2"})">${t.remaining < 0 ? "超 " + fmtH(-t.remaining) : fmtH(t.remaining)}</span></div>`}</td>
       <td class="num">${hoursButton(t.key, t.seconds, hpp)}</td>
       <td class="num actions"><span class="cubi-row" style="justify-content:flex-end;flex-wrap:nowrap">
         <button class="cubi-btn icon" data-time="${esc(t.key)}" title="補時數（會議、討論）">${ic("plus", 15)}</button>
         <button class="cubi-btn icon" data-transition="${esc(t.key)}" title="換 Jira 狀態">${ic("flag", 15)}</button>
-        ${state.config.actualPointsField ? `<button class="cubi-btn icon" data-push="${esc(t.key)}" title="這張單所有投入（含之前的 sprint）換算的點數寫回 Jira">${ic("download", 15)}</button>` : ""}</span></td></tr>`;
+        ${state.config.actualPointsField ? `<button class="cubi-btn icon" data-push="${esc(t.key)}" title="這張單所有投入（含之前的 sprint）換算的點數寫回 Jira">${ic("download", 15)}</button>` : ""}
+        ${state.config.actualHoursField ? `<button class="cubi-btn icon" data-push-hours="${esc(t.key)}" title="寫回時數：把這張單的總投入時數（含之前的 sprint）寫進 Jira 的實際時數欄位。會蓋掉那裡原有的數字，包含別人手動填的">${ic("hourglass", 15)}</button>` : ""}</span></td></tr>`;
     if (openHours.has(t.key)) html += `<tr><td colspan="8" style="white-space:normal">${kindsList(t.kinds, hpp)}${entriesList(t.entries, hpp)}</td></tr>`;
     if (pendingTime && pendingTime.key === t.key) html += timeFormRow(t.key);
   }
@@ -520,6 +522,12 @@ function bindOverview(el) {
   el.querySelectorAll("[data-unbind-sid]").forEach(x => x.addEventListener("click", () => refresh("session.unbind", { sid: x.dataset.unbindSid, key: x.dataset.unbindKey })));
   el.querySelectorAll("[data-hours]").forEach(b => b.addEventListener("click", () => { const k = b.dataset.hours; if (!openHours.delete(k)) openHours.add(k); render(); }));
   el.querySelectorAll("[data-push]").forEach(b => b.addEventListener("click", () => refresh("points.push", { key: b.dataset.push })));
+  el.querySelectorAll("[data-push-hours]").forEach(b => b.addEventListener("click", async () => { if (await refresh("hours.push", { key: b.dataset.pushHours })) status("時數已寫回 Jira"); }));
+  // Jira is the truth for an estimate: a failed write puts the field back to what Jira has.
+  el.querySelectorAll("[data-est]").forEach(i => i.addEventListener("change", async () => {
+    if (await refresh("estimate.set", { key: i.dataset.est, value: i.value }, [i])) { if (!(state.warnings || []).length) status("估點已寫回 Jira"); return; }
+    drafts.delete(fieldSel(i)); render();
+  }));
   el.querySelectorAll("[data-remove-time]").forEach(b => b.addEventListener("click", () => refresh("time.remove", { id: b.dataset.removeTime })));
   el.querySelectorAll("[data-time]").forEach(b => b.addEventListener("click", () => openTimeForm(b.dataset.time)));
   el.querySelectorAll("[data-transition]").forEach(b => b.addEventListener("click", () => transitionMenu(b.dataset.transition, b)));
@@ -676,6 +684,7 @@ function renderSettings() {
       ${field("projectKey", "專案 key", "可多個，逗號分開")}
       ${field("pointsField", "估點欄位", "Story point estimate 通常是 customfield_10016")}
       ${field("actualPointsField", "實際點數欄位", "留空就只存本機；填了表格才有寫回")}
+      ${field("actualHoursField", "實際時數欄位", "Jira 上放實際時數的數字欄位（customfield_…）。填了工單那列才有「寫回時數」；留空就不寫")}
     </div>${state.netrcFound ? "" : `<div class="cubi-row" style="margin-top:10px"><span class="cubi-pill danger">找不到帳密檔</span></div>`}
     <div class="cubi-section-title">同步</div><div class="cubi-form">
       <div class="cubi-field" style="grid-column: 1 / -1"><label for="c-jql">JQL ${tip("本期會送出：" + sent)}</label><input id="c-jql" value="${esc(c.jql ?? "")}"></div>
@@ -688,7 +697,7 @@ function renderSettings() {
       ${field("reviewDir", "Markdown 資料夾", "匯出 <資料夾>/<標籤>.md；整理用的資料檔也在這")}
       ${field("reviewSessionDir", "整理用的 session 開在", "「用 Claude 整理」在這裡開 Claude Code")}
     </div></div>`;
-  $("#c-save", el).onclick = () => { const p = {}; ["site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "hoursPerPoint", "cadenceAnchor", "reviewEventStart", "reviewEventMinutes", "reviewDir", "reviewSessionDir"].forEach(k => { p[k] = $("#c-" + k).value; }); refresh("config.set", p, el.querySelectorAll("[id^=c-]")); };
+  $("#c-save", el).onclick = () => { const p = {}; ["site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "actualHoursField", "hoursPerPoint", "cadenceAnchor", "reviewEventStart", "reviewEventMinutes", "reviewDir", "reviewSessionDir"].forEach(k => { p[k] = $("#c-" + k).value; }); refresh("config.set", p, el.querySelectorAll("[id^=c-]")); };
 }
 
 // ---------- boot ----------

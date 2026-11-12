@@ -1,8 +1,15 @@
 """Ticket actions: add to the sprint, local marks, Jira transitions, pushing the actual points."""
+import math
+import re
+import unicodedata
+
 import common
 import review
-from common import fetch_tickets, jira_field, known_key
+from common import apply_issue, fetch_tickets, jira_field, known_key
+from jira import TICKET_FIELDS, JiraError, parse_issue
 from panel import panel_state
+
+ESTIMATE = re.compile(r"[0-9]+(\.[0-9]+)?")
 
 
 def ticket_add(store, p):
@@ -54,4 +61,73 @@ def points_push(store, p):
     if actual is None:
         raise ValueError("這張單還沒有投入時數")
     common.jira(store).set_field(key, field, actual)
+    return panel_state(store, p)
+
+
+def parse_estimate(value):
+    """What the panel's estimate field holds, as points: a number above zero, or None for an empty
+    field (not estimated). Full-width digits count; a comma, a space inside, 1e3 or a zero do not
+    (zero points already reads as "not estimated" everywhere: it may not be a second way to say it)."""
+    wrong = ValueError("估點要是大於 0 的數字（例如 0.5、3）；清空代表未估點")
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        raise wrong
+    if isinstance(value, str):
+        text = unicodedata.normalize("NFKC", value).strip()
+        if not text:
+            return None
+        if not ESTIMATE.fullmatch(text):
+            raise wrong
+        value = float(text)
+    if not math.isfinite(value) or value <= 0:
+        raise wrong
+    return float(value)
+
+
+def estimate_set(store, p):
+    """Write the ticket's estimate to Jira (`value` empty: clear it), then keep what was written.
+    Jira is the truth: nothing is stored unless the write went through. The lock is not held
+    while Jira is asked, and afterwards only this ticket is touched."""
+    key = known_key(store, p["key"])
+    field = jira_field(store, "pointsField", "估點欄位", required=True)
+    value = parse_estimate(p.get("value"))
+    j = common.jira(store)
+
+    def write():
+        j.set_field(key, field, value)
+        try:
+            return j.issue(key, TICKET_FIELDS + [field]), None
+        except JiraError as e:   # written, but the read-back failed: the estimate still stands
+            return None, str(e)
+    issue, trouble = store.away(write)
+    if issue:
+        apply_issue(store, parse_issue(issue, field))
+    # The value just written, not what the read-back said: a cleared field comes back empty, and
+    # an empty answer never clears the local estimate (common.apply_issue).
+    store.ticket(key)["estimate"] = value
+    state = panel_state(store, p)
+    if trouble:
+        state["warnings"] = state.get("warnings", []) + [f"估點已寫進 Jira，但回讀工單失敗：{trouble}"]
+    return state
+
+
+def worked_hours(store, key):
+    """Every hour ever worked on the ticket (all sprints, sessions and manual stretches alike, the
+    same total `remaining` counts from), to two decimals."""
+    return round(store.hours_by_key().get(key, {}).get("total", 0.0) / 3600, 2)
+
+
+def hours_push(store, p):
+    """Set the ticket's actual-hours field in Jira to the hours worked on it. It replaces what is
+    there (pressing twice gives the same number), someone else's figure included."""
+    field = jira_field(store, "actualHoursField", "實際時數欄位")
+    if not field:
+        raise ValueError("設定裡沒有「實際時數欄位」")
+    key = known_key(store, p["key"])
+    hours = worked_hours(store, key)
+    if hours <= 0:
+        raise ValueError("這張單還沒有投入時數")
+    j = common.jira(store)
+    store.away(lambda: j.set_field(key, field, hours))
     return panel_state(store, p)

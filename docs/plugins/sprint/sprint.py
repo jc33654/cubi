@@ -23,7 +23,7 @@ from panel import CONFIG_KEYS, config_set, hint_seen, panel_state  # noqa: E402,
 from reviews import review_brief, review_export, review_resend, review_update  # noqa: E402
 from sprints import sprint_at, sprint_new, sprint_select, sprint_sync, sprint_update  # noqa: E402,F401
 from store import Store  # noqa: E402
-from tickets import points_push, ticket_add, ticket_transition, ticket_update  # noqa: E402
+from tickets import estimate_set, hours_push, points_push, ticket_add, ticket_transition, ticket_update  # noqa: E402
 from worklog import session_bind, session_shares, session_unbind, time_add, time_remove, time_update, timer_stop  # noqa: E402
 
 ACTIONS = {
@@ -32,7 +32,7 @@ ACTIONS = {
     "review.brief": review_brief, "timer.start": timer_start, "timer.stop": timer_stop,
     "tick": tick, "panel.state": panel_state,
     "sprint.new": sprint_new, "sprint.update": sprint_update, "sprint.select": sprint_select, "sprint.sync": sprint_sync,
-    "ticket.add": ticket_add, "ticket.update": ticket_update, "ticket.transition": ticket_transition, "points.push": points_push,
+    "ticket.add": ticket_add, "ticket.update": ticket_update, "ticket.transition": ticket_transition, "points.push": points_push, "hours.push": hours_push, "estimate.set": estimate_set,
     "time.add": time_add, "time.update": time_update, "time.remove": time_remove,
     "review.update": review_update, "review.export": review_export, "review.resend": review_resend,
     "config.set": config_set, "hint.seen": hint_seen,

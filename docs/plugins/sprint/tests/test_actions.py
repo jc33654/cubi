@@ -34,6 +34,8 @@ CASES = {
     "ticket.update": ({"key": "PROJ-1", "starred": True}, ("sprint",), None),
     "ticket.transition": ({"key": "PROJ-1"}, (), NO_JIRA),
     "points.push": ({"key": "PROJ-1"}, (), "實際點數欄位"),
+    "estimate.set": ({"key": "PROJ-1", "value": "3"}, (), NO_JIRA),
+    "hours.push": ({"key": "PROJ-1"}, (), "實際時數欄位"),
     "time.add": ({"key": "PROJ-1", "start": "2026-11-05T10:00", "minutes": 30}, ("sprint",), None),
     "time.update": ({"id": "nope", "minutes": 30}, (), "找不到這筆時段"),
     "time.remove": ({"id": "nope"}, ("sprint",), None),
@@ -191,7 +193,7 @@ class ActionTests(unittest.TestCase):
         store.save()
         try:
             for key in ("PROJ-404", "proj-1", "PROJ-1/../PROJ-2", "../PROJ-1", "PROJ-1?x=1", "PROJ-1#", "PROJ-1 ", " PROJ-1", "PROJ-1\n", ""):
-                for action in ("points.push", "ticket.transition"):
+                for action in ("points.push", "ticket.transition", "estimate.set"):
                     with self.subTest(action=action, key=key):
                         self.assertRegex(self.answer(action, {"key": key, "id": "31"})["error"], "單號格式不對|不認得")
         finally:

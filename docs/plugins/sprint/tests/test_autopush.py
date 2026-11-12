@@ -187,6 +187,29 @@ class AutoPushTests(unittest.TestCase):
             FakeJira.fail = {}
             self.tick()
 
+    def test_F7_21_one_tickets_unexpected_failure_is_its_own_and_tick_carries_on(self):
+        import json
+        for i in (1, 2, 3):
+            sprint.time_add(self.store, {"key": f"PROJ-{i}", "minutes": 30})
+            self.store.tickets[f"PROJ-{i}"]["hoursPush"]["since"] = NOW + i
+        self.store.add_manual("PROJ-4", NOW - 7200, 30, calendar=True)
+        # Jira (or something in front of it) answered 200 with a page that is not JSON; and worse.
+        FakeJira.fail = {"PROJ-1": json.JSONDecodeError("Expecting value", "<html>", 0), "PROJ-2": RuntimeError("boom")}
+        session = {**SESSION, "segments": [{"start": NOW - 900, "end": NOW, "open": False}]}
+        out = sprint.tick(self.store, {"now": NOW, "sessions": [session]})
+        self.reopen()
+        kinds = sorted(e["marker"].split(":")[1] for e in out["calendar"])
+        self.assertEqual(kinds, ["manual", "review", "s1"])                        # tick's own answer is whole: the review event, the manual stretch, the session's
+        self.assertIn("s1", self.store.segments["sessions"])                       # and its own work is stored
+        self.assertEqual([c[0] for c in FakeJira.calls], ["PROJ-1", "PROJ-2", "PROJ-3"])   # the round went on past the failures
+        self.assertEqual(self.waiting(), ["PROJ-1", "PROJ-2"])                     # both wait for the next tick; the third was written
+        state = sprint.panel_state(self.store, {})["hoursPush"]
+        self.assertEqual(state["stopped"], [])
+        self.assertRegex(state["error"], r"^PROJ-[12]：(JSONDecodeError|RuntimeError): ")
+        FakeJira.fail = {}
+        self.tick()
+        self.assertEqual(self.waiting(), [])
+
     def test_F7_14_F7_19_a_refusal_stops_the_retries_and_is_kept_for_the_panel(self):
         for code, text in ((403, "Jira 認證失敗（401/403），檢查 netrc 的帳號與 token"), (400, "HTTP 400 Field cannot be set"), (404, "HTTP 404 Issue does not exist")):
             FakeJira.calls = []

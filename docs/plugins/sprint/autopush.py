@@ -84,6 +84,11 @@ def push_waiting(store):
                 results[key] = None
             except JiraError as e:
                 results[key] = e
+            except Exception as e:  # noqa: BLE001 — an answer that is not JSON (a proxy's page, a login form)…
+                # Whatever goes wrong with one ticket is that ticket's, and worth another try:
+                # tick's own work (the stretches it recorded, the calendar it returns) must not
+                # fail because of it, nor the other tickets of this round.
+                results[key] = JiraError(f"{type(e).__name__}: {e}")
         return results
     results = store.away(write, save_first=True)
     for key, error in results.items():

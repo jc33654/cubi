@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import CubiKit
 
@@ -68,4 +69,80 @@ import Testing
     }
     // Not restricted: the mode is the user's own business, as before.
     #expect(!SessionLaunch.command(directory: "/p", prompt: "hi", resume: .none).contains("--permission-mode"))
+}
+
+// MARK: - Commands too long to type
+
+@Test func aShortCommandIsTypedAsItIs() {
+    let command = SessionLaunch.command(directory: "/p", prompt: "hi", resume: .none)
+    let typed = SessionLaunch.typed(command, scriptPath: "/Users/me/.cubi/launch/x.sh")
+    #expect(typed.line == command)
+    #expect(typed.script == nil)
+}
+
+@Test func aLongCommandIsReadFromAFileByOneShortLine() {
+    // The sprint review's first prompt is about 340 characters, 740 bytes: with the restricted
+    // flags and two real paths the command passes a terminal line's 1024 bytes.
+    let prompt = String(repeating: "請讀回顧資料，", count: 48)
+    let command = SessionLaunch.command(directory: "/Users/me/Documents/project notes", prompt: prompt, resume: .none,
+                                        restricted: .init(settingsFile: "/Users/me/.cubi/restricted-settings.json", readDirs: ["/Users/me/Documents/project notes/回顧"]))
+    #expect(command.utf8.count > 1024)
+    let typed = SessionLaunch.typed(command, scriptPath: "/Users/me/.cubi/launch/it's 啟動 🎯.sh")
+    #expect(typed.line == "source '/Users/me/.cubi/launch/it'\\''s 啟動 🎯.sh'")
+    #expect(typed.line.utf8.count < SessionLaunch.maxTypedBytes)
+    #expect(typed.script == command + "\n")
+}
+
+@Test func whatIsTypedAlwaysFitsATerminalLine() {
+    #expect(SessionLaunch.maxTypedBytes < 1024)
+    for bytes in [1, 100, SessionLaunch.maxTypedBytes - 2, SessionLaunch.maxTypedBytes - 1, SessionLaunch.maxTypedBytes, SessionLaunch.maxTypedBytes + 1, 1016, 1023, 1024, 5000] {
+        let command = String(repeating: "x", count: bytes)
+        let typed = SessionLaunch.typed(command, scriptPath: "/Users/me/.cubi/launch/0E9A1B7C-0000-0000-0000-000000000000.sh")
+        #expect(typed.line.utf8.count + 1 <= SessionLaunch.maxTypedBytes, "\(bytes)")
+        #expect((typed.script == nil) == (bytes + 1 <= SessionLaunch.maxTypedBytes), "\(bytes)")
+        #expect(typed.script == nil || typed.script == command + "\n")
+    }
+}
+
+private func mode(_ url: URL) -> Int {
+    ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.posixPermissions] as? NSNumber)?.intValue ?? -1
+}
+
+@Test func theLaunchFileAndItsFolderAreTheUsersOnlyEvenIfTheFolderWasNot() throws {
+    let fm = FileManager.default
+    let root = fm.temporaryDirectory.appendingPathComponent("cubi-launch-test-\(UUID().uuidString)")
+    defer { try? fm.removeItem(at: root) }
+    // The folder is already there and open to everyone, as if something else had made it.
+    let folder = root.appendingPathComponent("launch 啟動 🎯")
+    try fm.createDirectory(at: folder, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o777])
+    #expect(mode(folder) == 0o777)
+    let file = folder.appendingPathComponent("a.sh")
+    try SessionLaunch.writeScript("cd '/p' && claude -- '第一句話 🎯'\n", to: file)
+    #expect(mode(folder) == 0o700)
+    #expect(mode(file) == 0o600)
+    #expect(try String(contentsOf: file, encoding: .utf8) == "cd '/p' && claude -- '第一句話 🎯'\n")
+    // Loosened again between two launches: put right again.
+    try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.path)
+    try SessionLaunch.writeScript("x\n", to: folder.appendingPathComponent("b.sh"))
+    #expect(mode(folder) == 0o700)
+    // A folder that is not there yet is made, the same way.
+    let fresh = root.appendingPathComponent("new/launch")
+    try SessionLaunch.writeScript("x\n", to: fresh.appendingPathComponent("c.sh"))
+    #expect(mode(fresh) == 0o700)
+    #expect(mode(fresh.appendingPathComponent("c.sh")) == 0o600)
+}
+
+@Test func launchFilesOlderThanAnHourAreClearedAndNothingElseIs() throws {
+    let fm = FileManager.default
+    let folder = fm.temporaryDirectory.appendingPathComponent("cubi-launch-test-\(UUID().uuidString)")
+    defer { try? fm.removeItem(at: folder) }
+    try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+    let now = Date()
+    for (name, age) in [("old.sh", 3601.0), ("recent.sh", 3599.0), ("fresh.sh", 2.0), ("notes.txt", 99_999.0)] {
+        let url = folder.appendingPathComponent(name)
+        try Data("x".utf8).write(to: url)
+        try fm.setAttributes([.modificationDate: now.addingTimeInterval(-age)], ofItemAtPath: url.path)
+    }
+    try SessionLaunch.writeScript("y\n", to: folder.appendingPathComponent("new.sh"), now: now)
+    #expect(try fm.contentsOfDirectory(atPath: folder.path).sorted() == ["fresh.sh", "new.sh", "notes.txt", "recent.sh"])
 }

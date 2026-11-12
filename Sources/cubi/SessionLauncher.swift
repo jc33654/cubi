@@ -31,15 +31,30 @@ enum SessionLauncher {
         let command = SessionLaunch.command(directory: request.directory, prompt: request.prompt, resume: request.resume, restricted: request.restricted)
         let promptNote = request.prompt.map { " prompt=\($0.count) chars" } ?? ""
         let modeNote = request.restricted.map { " restricted readDirs=\($0.readDirs.count)" } ?? ""
-        CubiLog.write("launch \(request.terminal.rawValue) in \(request.directory) resume=\(request.resume)\(promptNote)\(modeNote)")
-        var result = await TerminalFocus.run(script(for: request.terminal, directory: request.directory, command: command),
+        // A long command (a prompt of a few hundred characters is enough) cannot be typed: see
+        // `SessionLaunch.maxTypedBytes`. It goes into a file, and one short line is typed.
+        let scriptURL = launchDirectory.appendingPathComponent(UUID().uuidString + ".sh")
+        let typed = SessionLaunch.typed(command, scriptPath: scriptURL.path)
+        if let script = typed.script {
+            do {
+                try SessionLaunch.writeScript(script, to: scriptURL)
+            } catch {
+                return "寫不出啟動指令檔 \(scriptURL.path)：\(error.localizedDescription)"
+            }
+        }
+        let how = typed.script == nil ? "typed" : "from \(scriptURL.lastPathComponent)"
+        CubiLog.write("launch \(request.terminal.rawValue) in \(request.directory) resume=\(request.resume)\(promptNote)\(modeNote) command=\(command.utf8.count) bytes \(how)")
+        var result = await TerminalFocus.run(script(for: request.terminal, directory: request.directory, command: typed.line),
                                              label: "launch \(request.terminal.rawValue)", fallbackBundle: nil)
         if !result.ok, request.terminal == .ghostty {
             CubiLog.write("launch: Ghostty failed (\(result.error)); trying Terminal.app")
-            result = await TerminalFocus.run(terminalScript(command: command), label: "launch terminal", fallbackBundle: nil)
+            result = await TerminalFocus.run(terminalScript(command: typed.line), label: "launch terminal", fallbackBundle: nil)
         }
         return result.ok ? nil : result.error
     }
+
+    /// Where the files of commands too long to type are kept (see `SessionLaunch.typed`).
+    static var launchDirectory: URL { CubiPaths.home.appendingPathComponent(".cubi/launch") }
 
     static func alert(_ error: String) {
         Notice.show("開不了終端", error + "\n\n第一次用會需要在「系統設定 → 隱私與安全性 → 自動化」允許 Cubi 控制終端。詳細在 ~/Library/Logs/cubi.log。")

@@ -130,17 +130,36 @@ private func refusal(_ json: String) -> SessionNewSpec.ParseError? {
     let local: JSONValue = .object(["permissions": .object(["deny": .array([.string("Bash(curl:*)")]), "allow": .array([.string("Bash(*)")])])])
     let settings = ClaudeHookInstaller.restrictedSettings(denyingAs: [.user(user), .project(project, workingDirectory: "/w"), .project(local, workingDirectory: "/w")])
     #expect(settings.object?.keys.sorted() == ["hooks", "permissions"])
-    #expect(settings["permissions"]?.object?.keys.sorted() == ["deny"])
+    #expect(settings["permissions"]?.object?.keys.sorted() == ["deny", "disableAutoMode", "disableBypassPermissionsMode"])
     #expect(settings["permissions"]?["deny"] == .array([.string("Read(**/.env)"), .string("Read(~/.ssh/**)"), .string("Read(./secrets/**)"), .string("Bash(curl:*)")]))
     #expect(settings["hooks"] == ClaudeHookInstaller.hooksOnlySettings()["hooks"])
     let text = String(decoding: SettingsFile.serialize(settings), as: UTF8.self)
     for forbidden in ["\"allow\"", "python3", "make:", "Bash(*)", "\"ask\"", "git push", "defaultMode", "statusLine", "\"env\""] {
         #expect(!text.contains(forbidden), "\(forbidden)")
     }
-    // No deny rules anywhere (or no files at all): just the hooks, no empty permissions block.
-    #expect(ClaudeHookInstaller.restrictedSettings(denyingAs: []) == ClaudeHookInstaller.hooksOnlySettings())
-    #expect(ClaudeHookInstaller.restrictedSettings(denyingAs: [.user(.object([:])), .project(.object(["permissions": .object(["allow": .array([.string("Bash(*)")])])]), workingDirectory: "/w")])
-            == ClaudeHookInstaller.hooksOnlySettings())
+    // No deny rules anywhere (or no files at all): the hooks and the two switches, no deny key.
+    let pins: JSONValue = .object(["disableAutoMode": .string("disable"), "disableBypassPermissionsMode": .string("disable")])
+    for layers in [[], [.user(.object([:])), .project(.object(["permissions": .object(["allow": .array([.string("Bash(*)")])])]), workingDirectory: "/w")]] as [[ClaudeHookInstaller.DenyLayer]] {
+        let bare = ClaudeHookInstaller.restrictedSettings(denyingAs: layers)
+        #expect(bare["permissions"] == pins)
+        #expect(bare["hooks"] == ClaudeHookInstaller.hooksOnlySettings()["hooks"])
+    }
+}
+
+@Test func restrictedSettingsAlwaysSwitchAutoAndBypassOff() {   // F8-24
+    let user: JSONValue = .object(["permissions": .object(["deny": .array([.string("Read(**/.env)")]), "defaultMode": .string("auto"),
+                                                           "disableAutoMode": .string("enable"), "disableBypassPermissionsMode": .string("enable")])])
+    for hooks in [true, false] {
+        let settings = ClaudeHookInstaller.restrictedSettings(denyingAs: [.user(user)], hooks: hooks)
+        // Whatever the user's own file says about them, these two are Cubi's to set.
+        #expect(settings["permissions"]?["disableAutoMode"] == .string("disable"))
+        #expect(settings["permissions"]?["disableBypassPermissionsMode"] == .string("disable"))
+        #expect(settings["permissions"]?["deny"] == .array([.string("Read(**/.env)")]))
+        #expect(settings["permissions"]?["defaultMode"] == nil)
+        // Without Cubi's hooks installed the file has no hooks, and still everything else (F8-12).
+        #expect((settings["hooks"] != nil) == hooks)
+        #expect(settings.object?.keys.sorted() == (hooks ? ["hooks", "permissions"] : ["permissions"]))
+    }
 }
 
 @Test func sessionNewNeverHandsOverTheHomeDirectoryOrWhereKeysLive() {

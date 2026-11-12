@@ -47,17 +47,17 @@ enum HookSetup {
     }
 
     /// The settings file a restricted session is started with, written afresh each time so it
-    /// always matches this build's hooks and the user's deny rules as they are now. nil when
-    /// Cubi's hooks are not installed: the session then runs without this file, and its approvals
-    /// come up in the terminal only. A settings.json that cannot be read is an error, never an
-    /// empty set of deny rules.
+    /// always matches this build's hooks and the user's deny rules as they are now. It is always
+    /// written (it is what keeps the session out of the auto permission mode); Cubi's hooks go
+    /// in only when they are installed — without them the session's approvals come up in the
+    /// terminal only. A settings.json that cannot be read is an error, never an empty set of
+    /// deny rules.
     ///
     /// `directory` is where the session starts: its `.claude/settings.json` gives its deny rules
     /// too, and so does the `.claude/settings.local.json` Claude Code would read for it (the git
     /// repository root's, when the directory is inside a repository).
-    static func writeRestrictedSettings(directory: String) throws -> URL? {
+    static func writeRestrictedSettings(directory: String) throws -> URL {
         let user = try SettingsFile.read(at: settingsURL).object
-        guard ClaudeHookInstaller.status(user).hooksInstalled else { return nil }
         let shared = URL(fileURLWithPath: directory).appendingPathComponent(".claude/settings.json")
         let localRoot = ClaudeHookInstaller.localSettingsDirectory(for: directory, home: home.path) { FileManager.default.fileExists(atPath: $0) }
         let local = URL(fileURLWithPath: localRoot).appendingPathComponent(".claude/settings.local.json")
@@ -68,7 +68,8 @@ enum HookSetup {
         ]
         let url = restrictedSettingsURL
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try SettingsFile.serialize(ClaudeHookInstaller.restrictedSettings(denyingAs: layers)).write(to: url, options: .atomic)
+        let settings = ClaudeHookInstaller.restrictedSettings(denyingAs: layers, hooks: ClaudeHookInstaller.status(user).hooksInstalled)
+        try SettingsFile.serialize(settings).write(to: url, options: .atomic)
         return url
     }
 

@@ -150,8 +150,14 @@ public enum ClaudeHookInstaller {
     /// rewritten where it would otherwise change meaning; nothing else of those files does — no
     /// allow rules, no ask rules, no status line. Restricted mode drops them whole, and a session
     /// meant to be safer must not get to read what the user forbade.
-    public static func restrictedSettings(denyingAs layers: [DenyLayer]) -> JSONValue {
-        var root = hooksOnlySettings().object ?? [:]
+    ///
+    /// Always there, whatever the layers hold: the auto and bypass permission modes are switched
+    /// off, so the session cannot be moved (shift+tab, or a prompt's "and switch to auto") into a
+    /// mode that runs commands without asking. `hooks` false (Cubi's hooks are not installed):
+    /// no hooks, the rest the same.
+    public static func restrictedSettings(denyingAs layers: [DenyLayer], hooks: Bool = true) -> JSONValue {
+        var root = hooks ? hooksOnlySettings().object ?? [:] : [:]
+        var permissions: [String: JSONValue] = ["disableAutoMode": .string("disable"), "disableBypassPermissionsMode": .string("disable")]
         var deny: [JSONValue] = []
         for layer in layers {
             for rule in layer.settings["permissions"]?["deny"]?.array ?? [] {
@@ -159,7 +165,8 @@ public enum ClaudeHookInstaller {
                 if !deny.contains(carried) { deny.append(carried) }
             }
         }
-        if !deny.isEmpty { root["permissions"] = .object(["deny": .array(deny)]) }
+        if !deny.isEmpty { permissions["deny"] = .array(deny) }
+        root["permissions"] = .object(permissions)
         return .object(root)
     }
 

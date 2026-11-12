@@ -195,7 +195,7 @@ private final class ToolBridge: NSObject, WKScriptMessageHandlerWithReply {
                 var restricted: SessionLaunch.Restricted?
                 if spec.restricted {
                     do {
-                        restricted = .init(settingsFile: try HookSetup.writeRestrictedSettings(directory: directory)?.path, readDirs: spec.readDirs)
+                        restricted = .init(settingsFile: try HookSetup.writeRestrictedSettings(directory: directory).path, readDirs: spec.readDirs)
                     } catch {
                         // Never fall back to an ordinary session: the plugin asked for the restricted one.
                         replyHandler(["ok": false, "err": "寫不出受限模式的設定檔：\(error.localizedDescription)"], nil)

@@ -25,7 +25,7 @@ import Testing
 @Test func restrictedLaunchCarriesTheFixedFlagsBeforeTheDoubleDash() {   // F8-1, F8-11
     let cmd = SessionLaunch.command(directory: "/Users/me/My Notes", prompt: "讀 it's 資料 🎯", resume: .none,
                                     restricted: .init(settingsFile: "/Users/me/.cubi/restricted-settings.json", readDirs: ["/Users/me/回顧 資料/📁"]))
-    #expect(cmd == "cd '/Users/me/My Notes' && claude --restricted --strict-mcp-config --tools 'Read,Grep,Glob,Bash'"
+    #expect(cmd == "cd '/Users/me/My Notes' && claude --restricted --permission-mode manual --strict-mcp-config --disable-slash-commands --tools 'Read,Grep,Glob,Bash'"
                  + " --settings '/Users/me/.cubi/restricted-settings.json' --add-dir '/Users/me/回顧 資料/📁' -- '讀 it'\\''s 資料 🎯'")
     // `--tools` and `--add-dir` take any number of values: nothing but options between them and `--`.
     let options = cmd.components(separatedBy: " -- ")[0]
@@ -33,12 +33,12 @@ import Testing
     #expect(cmd.components(separatedBy: " -- ").count == 2)
 }
 
-@Test func restrictedLaunchWithoutHooksOrReadDirsOrPrompt() {   // F8-12: no hooks installed, no --settings
-    #expect(SessionLaunch.command(directory: "/p", prompt: "hi", resume: .none, restricted: .init(settingsFile: nil, readDirs: []))
-            == "cd '/p' && claude --restricted --strict-mcp-config --tools 'Read,Grep,Glob,Bash' -- 'hi'")
+@Test func restrictedLaunchWithoutReadDirsOrPrompt() {   // F8-12: the settings file is passed whether or not Cubi's hooks are in it
+    #expect(SessionLaunch.command(directory: "/p", prompt: "hi", resume: .none, restricted: .init(settingsFile: "/s.json", readDirs: []))
+            == "cd '/p' && claude --restricted --permission-mode manual --strict-mcp-config --disable-slash-commands --tools 'Read,Grep,Glob,Bash' --settings '/s.json' -- 'hi'")
     // No prompt: the options still end in `--`, so the last one's value list is closed.
-    #expect(SessionLaunch.command(directory: "/p", prompt: nil, resume: .none, restricted: .init(settingsFile: nil, readDirs: ["/a", "/b"]))
-            == "cd '/p' && claude --restricted --strict-mcp-config --tools 'Read,Grep,Glob,Bash' --add-dir '/a' --add-dir '/b' --")
+    #expect(SessionLaunch.command(directory: "/p", prompt: nil, resume: .none, restricted: .init(settingsFile: "/s.json", readDirs: ["/a", "/b"]))
+            == "cd '/p' && claude --restricted --permission-mode manual --strict-mcp-config --disable-slash-commands --tools 'Read,Grep,Glob,Bash' --settings '/s.json' --add-dir '/a' --add-dir '/b' --")
 }
 
 @Test func launchWithoutRestrictedIsWhatItAlwaysWas() {   // F8-2
@@ -52,6 +52,20 @@ import Testing
 
 @Test func aQuoteInAReadDirCannotLeaveItsArgument() {
     let cmd = SessionLaunch.command(directory: "/p", prompt: nil, resume: .none,
-                                    restricted: .init(settingsFile: nil, readDirs: ["/tmp/x' --dangerously-skip-permissions '"]))
+                                    restricted: .init(settingsFile: "/s.json", readDirs: ["/tmp/x' --dangerously-skip-permissions '"]))
     #expect(cmd.hasSuffix("--add-dir '/tmp/x'\\'' --dangerously-skip-permissions '\\''' --"))
+}
+
+@Test func aRestrictedSessionAlwaysAsksWhateverModeTheUserLastHad() {   // F8-22
+    for restricted in [SessionLaunch.Restricted(settingsFile: "/s.json", readDirs: []), .init(settingsFile: "/s 設定.json", readDirs: ["/a"])] {
+        for prompt in [nil, "hi"] as [String?] {
+            let options = SessionLaunch.command(directory: "/p", prompt: prompt, resume: .none, restricted: restricted).components(separatedBy: " -- ")[0]
+            #expect(options.contains(" --permission-mode manual "))
+            #expect(options.contains(" --disable-slash-commands "))
+            #expect(options.contains(" --settings '\(restricted.settingsFile)'"))   // the file that keeps it out of auto: never left out
+            #expect(!options.contains("auto") && !options.contains("bypassPermissions") && !options.contains("dontAsk") && !options.contains("acceptEdits"))
+        }
+    }
+    // Not restricted: the mode is the user's own business, as before.
+    #expect(!SessionLaunch.command(directory: "/p", prompt: "hi", resume: .none).contains("--permission-mode"))
 }

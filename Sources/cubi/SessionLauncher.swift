@@ -30,7 +30,7 @@ enum SessionLauncher {
     static func launch(_ request: LaunchRequest) async -> String? {
         let command = SessionLaunch.command(directory: request.directory, prompt: request.prompt, resume: request.resume, restricted: request.restricted)
         let promptNote = request.prompt.map { " prompt=\($0.count) chars" } ?? ""
-        let modeNote = request.restricted.map { " restricted hooks=\($0.settingsFile != nil) readDirs=\($0.readDirs.count)" } ?? ""
+        let modeNote = request.restricted.map { " restricted readDirs=\($0.readDirs.count)" } ?? ""
         CubiLog.write("launch \(request.terminal.rawValue) in \(request.directory) resume=\(request.resume)\(promptNote)\(modeNote)")
         var result = await TerminalFocus.run(script(for: request.terminal, directory: request.directory, command: command),
                                              label: "launch \(request.terminal.rawValue)", fallbackBundle: nil)

@@ -15,13 +15,15 @@ public enum SessionLaunch {
     /// is asked about), no MCP servers, file tools confined to the directory and `readDirs`.
     /// For sessions whose first prompt points at text other people wrote.
     public struct Restricted: Equatable, Sendable {
-        /// A settings file holding only Cubi's hooks, so the session still shows on the island
-        /// (restricted mode ignores the user's settings, hooks included). nil: hooks not installed.
-        public var settingsFile: String?
+        /// The settings file Cubi writes for the session (`ClaudeHookInstaller.restrictedSettings`):
+        /// it switches the auto and bypass permission modes off, carries the user's deny rules,
+        /// and, where they are installed, Cubi's hooks. Always there: without it the session
+        /// could be put back into a mode that runs commands unasked.
+        public var settingsFile: String
         /// Directories besides the working one the file tools may read.
         public var readDirs: [String]
 
-        public init(settingsFile: String?, readDirs: [String]) {
+        public init(settingsFile: String, readDirs: [String]) {
             self.settingsFile = settingsFile
             self.readDirs = readDirs
         }
@@ -35,8 +37,14 @@ public enum SessionLaunch {
         if let restricted {
             // `--tools` and `--add-dir` take any number of values: each is followed by another
             // option or the closing `--`, never by the prompt.
-            parts += ["--restricted", "--strict-mcp-config", "--tools", ClaudeHookInstaller.shellQuote(restrictedTools)]
-            if let file = restricted.settingsFile { parts += ["--settings", ClaudeHookInstaller.shellQuote(file)] }
+            // `--permission-mode manual`: restricted mode drops the settings files but not the
+            // permission mode, and "auto" (what an interactive session starts in by default) lets
+            // a classifier pass commands unasked: the one thing this session must never do. The
+            // flag only sets where the session starts; the settings file is what keeps it from
+            // being switched back (shift+tab, or "yes, and switch to auto" on a prompt).
+            // `--disable-slash-commands`: the user's skills and commands are instructions too.
+            parts += ["--restricted", "--permission-mode", "manual", "--strict-mcp-config", "--disable-slash-commands",
+                      "--tools", ClaudeHookInstaller.shellQuote(restrictedTools), "--settings", ClaudeHookInstaller.shellQuote(restricted.settingsFile)]
             for dir in restricted.readDirs { parts += ["--add-dir", ClaudeHookInstaller.shellQuote(dir)] }
         }
         switch resume {

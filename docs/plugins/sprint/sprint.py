@@ -6,291 +6,25 @@
 Every action takes the same envelope. From cubi's session hook the payload is the session
 itself ({id, name, cwd, …, segments}); from the panel it is whatever the page sends, with the
 session (if the panel was opened from one) under "session".
+
+The actions themselves live next door: panel.py, sprints.py, tickets.py, worklog.py, reviews.py
+and card.py (the session card, its timer, tick).
 """
 import json
 import os
 import sys
-import time
 import traceback
-from datetime import date, datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import review  # noqa: E402
-from card import claude_session_ids, remaining_text, session_info, tick, timer_start  # noqa: E402,F401
-from common import apply_issue, dry_run, fetch_tickets, jira, pts, rows_for, session_of, target_sprint  # noqa: E402,F401
-from jira import JiraError, parse_issue, TICKET_FIELDS  # noqa: E402
-from store import Store, empty_review  # noqa: E402
-
-CONFIG_KEYS = ("site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "hoursPerPoint", "reviewDir", "reviewSessionDir")
-CUBI = "~/Applications/Cubi.app/Contents/MacOS/cubi"
-def timer_stop(store, p):
-    """From the card (the session itself) or the panel (`sid` of any running timer)."""
-    from_panel = "session" in p or "sid" in p or "id" not in p
-    sid = p.get("sid") or session_of(p).get("id", "")
-    _, note = store.timer_stop(sid, time.time()) if sid else (None, "要停哪個計時？")
-    if from_panel:
-        state = panel_state(store, p)
-        if note:
-            state["warnings"] = state.get("warnings", []) + [note]
-        return state
-    out = session_info(store, session_of(p))
-    if note:
-        out["error"] = note
-    return out
-
-
-# ---------- panel ----------
-
-def panel_state(store, p):
-    sprint = store.current_sprint()
-    session = p.get("session")
-    binding = None
-    if session:
-        rec = store.binding(session)
-        binding = {"id": session["id"], "name": session.get("name", ""), "cwd": session.get("cwd"),
-                   "keys": store.bound_keys(rec), "auto": rec.get("auto", []), "shares": store.shares(rec)}
-    state = {"config": {k: store.config.get(k) for k in CONFIG_KEYS}, "netrcFound": os.path.exists(os.path.expanduser(store.config["netrc"])),
-             "sprints": [{"label": s["label"], "name": s.get("name"), "start": s.get("start"), "end": s.get("end")}
-                         for s in sorted(store.sprints["sprints"].values(), key=lambda s: (s.get("start") or "", s["label"]))],
-             "current": store.sprints.get("current"), "session": binding, "history": review.history(store),
-             "today": date.today().isoformat(), "site": store.config["site"], "warnings": list(store.warnings),
-             "bindings": bindings_overview(store, sprint, session),
-             "timers": [{"sid": sid, "name": store.bindings.get(sid, {}).get("name", sid[:8]), "start": t["start"],
-                         "keys": list(store.timer_shares(sid))} for sid, t in store.segments["timers"].items()]}
-    if sprint:
-        rows, other = rows_for(store, sprint), store.other_work(sprint["label"])
-        state["sprint"] = {**{k: sprint.get(k) for k in ("label", "name", "start", "end", "goal")}, "review": {**empty_review(), **(sprint.get("review") or {})},
-                           "tickets": rows, "metrics": review.metrics(rows, other), "other": other, "burndown": review.burndown(sprint, rows),
-                           "capacity": review.capacity(sprint, rows, store.hours_per_point()),
-                           "categories": list(review.CATEGORIES),
-                           "manual": [m for m in store.segments["manual"] if set(m.get("shares") or [m["key"]]) & set(sprint["keys"])]}
-    return state
-
-
-def bindings_overview(store, sprint, session):
-    """Bound sessions that worked in the sprint (any time, without sprint dates), are timing now,
-    or are the one the panel was opened from."""
-    since, until = review.sprint_range(sprint) if sprint else (None, None)
-    here = session["id"] if session else None
-    return sorted(({"sid": sid, "name": rec.get("name") or sid[:8], "keys": keys, "shares": store.shares(rec)}
-                   for sid, rec in store.bindings.items()
-                   if (keys := store.bound_keys(rec)) and (sid == here or store.active_in(sid, since, until))), key=lambda b: b["name"])
-
-
-def sprint_new(store, p):
-    label = (p.get("label") or "").strip()
-    if not label:
-        raise ValueError("要給 sprint 的標籤（例如 Sprint7）")
-    store.new_sprint(label, p.get("name", ""), p.get("start", ""), p.get("end", ""), p.get("goal", ""))
-    return panel_state(store, p)
-
-
-def sprint_update(store, p):
-    s = target_sprint(store, p)
-    for k in ("name", "start", "end", "goal"):
-        if k in p:
-            s[k] = p[k]
-    return panel_state(store, p)
-
-
-def sprint_select(store, p):
-    if p.get("label") not in store.sprints["sprints"]:
-        raise ValueError("沒有這個 sprint")
-    store.sprints["current"] = p["label"]
-    return panel_state(store, p)
-
-
-def sprint_sync(store, p):
-    """Pull the sprint's tickets from Jira. `replace` makes the sprint exactly what the JQL
-    returns (dropping tickets added by hand or by an earlier, wider query)."""
-    s = target_sprint(store, p)
-    projects = store.project_keys()
-    jql = store.config["jql"].format(projects=", ".join(projects), project=projects[0] if projects else "", label=s["label"])
-    field = store.config["pointsField"]
-    found = []
-    for issue in jira(store).search(jql, TICKET_FIELDS + [field]):
-        apply_issue(store, parse_issue(issue, field))
-        found.append(issue["key"])
-    if p.get("replace"):
-        store.set_sprint_keys(s["label"], found)
-    else:
-        for key in found:
-            store.add_to_sprint(s["label"], key)
-    # Tickets the query does not return (added by hand) are refreshed too, so their status and its
-    # colour never stay as they were first read; not the ones Jira already said it does not know.
-    fetch_tickets(store, [k for k in s["keys"] if k not in found and not store.tickets.get(k, {}).get("notFound")])
-    return panel_state(store, p)
-
-
-def ticket_add(store, p):
-    keys = store.extract_keys(p.get("key", ""))
-    if not keys:
-        raise ValueError(f"不是 {store.config['projectKey']} 的單號")
-    s = store.current_sprint()
-    if not s:
-        raise ValueError("先建一個 sprint")
-    for key in keys:
-        store.add_to_sprint(s["label"], key)
-    fetch_tickets(store, keys)
-    return panel_state(store, p)
-
-
-def ticket_update(store, p):
-    t = store.ticket(p["key"])
-    if "notes" in p:
-        t["notes"] = p["notes"]
-    if "starred" in p:
-        t["starred"] = p["starred"] is True
-    return panel_state(store, p)
-
-
-def ticket_transition(store, p):
-    j = jira(store)
-    if not p.get("id"):
-        return {"transitions": j.transitions(p["key"])}
-    j.transition(p["key"], p["id"])
-    fetch_tickets(store, [p["key"]])
-    return panel_state(store, p)
-
-
-def points_push(store, p):
-    field = store.config["actualPointsField"]
-    if not field:
-        raise ValueError("設定裡沒有「實際點數欄位」，先只存本機")
-    # The ticket's own field: every hour ever worked on it, not just this sprint's (as `remaining`).
-    actual = review.actual_points(store.hours_by_key().get(p["key"], {}).get("total", 0.0), store.hours_per_point())
-    if actual is None:
-        raise ValueError("這張單還沒有投入時數")
-    jira(store).set_field(p["key"], field, actual)
-    return panel_state(store, p)
-
-
-def time_add(store, p):
-    try:
-        start = datetime.fromisoformat(p["start"]).timestamp()
-    except (TypeError, ValueError):
-        raise ValueError("開始時間格式不對")
-    if p.get("key"):
-        store.add_manual(p["key"], start, p.get("minutes"), p.get("kind", "開發"), p.get("note", ""), p.get("calendar", False))
-    else:
-        s = sprint_at(store, start) or store.current_sprint()
-        if not s:
-            raise ValueError("先建一個 sprint")
-        if not (p.get("note") or "").strip():
-            raise ValueError("沒有單號的工作要寫說明")
-        store.add_manual(None, start, p.get("minutes"), p.get("kind", "會議"), p["note"].strip(), p.get("calendar", False),
-                         sprint=s["label"], counted=p.get("counted", True) is not False)
-    return panel_state(store, p)
-
-
-def sprint_at(store, ts):
-    """The sprint whose dates hold `ts`, if any."""
-    for s in store.sprints["sprints"].values():
-        since, until = review.sprint_range(s)
-        if since is not None and until is not None and since <= ts < until:
-            return s
-    return None
-
-
-def time_remove(store, p):
-    store.remove_manual(p["id"])
-    return panel_state(store, p)
-
-
-def session_bind(store, p):
-    """From the panel: `key`; from the card's 綁單號… button: whatever the user typed in `input`."""
-    s = session_of(p)
-    keys = store.extract_keys(p.get("key", ""), p.get("input", ""))
-    if not keys:
-        raise ValueError(f"沒看到 {'／'.join(store.project_keys())} 的單號")
-    for key in keys:
-        store.bind(s["id"], key)
-    return panel_state(store, p) if "session" in p else session_info(store, s)
-
-
-def session_unbind(store, p):
-    """From the panel: `key` (and `sid` from the bindings overview, any session); from the card's
-    ✕ buttons: the key cubi passes back as `input`."""
-    keys = store.extract_keys(p.get("key", ""), p.get("input", ""))
-    if not keys:
-        raise ValueError("要解除哪張單？")
-    if p.get("sid"):
-        if p["sid"] not in store.bindings:
-            raise ValueError("找不到這個 session 的綁定")
-        store.unbind(p["sid"], keys[0])
-        return panel_state(store, p)
-    s = session_of(p)
-    store.unbind(s["id"], keys[0])
-    return panel_state(store, p) if "session" in p else session_info(store, s)
-
-
-def session_shares(store, p):
-    s = session_of(p)
-    since = until = None
-    if p.get("applyToSprint") and store.current_sprint():
-        since, until = review.sprint_range(store.current_sprint())
-        since = since or 0
-    store.set_shares(s["id"], p.get("shares") or {}, since, until)
-    return panel_state(store, p)
-
-
-def review_update(store, p):
-    s = target_sprint(store, p)
-    r = s.setdefault("review", empty_review())
-    for k in review.REVIEW_FIELDS:
-        if k in p:
-            r[k] = p[k]
-    return panel_state(store, p)
-
-
-def review_dir(store):
-    if dry_run():
-        raise ValueError("離線渲染不寫回顧檔")
-    folder = os.path.expanduser(store.config["reviewDir"])
-    os.makedirs(folder, exist_ok=True)
-    return folder
-
-
-def review_export(store, p):
-    s = target_sprint(store, p)
-    rows = rows_for(store, s)
-    path = os.path.join(review_dir(store), f"{s['label']}.md")
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(review.markdown(s, rows, review.metrics(rows, store.other_work(s["label"]))))
-    return {"_raw": path}
-
-
-def review_brief(store, p):
-    """Write the data file for a Claude Code session and say where to open it; the panel then
-    asks cubi (built-in session.new) to open the session with `prompt`."""
-    s = target_sprint(store, p)
-    directory = os.path.expanduser(store.config["reviewSessionDir"])
-    if not os.path.isdir(directory):
-        raise ValueError(f"回顧 session 的資料夾不存在：{directory}（設定分頁可改）")
-    rows = rows_for(store, s)
-    folder = review_dir(store)
-    data_path = os.path.join(folder, f"{s['label']}-data.md")
-    with open(data_path, "w", encoding="utf-8") as f:
-        f.write(review.brief(s, rows, review.metrics(rows, store.other_work(s["label"])), CUBI, os.path.join(folder, f"{s['label']}.md")))
-    return {"directory": directory, "prompt": review.brief_prompt(s, data_path), "file": data_path}
-
-
-def config_set(store, p):
-    """Everything is checked before anything is stored, so a bad value leaves the file as it was."""
-    new = {}
-    for k in CONFIG_KEYS:
-        if k in p:
-            new[k] = str(p[k]).strip()
-    if "hoursPerPoint" in new:
-        try:
-            new["hoursPerPoint"] = max(0.1, float(new["hoursPerPoint"]))
-        except ValueError:
-            raise ValueError("每點小時數要是數字")
-    if "projectKey" in new and not new["projectKey"]:
-        raise ValueError("專案 key 不能空白")
-    store.config.update(new)
-    return panel_state(store, p)
-
+from card import claude_session_ids, session_info, tick, timer_start  # noqa: E402,F401
+from common import check_payload, dry_run, jira  # noqa: E402,F401
+from jira import JiraError  # noqa: E402
+from panel import CONFIG_KEYS, config_set, panel_state  # noqa: E402,F401
+from reviews import review_brief, review_export, review_update  # noqa: E402
+from sprints import sprint_at, sprint_new, sprint_select, sprint_sync, sprint_update  # noqa: E402,F401
+from store import Store  # noqa: E402
+from tickets import points_push, ticket_add, ticket_transition, ticket_update  # noqa: E402
+from worklog import session_bind, session_shares, session_unbind, time_add, time_remove, timer_stop  # noqa: E402
 
 ACTIONS = {
     "session.info": session_info, "session.sync": lambda s, p: session_info(s, p, sync=True),
@@ -319,6 +53,7 @@ def main(argv):
         return 1
     store = Store()
     try:
+        check_payload(payload)
         result = ACTIONS[argv[1]](store, payload)
         # Only a run that got through writes anything: a half-done action leaves the files alone.
         if not dry_run():

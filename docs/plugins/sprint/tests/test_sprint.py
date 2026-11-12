@@ -8,6 +8,7 @@ import unittest
 from datetime import date, datetime
 
 import common
+import reviews
 import sprint
 from store import Store
 
@@ -28,8 +29,10 @@ class CardTests(unittest.TestCase):
         # Jira marks a status category done but leaves resolutiondate empty (no resolution set on the
         # transition): the sync used to die on NameError here, before the state was written.
         done = {"key": "PROJ-1", "fields": {"summary": "甲", "status": {"name": "Done", "statusCategory": {"key": "done"}}}}
+        days = {date.today().isoformat()}
         common.apply_issue(self.store, common.parse_issue(done, "customfield_1"))
-        self.assertEqual(self.store.ticket("PROJ-1")["doneAt"], date.today().isoformat())
+        days.add(date.today().isoformat())   # the call may have run across midnight
+        self.assertIn(self.store.ticket("PROJ-1")["doneAt"], days)
         common.apply_issue(self.store, common.parse_issue({"key": "PROJ-1", "fields": {"status": {"statusCategory": {"key": "indeterminate"}}}}, "customfield_1"))
         self.assertIsNone(self.store.ticket("PROJ-1")["doneAt"])
 
@@ -64,7 +67,7 @@ class CardTests(unittest.TestCase):
         self.store.ticket("PROJ-1")["actual"] = 9   # an old override: ignored
         self.store.new_sprint("Sprint7")
         self.store.add_to_sprint("Sprint7", "PROJ-1")
-        real, sprint.jira = sprint.jira, lambda store: FakeJira()
+        real, common.jira = common.jira, lambda store: FakeJira()
         try:
             with self.assertRaises(ValueError):
                 sprint.points_push(self.store, {"key": "PROJ-1"})    # nothing worked yet
@@ -77,7 +80,7 @@ class CardTests(unittest.TestCase):
             self.store.add_manual("PROJ-1", ts("2026-11-17T09:00"), 240)
             sprint.points_push(self.store, {"key": "PROJ-1"})
         finally:
-            sprint.jira = real
+            common.jira = real
         self.assertEqual(sent, [("PROJ-1", "customfield_1", 0.25), ("PROJ-1", "customfield_1", 0.75)])
 
     def test_work_without_a_ticket_goes_to_the_sprint_of_its_date(self):
@@ -201,7 +204,7 @@ class CardTests(unittest.TestCase):
             with self.assertRaisesRegex(sprint.JiraError, "離線渲染不連 Jira"):
                 sprint.jira(self.store)
             with self.assertRaisesRegex(ValueError, "離線渲染不寫回顧檔"):
-                sprint.review_dir(self.store)
+                reviews.review_dir(self.store)
             os.environ["CUBI_SPRINT_DIR"] = self.dir.name   # test data: business as usual
             self.assertFalse(sprint.dry_run())
             sprint.jira(self.store)

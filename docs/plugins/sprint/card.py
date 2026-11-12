@@ -91,10 +91,10 @@ def remaining_text(left):
 
 def tick(store, p):
     now = p.get("now") or time.time()
-    for session in p.get("sessions", []):
+    for session in p.get("sessions") or []:
         rec = store.binding(session)
         store.record_segments(session, store.shares(rec))
-    for sid, entry in store.stop_orphan_timers({s["id"] for s in p.get("sessions", [])}, now, claude_session_ids()):
+    for sid, entry in store.stop_orphan_timers({s["id"] for s in p.get("sessions") or []}, now, claude_session_ids()):
         print(f"timer of session {sid[:8]} stopped: session gone for {ORPHAN_AFTER // 60} min"
               + (f", booked {review.fmt_hours(entry['end'] - entry['start'])}" if entry else ", nothing booked (under a minute, or no ticket left)"), file=sys.stderr)
     return {"calendar": store.calendar_entries(now)}

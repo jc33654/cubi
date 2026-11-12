@@ -1,9 +1,65 @@
 """Helpers every sprint command shares: Jira access, the payload's session, the target sprint."""
+import math
 import os
+import re
 from datetime import date
 
 from jira import TICKET_FIELDS, Jira, JiraError, parse_issue
 import review
+from store import KEY_RE
+
+FIELD_RE = re.compile(r"customfield_[0-9]+")
+# What a payload field must be when it is there at all (None counts as absent). The same name
+# means the same thing in every action, so one table covers them.
+TEXT, NUMBER, OBJECT, LIST = "文字", "數字", "物件", "清單"
+FIELD_KINDS = {"key": TEXT, "input": TEXT, "label": TEXT, "name": TEXT, "goal": TEXT, "start": TEXT, "end": TEXT, "sid": TEXT,
+               "notes": TEXT, "note": TEXT, "kind": TEXT, "summary": TEXT, "cwd": TEXT,
+               "now": NUMBER, "shares": OBJECT, "session": OBJECT, "sessions": LIST, "segments": LIST}
+KIND_OF = {TEXT: str, NUMBER: (int, float), OBJECT: dict, LIST: list}
+
+
+def check_payload(p):
+    """Refuse a payload whose fields are of the wrong kind, in words the panel can show: the
+    handlers then never meet a list where they expect text."""
+    if not isinstance(p, dict):
+        raise ValueError("輸入要是 JSON 物件")
+    for name, kind in FIELD_KINDS.items():
+        v = p.get(name)
+        if v is None:
+            continue
+        if not isinstance(v, KIND_OF[kind]) or isinstance(v, bool) or (kind == NUMBER and not math.isfinite(v)):
+            raise ValueError(f"{name} 要是{kind}")
+    # A session's id, a manual entry's, a Jira transition's: text, or a number Jira handed out.
+    if isinstance(p.get("id"), (list, dict, bool)):
+        raise ValueError("id 要是文字或數字")
+    if "session" in p and p["session"] is not None:
+        check_payload(p["session"])
+    for s in p.get("sessions") or []:
+        check_payload(s)
+    for seg in p.get("segments") or []:
+        if not isinstance(seg, dict) or not all(isinstance(seg.get(k), (int, float)) and not isinstance(seg.get(k), bool) for k in ("start", "end")):
+            raise ValueError("segments 的每一段要有數字的 start 與 end")
+
+
+def known_key(store, key):
+    """A key that may go into a Jira write: the exact form of an issue key, of a ticket the plugin
+    already holds. Nothing else is ever put into a request path."""
+    if not isinstance(key, str) or not KEY_RE.fullmatch(key):
+        raise ValueError("單號格式不對（要像 PROJ-12）")
+    if key not in store.tickets:
+        raise ValueError(f"不認得 {key}：先把它加進 sprint")
+    return key
+
+
+def jira_field(store, name, label, required=False):
+    """The Jira field id a setting names: customfield_<digits> only, so a write can never land on
+    summary or assignee. Empty is allowed unless `required`."""
+    value = str(store.config.get(name) or "").strip()
+    if not value and not required:
+        return ""
+    if not FIELD_RE.fullmatch(value):
+        raise ValueError(f"設定的「{label}」要是 customfield_<數字>（例如 customfield_10016）")
+    return value
 
 
 def dry_run():
@@ -23,7 +79,9 @@ def fetch_tickets(store, keys):
     does not know is remembered as notFound so it is not asked again every minute."""
     if not keys:
         return
-    field = store.config["pointsField"]
+    if not all(isinstance(k, str) and KEY_RE.fullmatch(k) for k in keys):
+        raise ValueError("單號格式不對（要像 PROJ-12）")
+    field = jira_field(store, "pointsField", "估點欄位", required=True)
     j = jira(store)
     try:
         issues = j.search(f"key in ({','.join(keys)})", TICKET_FIELDS + [field])

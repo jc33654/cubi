@@ -77,36 +77,63 @@ def jira(store):
     return Jira(store.config["site"], store.config["netrc"])
 
 
-def fetch_tickets(store, keys):
-    """Refresh these tickets from Jira; local fields (notes, doneAt, starred) are kept. A key Jira
-    does not know is remembered as notFound so it is not asked again every minute."""
+# How many tickets a search did not return are asked for one by one in a single call: from the
+# panel, and from a hook (the session card and its 同步 button), which has 20 seconds in all.
+CONFIRM_PANEL, CONFIRM_HOOK = 20, 3
+
+
+def fetch_tickets(store, keys, confirm=CONFIRM_PANEL):
+    """Refresh these tickets from Jira; local fields (notes, doneAt, starred) are kept.
+
+    Jira's search leaves out a key it cannot find (deleted, or not visible to this account)
+    without a word, so each key the search did not return is asked for by itself: a 404 marks the
+    ticket notFound, whether or not it was ever read before; an answer refreshes it (the search
+    index was only behind). At most `confirm` of them per call; the rest wait for the next one.
+    A ticket marked notFound is not asked about again by a sync (adding it again does)."""
     if not keys:
         return
     if not all(isinstance(k, str) and KEY_RE.fullmatch(k) for k in keys):
         raise ValueError("單號格式不對（要像 PROJ-12）")
     field = jira_field(store, "pointsField", "估點欄位", required=True)
     j = jira(store)
+    fields = TICKET_FIELDS + [field]
     try:
-        issues = j.search(f"key in ({','.join(keys)})", TICKET_FIELDS + [field])
+        issues = j.search(f"key in ({','.join(keys)})", fields)
     except JiraError as e:
         if e.code != 400:
             raise
-        # One unknown key fails the whole search: ask one by one.
-        issues = []
-        for key in keys:
-            try:
-                issues.append(j.issue(key, TICKET_FIELDS + [field]))
-            except JiraError as single:
-                if single.code not in (400, 404):
-                    raise
-                store.ticket(key)["notFound"] = True
+        issues = []   # a search that refuses the whole list: every key is then asked for by itself
     seen = set()
     for issue in issues:
         apply_issue(store, parse_issue(issue, field))
         seen.add(issue["key"])
-    for key in keys:
-        if key not in seen and not store.tickets.get(key, {}).get("summary"):
-            store.ticket(key)["notFound"] = True
+    for key in [k for k in keys if k not in seen][:confirm]:
+        try:
+            apply_issue(store, parse_issue(j.issue(key, fields), field))
+        except JiraError as e:
+            if e.code not in (400, 404):
+                raise
+            not_found(store, key)
+
+
+def not_found(store, key):
+    """Jira does not know this ticket (any more): it stays where it is, marked, and nothing waits
+    to be written to it."""
+    t = store.ticket(key)
+    t["notFound"] = True
+    t.pop("hoursPush", None)
+
+
+FIELD_REFUSED = "cannot be set"
+
+
+def field_refused(error, field, what):
+    """Jira's answer to writing a field the ticket's screen does not have ("Field 'customfield_…'
+    cannot be set. It is not on the appropriate screen, or unknown."), in words; the original
+    after it. Any other error comes back as it is."""
+    if error.code == 400 and field in str(error) and FIELD_REFUSED in str(error):
+        return JiraError(f"這張單在 Jira 上不能寫{what}：它的專案或單的類型沒有這個欄位（{field}），或欄位不在編輯畫面上。原始錯誤：{error}", error.code)
+    return error
 
 
 def apply_issue(store, parsed):

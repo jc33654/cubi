@@ -32,6 +32,7 @@ CASES = {
     "sprint.sync": ({}, (), NO_JIRA),
     "ticket.add": ({"key": "PROJ-2"}, (), NO_JIRA),
     "ticket.update": ({"key": "PROJ-1", "starred": True}, ("sprint",), None),
+    "ticket.remove": ({"key": "PROJ-1"}, ("sprint",), None),
     "ticket.transition": ({"key": "PROJ-1"}, (), NO_JIRA),
     "points.push": ({"key": "PROJ-1"}, (), "實際點數欄位"),
     "estimate.set": ({"key": "PROJ-1", "value": "3"}, (), NO_JIRA),

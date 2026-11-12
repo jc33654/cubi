@@ -119,7 +119,9 @@ class CardTests(unittest.TestCase):
             sprint.sprint_sync(self.store, {})
         finally:
             sprint.jira, common.jira = real, real_common
-        self.assertEqual(calls, ["search", "search"])   # the query, then PROJ-1 alone in one batch
+        # The query, then PROJ-1 in one batch; this fake's search returns nothing, so PROJ-1 is asked
+        # for by itself. PROJ-2, already known to be gone, is not asked about again.
+        self.assertEqual(calls, ["search", "search", "PROJ-1"])
 
     def test_sync_refreshes_tickets_the_query_does_not_return(self):
         asked = []

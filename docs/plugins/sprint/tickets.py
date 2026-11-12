@@ -5,7 +5,7 @@ import unicodedata
 
 import common
 import review
-from common import apply_issue, fetch_tickets, jira_field, known_key
+from common import KEY_RE, apply_issue, fetch_tickets, field_refused, jira_field, known_key, target_sprint
 from jira import TICKET_FIELDS, JiraError, parse_issue
 from panel import panel_state
 
@@ -60,7 +60,10 @@ def points_push(store, p):
     actual = review.actual_points(store.hours_by_key().get(key, {}).get("total", 0.0), store.hours_per_point())
     if actual is None:
         raise ValueError("這張單還沒有投入時數")
-    common.jira(store).set_field(key, field, actual)
+    try:
+        common.jira(store).set_field(key, field, actual)
+    except JiraError as e:
+        raise field_refused(e, field, "實際點數")
     return panel_state(store, p)
 
 
@@ -100,7 +103,10 @@ def estimate_set(store, p):
             return j.issue(key, TICKET_FIELDS + [field]), None
         except JiraError as e:   # written, but the read-back failed: the estimate still stands
             return None, str(e)
-    issue, trouble = store.away(write)
+    try:
+        issue, trouble = store.away(write)
+    except JiraError as e:
+        raise field_refused(e, field, "估點")
     if issue:
         apply_issue(store, parse_issue(issue, field))
     # The value just written, not what the read-back said: a cleared field comes back empty, and
@@ -129,5 +135,26 @@ def hours_push(store, p):
     if hours <= 0:
         raise ValueError("這張單還沒有投入時數")
     j = common.jira(store)
-    store.away(lambda: j.set_field(key, field, hours))
+    try:
+        store.away(lambda: j.set_field(key, field, hours))
+    except JiraError as e:
+        raise field_refused(e, field, "實際時數")
     return panel_state(store, p)
+
+
+def ticket_remove(store, p):
+    """Take one ticket out of the sprint (`label`, else the current one). Only the sprint's list
+    changes: the ticket, the hours booked on it and what sessions are bound to it all stay, and
+    adding it back brings its numbers back. Jira is not asked; a ticket that still carries the
+    sprint's label there returns with the next sync."""
+    s = target_sprint(store, p)
+    key = p["key"]
+    if not isinstance(key, str) or not KEY_RE.fullmatch(key) or key not in s["keys"]:
+        raise ValueError(f"{s['label']} 裡沒有這張單")
+    since, until = review.sprint_range(s)
+    worked = store.hours_by_key(since, until).get(key, {}).get("total", 0.0)
+    s["keys"].remove(key)
+    state = panel_state(store, p)
+    if worked >= 60:
+        state["notices"] = [f"{key} 在這一期有 {review.fmt_hours(worked)} 工時，移出後不算進這一期（紀錄還在，加回來就恢復）"]
+    return state

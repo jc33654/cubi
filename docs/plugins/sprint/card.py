@@ -9,7 +9,7 @@ import autopush
 import cadence
 import remind
 import review
-from common import fetch_tickets, pts, session_of
+from common import CONFIRM_HOOK, fetch_tickets, pts, session_of
 from jira import JiraError
 from store import ORPHAN_AFTER, remaining_seconds, tone_for
 
@@ -29,7 +29,7 @@ def session_info(store, p, sync=False):
     missing = [k for k in keys if not store.tickets.get(k, {}).get("summary") and not store.tickets.get(k, {}).get("notFound")]
     if keys and (sync or missing):
         try:
-            fetch_tickets(store, keys if sync else missing)
+            fetch_tickets(store, keys if sync else missing, confirm=CONFIRM_HOOK)
         except JiraError as e:
             error = str(e)
     worked = store.hours_by_key()

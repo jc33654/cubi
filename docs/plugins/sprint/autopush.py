@@ -83,7 +83,7 @@ def push_waiting(store):
                 j.set_field(key, target, hours)
                 results[key] = None
             except JiraError as e:
-                results[key] = e
+                results[key] = common.field_refused(e, target, "實際時數")
             except Exception as e:  # noqa: BLE001 — an answer that is not JSON (a proxy's page, a login form)…
                 # Whatever goes wrong with one ticket is that ticket's, and worth another try:
                 # tick's own work (the stretches it recorded, the calendar it returns) must not

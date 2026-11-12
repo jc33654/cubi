@@ -31,6 +31,7 @@
     "timer.stop":        { "run": ["/usr/bin/python3", "$plugin/sprint.py", "timer.stop"],        "args": ["text"], "stdin": 1 },
     "review.brief":      { "run": ["/usr/bin/python3", "$plugin/sprint.py", "review.brief"],      "args": ["text"], "stdin": 1 },
     "review.export":     { "run": ["/usr/bin/python3", "$plugin/sprint.py", "review.export"],     "args": ["text"], "stdin": 1, "reveal": true },
+    "review.resend":     { "run": ["/usr/bin/python3", "$plugin/sprint.py", "review.resend"],     "args": ["text"], "stdin": 1 },
     "config.set":        { "run": ["/usr/bin/python3", "$plugin/sprint.py", "config.set"],        "args": ["text"], "stdin": 1 },
     "hint.seen":         { "run": ["/usr/bin/python3", "$plugin/sprint.py", "hint.seen"],         "args": ["text"], "stdin": 1 }
   }

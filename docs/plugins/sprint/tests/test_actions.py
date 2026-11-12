@@ -38,6 +38,7 @@ CASES = {
     "time.update": ({"id": "nope", "minutes": 30}, (), "找不到這筆時段"),
     "time.remove": ({"id": "nope"}, ("sprint",), None),
     "review.update": ({"summary": "總結"}, ("sprint",), None),
+    "review.resend": ({}, ("sprint",), None),
     "timer.start": (SESSION, ("rows",), None),
     "timer.stop": (SESSION, ("rows",), "沒有在計時"),
     "review.brief": ({}, ("directory", "prompt", "file", "readDirs"), None),

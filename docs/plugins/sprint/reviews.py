@@ -18,6 +18,15 @@ def review_update(store, p):
     return panel_state(store, p)
 
 
+def review_resend(store, p):
+    """Forget that the sprint's calendar event was sent: the next tick writes it for the review
+    day and time as they are now. (cubi skips it if the old one still sits at that very time.)"""
+    s = target_sprint(store, p)
+    s.pop("reviewEvent", None)
+    s.get("told", {}).pop("reviewMoved", None)
+    return panel_state(store, p)
+
+
 def review_dir(store):
     if dry_run():
         raise ValueError("離線渲染不寫回顧檔")

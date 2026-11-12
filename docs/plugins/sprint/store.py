@@ -38,6 +38,10 @@ DEFAULT_CONFIG = {
     # The Monday some sprint began: periods are counted from it in two-week steps, to propose
     # dates. Empty: nothing is proposed.
     "cadenceAnchor": "2026-11-02",
+    # The "Sprint review" calendar event on each sprint's review day: when it starts (HH:MM;
+    # empty: no event) and how many minutes it runs.
+    "reviewEventStart": "10:00",
+    "reviewEventMinutes": 30,
     "reviewDir": "~/Documents/sprint-reviews",
     # Where the "用 Claude 整理回顧" session opens.
     "reviewSessionDir": "~/Documents",

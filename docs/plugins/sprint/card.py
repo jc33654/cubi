@@ -6,6 +6,7 @@ import time
 from datetime import date, datetime
 
 import cadence
+import remind
 import review
 from common import fetch_tickets, pts, session_of
 from jira import JiraError
@@ -35,8 +36,14 @@ def session_info(store, p, sync=False):
     timer = store.timer(p["id"])
     now = time.time()
     rows = []
-    # cubi shows 10 rows: room for 今日, 計時中 and a 還有 N 張 line besides the tickets.
-    shown = keys if len(keys) <= MAX_TICKET_ROWS else keys[:MAX_TICKET_ROWS - (1 if timer else 0)]
+    today = cadence.today()
+    review_today = remind.is_review_day(remind.sprint_on(store, today), today)
+    if review_today:
+        rows.append({"label": "今天 review", "value": "開 Sprint 面板按「產生回顧」", "tone": "info"})
+    # cubi shows 10 rows: room for 今日, 計時中 and a 還有 N 張 line besides the tickets (and the
+    # review row on its day).
+    room = MAX_TICKET_ROWS - (1 if review_today else 0)
+    shown = keys if len(keys) <= room else keys[:room - (1 if timer else 0)]
     for key in shown:
         t = store.tickets.get(key, {})
         secs = worked.get(key, {}).get("total", 0)
@@ -103,7 +110,9 @@ def tick(store, p):
     for sid, entry in store.stop_orphan_timers({s["id"] for s in p.get("sessions") or []}, now, claude_session_ids()):
         print(f"timer of session {sid[:8]} stopped: session gone for {ORPHAN_AFTER // 60} min"
               + (f", booked {review.fmt_hours(entry['end'] - entry['start'])}" if entry else ", nothing booked (under a minute, or no ticket left)"), file=sys.stderr)
-    return {"calendar": store.calendar_entries(now)}
+    running = store.sprint(store.sprint_of({"start": now}) or "")
+    event = remind.calendar_event(running, store.config, now)
+    return {"calendar": ([event] if event else []) + store.calendar_entries(now)[:49 if event else 50]}
 
 
 def claude_session_ids():

@@ -279,6 +279,7 @@ function renderOverview() {
   }
   html += shownHints.map(h => `<div class="cubi-card"><div class="cubi-row" style="flex-wrap:nowrap;align-items:flex-start">${ic("info")}<span style="flex:1;white-space:normal">${esc(h.text)}</span>
       <button class="cubi-btn icon" data-hint="${esc(h.id)}" title="知道了">${ic("x", 15)}</button></div></div>`).join("");
+  if (s && s.reviewDue) html += reviewBanner(s);
   if (state.timers.length) {
     html += `<div class="cubi-card"><div class="cubi-card-head">${ic("clock")}<h2 class="cubi-card-title">計時中</h2></div><table class="cubi-table tight"><tbody>` +
       state.timers.map(t => `<tr><td>${esc(t.name)}</td><td>${t.keys.length ? t.keys.map(link).join(" ") : `<span style="color:var(--cubi-warning)">單都解除了，停下來不會記</span>`}</td>
@@ -326,7 +327,19 @@ function renderOverview() {
   html += `</tbody></table></div></div>` + otherCard(s, hpp) + bindingsCard() + sprintInfoCard(s) + manualCard(s);
   el.innerHTML = html;
   bindOverview(el);
-  const f = $("#t-hours", el) || $("#t-min", el); if (f && pendingTime && pendingTime.focus) { f.focus(); pendingTime.focus = false; }
+  const f = $("#t-hours", el); if (f && pendingTime && pendingTime.focus) { f.focus(); pendingTime.focus = false; }
+}
+
+// From the review day to the sprint's last day: write the review from here. The calendar event is
+// handed to cubi once per sprint; 重新寫入 is for when it never showed up (calendar not allowed yet).
+function reviewBanner(s) {
+  const when = s.reviewDay === state.today ? "今天是 review 日" : `review 日是 ${esc(s.reviewDay)}（${weekday(s.reviewDay)}），這一期到 ${esc(s.end)}`;
+  const ev = s.reviewEvent, time = t => new Date(t * 1000).toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  const calendar = !state.config.reviewEventStart ? `<span class="cubi-muted">沒有設定 review 事件時間，不寫行事曆</span>`
+    : `<span class="cubi-muted">${ev ? `行事曆事件已送出（${esc(time(ev.start))}）` : "行事曆事件還沒送出"}</span>
+       ${ev ? `<button class="cubi-btn small" id="review-resend" title="行事曆上沒看到事件時用：下一分鐘再寫一次。舊事件若被移動過，或 review 日、時段設定改過，行事曆上會多出一筆，請手動刪除舊的。">重新寫入行事曆</button>` : ""}`;
+  return `<div class="cubi-card"><div class="cubi-row">${ic("review")}<b>${when}</b>${calendar}<span class="cubi-spacer"></span>
+      <button class="cubi-btn primary" id="review-go" title="把這一期的數據交給 Claude Code 寫回顧（受限模式，會先問你）">${ic("sparkles")}產生回顧</button></div></div>`;
 }
 
 function sessionCard() {
@@ -417,7 +430,7 @@ function timeForm(key, title) {
   const buttons = `<span class="cubi-spacer"></span><button class="cubi-btn primary small" id="t-save">加</button><button class="cubi-btn small" id="t-cancel">取消</button>`;
   if (!key) return `<div class="cubi-inline cubi-row" data-time-form=""><b>${esc(title)}</b>
     <input id="t-start" type="datetime-local" value="${esc(p.start)}">
-    <input id="t-min" type="number" min="1" max="1440" value="${esc(p.minutes)}" style="width:80px"> 分
+    <input id="t-hours" type="number" min="0.02" max="24" step="0.25" value="${esc(p.hours)}" style="width:80px"> 小時
     ${kinds}
     <input id="t-note" placeholder="做了什麼（必填）" value="${esc(p.note)}" size="18">
     ${cal}
@@ -434,7 +447,7 @@ function timeForm(key, title) {
 function keepTimeForm() {
   if (!pendingTime || !$(`[data-time-form="${CSS.escape(pendingTime.key)}"]`)) return;
   const p = pendingTime, v = (id, was) => { const f = $(id); return f ? f.value : was; };
-  pendingTime = { ...p, start: v("#t-start", p.start), minutes: v("#t-min", p.minutes), hours: v("#t-hours", p.hours), kind: v("#t-kind", p.kind), note: v("#t-note", p.note),
+  pendingTime = { ...p, start: v("#t-start", p.start), hours: v("#t-hours", p.hours), kind: v("#t-kind", p.kind), note: v("#t-note", p.note),
     calendar: $("#t-cal")?.checked ?? p.calendar, counted: $("#t-counted")?.checked ?? p.counted };
 }
 
@@ -479,7 +492,7 @@ async function saveEditForm() {
 }
 function openTimeForm(key) {
   const d = new Date(Date.now() - 3600 * 1000), local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-  pendingTime = pendingTime && pendingTime.key === key ? null : { key, start: key ? "" : local, minutes: 60, hours: 1, more: false, kind: "會議", note: "", calendar: true, counted: true, focus: true };
+  pendingTime = pendingTime && pendingTime.key === key ? null : { key, start: key ? "" : local, hours: 1, more: false, kind: "會議", note: "", calendar: true, counted: true, focus: true };
   render();
 }
 
@@ -489,11 +502,13 @@ function bindOverview(el) {
   $("#bind-btn", el)?.addEventListener("click", () => refresh("session.bind", { key: $("#bind-key").value }, [$("#bind-key")]));
   $("#shares-btn", el)?.addEventListener("click", () => refresh("session.shares", { shares: currentShares(), applyToSprint: true }, el.querySelectorAll("[data-share]")));
   el.querySelectorAll("[data-hint]").forEach(b => b.addEventListener("click", () => { shownHints.splice(shownHints.findIndex(h => h.id === b.dataset.hint), 1); render(); }));
+  $("#review-go", el)?.addEventListener("click", startBrief);
+  $("#review-resend", el)?.addEventListener("click", () => refresh("review.resend"));
   $("#sp-save", el)?.addEventListener("click", () => refresh("sprint.update", { name: $("#sp-name").value, start: $("#sp-start").value, end: $("#sp-end").value, goal: $("#sp-goal").value }, el.querySelectorAll("[id^=sp-]")));
   $("#sp-resync", el)?.addEventListener("click", () => refresh("sprint.sync", { replace: true }));
   $("#t-save", el)?.addEventListener("click", async () => { keepTimeForm(); const p = pendingTime; pendingTime = null;
     const payload = p.key ? { key: p.key, minutes: Math.round(Number(p.hours) * 60), kind: p.kind, note: p.note, calendar: p.calendar, ...(p.more && p.start ? { start: p.start } : {}) }
-      : { key: p.key, start: p.start, minutes: Number(p.minutes), kind: p.kind, note: p.note, calendar: p.calendar, counted: p.counted };
+      : { key: p.key, start: p.start, minutes: Math.round(Number(p.hours) * 60), kind: p.kind, note: p.note, calendar: p.calendar, counted: p.counted };
     if (!await refresh("time.add", payload)) { pendingTime = p; render(); } });
   $("#t-more", el)?.addEventListener("click", () => { keepTimeForm(); pendingTime = { ...pendingTime, more: true }; render(); });
   el.querySelectorAll("[data-edit-time]").forEach(b => b.addEventListener("click", () => openEditForm(b.dataset.editTime)));
@@ -666,12 +681,14 @@ function renderSettings() {
       <div class="cubi-field" style="grid-column: 1 / -1"><label for="c-jql">JQL ${tip("本期會送出：" + sent)}</label><input id="c-jql" value="${esc(c.jql ?? "")}"></div>
       ${field("hoursPerPoint", "每點小時數", "實際點數＝投入時數 ÷ 這個數", "number")}
       ${field("cadenceAnchor", "節奏錨點", "某一期開始的那個週一。兩週一期從這天往後算，用來預填每期的起訖；留空就不預填", "date")}
+      ${field("reviewEventStart", "review 事件時間", "每一期 review 日在行事曆上寫一筆「Sprint review」，從這個時間開始。留空就不寫。改了只影響還沒寫出事件的期", "time")}
+      ${field("reviewEventMinutes", "review 事件長度（分）", "5 到 480 分鐘", "number")}
     </div>
     <div class="cubi-section-title">回顧</div><div class="cubi-form">
       ${field("reviewDir", "Markdown 資料夾", "匯出 <資料夾>/<標籤>.md；整理用的資料檔也在這")}
       ${field("reviewSessionDir", "整理用的 session 開在", "「用 Claude 整理」在這裡開 Claude Code")}
     </div></div>`;
-  $("#c-save", el).onclick = () => { const p = {}; ["site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "hoursPerPoint", "cadenceAnchor", "reviewDir", "reviewSessionDir"].forEach(k => { p[k] = $("#c-" + k).value; }); refresh("config.set", p, el.querySelectorAll("[id^=c-]")); };
+  $("#c-save", el).onclick = () => { const p = {}; ["site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "hoursPerPoint", "cadenceAnchor", "reviewEventStart", "reviewEventMinutes", "reviewDir", "reviewSessionDir"].forEach(k => { p[k] = $("#c-" + k).value; }); refresh("config.set", p, el.querySelectorAll("[id^=c-]")); };
 }
 
 // ---------- boot ----------

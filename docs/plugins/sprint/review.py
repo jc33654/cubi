@@ -197,9 +197,15 @@ def _review_sections(review):
     return lines
 
 
-def markdown(sprint, rows, m):
+def as_of(now=None):
+    """The line a data file or an export carries: its numbers are the ones of this minute, and the
+    sprint's hours may still move after it."""
+    return f"產生於 {(now or datetime.now()).strftime('%Y-%m-%d %H:%M')}，數字截至這個時間（之後記的工時不在裡面）。"
+
+
+def markdown(sprint, rows, m, now=None):
     review = sprint.get("review") or {}
-    lines = [f"# {sprint.get('name') or sprint['label']} 回顧（{sprint.get('start') or '?'} – {sprint.get('end') or '?'}）", ""]
+    lines = [f"# {sprint.get('name') or sprint['label']} 回顧（{sprint.get('start') or '?'} – {sprint.get('end') or '?'}）", "", as_of(now), ""]
     if sprint.get("goal"):
         lines += [f"目標：{sprint['goal']}", ""]
     if review.get("summary"):
@@ -225,7 +231,7 @@ THIRD_PARTY_OPEN = "<<<第三方資料開始>>>"
 THIRD_PARTY_CLOSE = "<<<第三方資料結束>>>"
 
 
-def brief(sprint, rows, m, cubi):
+def brief(sprint, rows, m, cubi, now=None):
     """The data file a Claude Code session reads before writing the review, with the exact
     command to hand the result back to the panel. What other people wrote (ticket summaries,
     statuses, notes) sits between two marker lines that the text itself cannot contain."""
@@ -236,6 +242,7 @@ def brief(sprint, rows, m, cubi):
     cell = lambda s: str(s or "").replace("|", "\\|").replace("\r", " ").replace("\n", " ").replace("<<<", "‹‹‹").replace(">>>", "›››")  # noqa: E731
     lines = [f"# {sprint.get('name') or label} 回顧資料", "",
              f"sprint：{label}，{sprint.get('start') or '?'} – {sprint.get('end') or '?'}；目標：{cell(sprint.get('goal')) or '（沒填）'}", "",
+             as_of(now), "",
              "## 數據", "",
              f"估 {pts(m['estimate'])} 點、實際 {pts(m['actual'])} 點（1 點 = 8 小時，實際由投入時數換算）、"
              f"完成 {m['done']}/{m['tickets']}、投入 {fmt_hours(m['seconds'])}、會議 {fmt_hours(m['meetingSeconds'])}"

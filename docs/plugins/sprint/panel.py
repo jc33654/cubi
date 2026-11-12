@@ -3,11 +3,12 @@ import os
 from datetime import date
 
 import cadence
+import remind
 import review
 from common import FIELD_RE, rows_for
 from store import empty_review
 
-CONFIG_KEYS = ("site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "hoursPerPoint", "cadenceAnchor", "reviewDir", "reviewSessionDir")
+CONFIG_KEYS = ("site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "hoursPerPoint", "cadenceAnchor", "reviewEventStart", "reviewEventMinutes", "reviewDir", "reviewSessionDir")
 
 
 def panel_state(store, p):
@@ -33,7 +34,8 @@ def panel_state(store, p):
                            "capacity": review.capacity(sprint, rows, store.hours_per_point()),
                            "categories": list(review.CATEGORIES),
                            "manual": [m for m in store.segments["manual"] if set(m.get("shares") or [m["key"]]) & set(sprint["keys"])],
-                           "reviewDay": iso(cadence.review_day(sprint)), "planningDay": iso(cadence.planning_day(sprint))}
+                           "reviewDay": iso(cadence.review_day(sprint)), "planningDay": iso(cadence.planning_day(sprint)),
+                           "reviewDue": remind.is_due(sprint, cadence.today()), "reviewEvent": sprint.get("reviewEvent")}
     state.update(proposals(store, sprint), hints=hints(store))
     return state
 
@@ -67,14 +69,18 @@ def hints(store):
         out.append({"id": f"weekendGap:{s['label']}",
                     "text": f"{s['label']} 的結束日是週五（{s['end']}），{following['label']} 在 {following['start']} 才開始，中間的週末不屬於任何一期，"
                             f"那兩天的工時不會算進哪一期。要算進 {s['label']}，請到「Sprint 資訊」把結束日改成 {sunday.isoformat()}（週日）。"})
+    out += [h for h in map(remind.moved_hint, store.sprints["sprints"].values()) if h]
     return out
+
+
+HINT_KINDS = ("weekendGap", "reviewMoved")
 
 
 def hint_seen(store, p):
     """The panel showed the hint `id` (`<kind>:<sprint label>`): noted on that sprint, never said again."""
     kind, _, label = str(p["id"]).partition(":")
     s = store.sprint(label)
-    if kind != "weekendGap" or not s:
+    if kind not in HINT_KINDS or not s:
         raise ValueError("沒有這個提示")
     s.setdefault("told", {})[kind] = True
     return {"ok": True}
@@ -107,6 +113,15 @@ def config_set(store, p):
         anchor = review.parse_date(new["cadenceAnchor"])
         if not anchor or anchor.isoformat() != new["cadenceAnchor"] or anchor.weekday() != 0:
             raise ValueError("節奏錨點要是某個週一的日期（例如 2026-11-02），或留空")
+    if new.get("reviewEventStart") and not remind.CLOCK.fullmatch(new["reviewEventStart"]):
+        raise ValueError("review 事件時間要像 10:00，或留空（不寫行事曆）")
+    if "reviewEventMinutes" in new:
+        try:
+            new["reviewEventMinutes"] = float(new["reviewEventMinutes"])
+        except ValueError:
+            raise ValueError("review 事件長度要是分鐘數")
+        if not 5 <= new["reviewEventMinutes"] <= 480:
+            raise ValueError("review 事件長度要在 5 到 480 分鐘之間")
     for name, label, required in (("pointsField", "估點欄位", True), ("actualPointsField", "實際點數欄位", False)):
         if name in new and (new[name] or required) and not FIELD_RE.fullmatch(new[name]):
             raise ValueError(f"「{label}」要是 customfield_<數字>（例如 customfield_10016）" + ("" if required else "，或留空"))

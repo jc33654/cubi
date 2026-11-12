@@ -61,26 +61,49 @@ private func refusal(_ json: String) -> SessionNewSpec.ParseError? {
     #expect(try! parse(#"{"directory":"/proj","restricted":true,"readDirs":["# + eight + "]}").readDirs == ["/a"])
 }
 
-@Test func sessionNewQuestionSaysWhatTheUserAgreesTo() {   // F8-4, F8-12
+@Test func sessionNewQuestionSaysWhatTheUserAgreesTo() {   // F8-4
     let plain = SessionNewSpec(directory: "/proj", prompt: "hi", restricted: false, readDirs: [])
-    #expect(plain.confirmation(hooksInstalled: true) == "目錄：/proj\n要交給 Claude 的話：hi")
-    #expect(plain.confirmation(hooksInstalled: false) == "目錄：/proj\n要交給 Claude 的話：hi")
-    #expect(SessionNewSpec(directory: "/proj", prompt: nil, restricted: false, readDirs: []).confirmation(hooksInstalled: true).hasSuffix("（沒有）"))
+    #expect(plain.confirmation() == "目錄：/proj\n要交給 Claude 的話：hi")
+    #expect(SessionNewSpec(directory: "/proj", prompt: nil, restricted: false, readDirs: []).confirmation().hasSuffix("（沒有）"))
     let long = String(repeating: "字", count: 401)
-    #expect(SessionNewSpec(directory: "/p", prompt: long, restricted: false, readDirs: []).confirmation(hooksInstalled: true)
+    #expect(SessionNewSpec(directory: "/p", prompt: long, restricted: false, readDirs: []).confirmation()
             == "目錄：/p\n要交給 Claude 的話：" + String(repeating: "字", count: 400) + "…（共 401 字）")
 
-    let restricted = SessionNewSpec(directory: "/proj", prompt: "hi", restricted: true, readDirs: ["/a", "/b"])
-    let text = restricted.confirmation(hooksInstalled: true)
-    #expect(text.contains("受限模式：不套用你的允許規則，每條指令都要你核准。"))
-    #expect(text.contains("另外可以讀：/a、/b"))
-    // The island's card has no such button for this session; the terminal's own prompt still does.
-    #expect(text.hasSuffix("島上的審批卡不會有「總是允許」；改到終端處理審批時，Claude Code 自己的「一律允許」會讓這個 session 之後不再問。"))
-    #expect(!text.contains("未安裝 Cubi hooks"))
-    let noHooks = restricted.confirmation(hooksInstalled: false)
-    #expect(noHooks.hasSuffix("未安裝 Cubi hooks：審批會出現在終端裡。在那裡選 Claude Code 的「一律允許」的話，這個 session 之後就不再問。"))
-    #expect(!noHooks.contains("島上的審批卡"))
-    #expect(!SessionNewSpec(directory: "/proj", prompt: "hi", restricted: true, readDirs: []).confirmation(hooksInstalled: true).contains("另外可以讀"))
+    // Restricted: nothing is asked, and what it may run is named.
+    let restricted = SessionNewSpec(directory: "/proj", prompt: "hi", restricted: true, readDirs: ["/a", "/b"], allowActions: ["review.update", "x.y"])
+    #expect(restricted.confirmation() == "目錄：/proj\n要交給 Claude 的話：hi\n"
+            + "受限模式：不套用你的允許規則，也不會問你。只能執行這些動作：review.update、x.y；其他指令一律拒絕。\n另外可以讀：/a、/b")
+    let readOnly = SessionNewSpec(directory: "/proj", prompt: "hi", restricted: true, readDirs: [])
+    #expect(readOnly.confirmation().hasSuffix("受限模式：不套用你的允許規則，也不會問你。它只能讀檔，會改動東西的指令一律拒絕。"))
+    for text in [restricted.confirmation(), readOnly.confirmation()] {
+        #expect(!text.contains("核准") && !text.contains("總是允許") && !text.contains("hooks"))
+    }
+}
+
+@Test func sessionNewAllowsOnlyActionsTheManifestMarked() {   // F8-29, F8-35
+    func parse(_ json: String) throws -> SessionNewSpec {
+        try SessionNewSpec.parse(json, promptLimit: 20, home: "/Users/me", actions: ["review.update", "notes.add"]) { existing.contains($0) }
+    }
+    func refusal(_ json: String) -> SessionNewSpec.ParseError? {
+        do { _ = try parse(json); return nil } catch { return error as? SessionNewSpec.ParseError }
+    }
+    #expect(try! parse(#"{"directory":"/proj","restricted":true,"allowActions":["review.update","notes.add","review.update"]}"#).allowActions == ["review.update", "notes.add"])
+    #expect(try! parse(#"{"directory":"/proj","restricted":true}"#).allowActions == [])
+    #expect(try! parse(#"{"directory":"/proj","restricted":true,"allowActions":[]}"#).allowActions == [])
+    #expect(try! parse(#"{"directory":"/proj","allowActions":null}"#).allowActions == [])
+    // A name the plugin has, but did not mark; a name it does not have; a command line; a rule.
+    for name in ["config.set", "nope", "review.update && rm -rf ~", "Bash(*)", "review.updateX", " review.update", "REVIEW.UPDATE"] {
+        #expect(refusal(#"{"directory":"/proj","restricted":true,"allowActions":[""# + name + #""]}"#) == .unknownAction(name), "\(name)")
+    }
+    #expect(refusal(#"{"directory":"/proj","restricted":true,"allowActions":"review.update"}"#) == .allowActionsShape)
+    #expect(refusal(#"{"directory":"/proj","restricted":true,"allowActions":["review.update",7]}"#) == .allowActionsShape)
+    #expect(refusal(#"{"directory":"/proj","restricted":true,"allowActions":[""]}"#) == .allowActionsShape)
+    #expect(refusal(#"{"directory":"/proj","allowActions":["review.update"]}"#) == .allowActionsWithoutRestricted)
+    #expect(refusal(#"{"directory":"/proj","restricted":false,"allowActions":["review.update"]}"#) == .allowActionsWithoutRestricted)
+    let five = Array(repeating: "\"review.update\"", count: 5).joined(separator: ",")
+    #expect(refusal(#"{"directory":"/proj","restricted":true,"allowActions":["# + five + "]}") == .tooManyAllowActions)
+    // A plugin that marked nothing can allow nothing.
+    #expect((try? SessionNewSpec.parse(#"{"directory":"/proj","restricted":true,"allowActions":["review.update"]}"#, promptLimit: 20) { _ in true }) == nil)
 }
 
 @Test func restrictedSettingsHoldOnlyCubisHooks() {   // F8-1: what --settings points at
@@ -130,7 +153,7 @@ private func refusal(_ json: String) -> SessionNewSpec.ParseError? {
     let local: JSONValue = .object(["permissions": .object(["deny": .array([.string("Bash(curl:*)")]), "allow": .array([.string("Bash(*)")])])])
     let settings = ClaudeHookInstaller.restrictedSettings(denyingAs: [.user(user), .project(project, workingDirectory: "/w"), .project(local, workingDirectory: "/w")])
     #expect(settings.object?.keys.sorted() == ["hooks", "permissions"])
-    #expect(settings["permissions"]?.object?.keys.sorted() == ["deny", "disableAutoMode", "disableBypassPermissionsMode"])
+    #expect(settings["permissions"]?.object?.keys.sorted() == ["blockReadsOutsideWorkingDirectories", "deny", "disableAutoMode", "disableBypassPermissionsMode"])
     #expect(settings["permissions"]?["deny"] == .array([.string("Read(**/.env)"), .string("Read(~/.ssh/**)"), .string("Read(./secrets/**)"), .string("Bash(curl:*)")]))
     #expect(settings["hooks"] == ClaudeHookInstaller.hooksOnlySettings()["hooks"])
     let text = String(decoding: SettingsFile.serialize(settings), as: UTF8.self)
@@ -138,7 +161,7 @@ private func refusal(_ json: String) -> SessionNewSpec.ParseError? {
         #expect(!text.contains(forbidden), "\(forbidden)")
     }
     // No deny rules anywhere (or no files at all): the hooks and the two switches, no deny key.
-    let pins: JSONValue = .object(["disableAutoMode": .string("disable"), "disableBypassPermissionsMode": .string("disable")])
+    let pins: JSONValue = .object(["disableAutoMode": .string("disable"), "disableBypassPermissionsMode": .string("disable"), "blockReadsOutsideWorkingDirectories": .bool(true)])
     for layers in [[], [.user(.object([:])), .project(.object(["permissions": .object(["allow": .array([.string("Bash(*)")])])]), workingDirectory: "/w")]] as [[ClaudeHookInstaller.DenyLayer]] {
         let bare = ClaudeHookInstaller.restrictedSettings(denyingAs: layers)
         #expect(bare["permissions"] == pins)
@@ -148,12 +171,14 @@ private func refusal(_ json: String) -> SessionNewSpec.ParseError? {
 
 @Test func restrictedSettingsAlwaysSwitchAutoAndBypassOff() {   // F8-24
     let user: JSONValue = .object(["permissions": .object(["deny": .array([.string("Read(**/.env)")]), "defaultMode": .string("auto"),
-                                                           "disableAutoMode": .string("enable"), "disableBypassPermissionsMode": .string("enable")])])
+                                                           "disableAutoMode": .string("enable"), "disableBypassPermissionsMode": .string("enable"),
+                                                           "blockReadsOutsideWorkingDirectories": .bool(false)])])
     for hooks in [true, false] {
         let settings = ClaudeHookInstaller.restrictedSettings(denyingAs: [.user(user)], hooks: hooks)
         // Whatever the user's own file says about them, these two are Cubi's to set.
         #expect(settings["permissions"]?["disableAutoMode"] == .string("disable"))
         #expect(settings["permissions"]?["disableBypassPermissionsMode"] == .string("disable"))
+        #expect(settings["permissions"]?["blockReadsOutsideWorkingDirectories"] == .bool(true))   // F8-36
         #expect(settings["permissions"]?["deny"] == .array([.string("Read(**/.env)")]))
         #expect(settings["permissions"]?["defaultMode"] == nil)
         // Without Cubi's hooks installed the file has no hooks, and still everything else (F8-12).

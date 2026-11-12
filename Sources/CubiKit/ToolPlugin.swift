@@ -38,7 +38,14 @@ public struct ToolPlugin: Sendable, Equatable {
         public var stdin: Int?
         /// Treat stdout as a path and reveal it in the Finder.
         public var reveal: Bool
+        /// A restricted session the plugin opens (`session.new` with `allowActions`) may run this
+        /// command through `cubi --tool-run` without anyone being asked. Off unless the manifest
+        /// says `"sessionAllowed": true` in so many words: it is there to be read.
+        public var sessionAllowed: Bool = false
     }
+
+    /// The commands a restricted session may be allowed to run (see `Command.sessionAllowed`).
+    public var sessionActions: Set<String> { Set(commands.filter { $0.value.sessionAllowed }.keys) }
 
     public struct Invocation: Sendable, Equatable {
         public var executable: String
@@ -187,7 +194,7 @@ public struct ToolPlugin: Sendable, Equatable {
                 }
             }
             commands[action] = Command(run: [executable] + argv, args: args, stdin: stdin,
-                                       reveal: spec["reveal"]?.bool ?? false)
+                                       reveal: spec["reveal"]?.bool ?? false, sessionAllowed: spec["sessionAllowed"]?.bool ?? false)
         }
 
         var session: SessionHook?

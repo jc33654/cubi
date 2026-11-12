@@ -157,7 +157,10 @@ public enum ClaudeHookInstaller {
     /// no hooks, the rest the same.
     public static func restrictedSettings(denyingAs layers: [DenyLayer], hooks: Bool = true) -> JSONValue {
         var root = hooks ? hooksOnlySettings().object ?? [:] : [:]
-        var permissions: [String: JSONValue] = ["disableAutoMode": .string("disable"), "disableBypassPermissionsMode": .string("disable")]
+        // …and commands that never ask (cat, head, grep…) may not read outside the working
+        // directory and the `--add-dir` folders either.
+        var permissions: [String: JSONValue] = ["disableAutoMode": .string("disable"), "disableBypassPermissionsMode": .string("disable"),
+                                                "blockReadsOutsideWorkingDirectories": .bool(true)]
         var deny: [JSONValue] = []
         for layer in layers {
             for rule in layer.settings["permissions"]?["deny"]?.array ?? [] {

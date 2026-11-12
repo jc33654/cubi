@@ -27,6 +27,25 @@ def review_resend(store, p):
     return panel_state(store, p)
 
 
+def cubi_binary():
+    """The cubi to write into a command line for the session: the one that is running this (the
+    app says which, CUBI_BIN, and lets a restricted session run exactly that path), else where
+    it is usually installed."""
+    return os.environ.get("CUBI_BIN") or os.path.expanduser(CUBI)
+
+
+def brief_dir(store):
+    """Where data files for a Claude Code session go: the plugin's own data folder, not the
+    user's review folder. A restricted session cannot be asked to approve a read, and Claude Code
+    wants approval for any path it finds odd (a folder whose name ends in dots, say): this path
+    is ours to keep plain."""
+    if dry_run():
+        raise ValueError("離線渲染不寫回顧檔")
+    folder = os.path.join(str(store.root), "briefs")
+    os.makedirs(folder, exist_ok=True)
+    return folder
+
+
 def review_dir(store):
     if dry_run():
         raise ValueError("離線渲染不寫回顧檔")
@@ -52,10 +71,12 @@ def review_brief(store, p):
     if not os.path.isdir(directory):
         raise ValueError(f"回顧 session 的資料夾不存在：{directory}（設定分頁可改）")
     rows = rows_for(store, s)
-    folder = review_dir(store)
+    folder = brief_dir(store)
     data_path = os.path.join(folder, f"{s['label']}-data.md")
     with open(data_path, "w", encoding="utf-8") as f:
-        f.write(review.brief(s, rows, review.metrics(rows, store.other_work(s["label"])), CUBI))
-    # The session is opened restricted (the data holds text other people wrote in Jira): it reads
-    # the data file from `readDirs`, hands the result back with one command, and writes no files.
-    return {"directory": directory, "prompt": review.brief_prompt(s, data_path), "file": data_path, "readDirs": [folder]}
+        f.write(review.brief(s, rows, review.metrics(rows, store.other_work(s["label"])), cubi_binary()))
+    # The session is opened restricted (the data holds text other people wrote in Jira) and is
+    # never asked anything: it may read `readDirs`, run the one action in `allowActions` to hand
+    # the result back, and nothing else.
+    return {"directory": directory, "prompt": review.brief_prompt(s, data_path), "file": data_path,
+            "readDirs": [folder], "allowActions": ["review.update"]}

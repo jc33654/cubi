@@ -44,7 +44,7 @@ CASES = {
     "review.resend": ({}, ("sprint",), None),
     "timer.start": (SESSION, ("rows",), None),
     "timer.stop": (SESSION, ("rows",), "沒有在計時"),
-    "review.brief": ({}, ("directory", "prompt", "file", "readDirs"), None),
+    "review.brief": ({}, ("directory", "prompt", "file", "readDirs", "allowActions"), None),
     "review.export": ({}, (), None),
     "config.set": ({"hoursPerPoint": "6"}, ("config",), None),
     "hint.seen": ({"id": "weekendGap:Sprint7"}, ("ok",), None),
@@ -238,3 +238,65 @@ class ActionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BriefTests(unittest.TestCase):
+    """F8: what `review.brief` writes and hands to the panel for a restricted session."""
+    # The same fake data folder and the same way through main() as above, without running those tests again.
+    setUp, tearDown, run_main, answer, files = (ActionTests.setUp, ActionTests.tearDown, ActionTests.run_main, ActionTests.answer, ActionTests.files)
+
+    def brief(self, **env):
+        saved = {k: os.environ.get(k) for k in env}
+        os.environ.update(env)
+        try:
+            return self.answer("review.brief", {})
+        finally:
+            for k, v in saved.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+
+    def test_F8_31_the_data_file_is_in_the_plugins_own_folder_not_the_review_folder(self):
+        out = self.brief()
+        folder = os.path.join(self.data, "briefs")
+        self.assertEqual((out["file"], out["readDirs"]), (os.path.join(folder, "Sprint7-data.md"), [folder]))
+        self.assertTrue(os.path.isfile(out["file"]))
+        self.assertFalse(os.path.exists(os.path.join(self.dir.name, "reviews")))      # the user's review folder is not touched
+        self.assertTrue(out["prompt"].startswith(f"請讀 {out['file']}"))
+        self.assertEqual(out["allowActions"], ["review.update"])
+        # The manifest says which commands a session may run unasked: that one, and only that one.
+        with open(os.path.join(os.path.dirname(os.path.abspath(sprint.__file__)), "manifest.json"), encoding="utf-8") as f:
+            commands = json.load(f)["commands"]
+        self.assertEqual([name for name, c in commands.items() if c.get("sessionAllowed")], ["review.update"])
+
+    def test_F8_33_the_command_in_the_data_file_uses_the_cubi_the_app_named(self):
+        out = self.brief(CUBI_BIN="/Applications/Cubi.app/Contents/MacOS/cubi")
+        with open(out["file"], encoding="utf-8") as f:
+            text = f.read()
+        self.assertIn("```sh\n/Applications/Cubi.app/Contents/MacOS/cubi --tool-run sprint review.update '{\n", text)
+        # Not told (an older app): where cubi usually is, with the ~ already expanded, so the
+        # path in the command is the absolute one a rule would name.
+        os.environ.pop("CUBI_BIN", None)
+        with open(self.brief()["file"], encoding="utf-8") as f:
+            text = f.read()
+        self.assertIn(f"```sh\n{os.path.expanduser('~')}/Applications/Cubi.app/Contents/MacOS/cubi --tool-run sprint review.update '{{\n", text)
+        self.assertNotIn("~/Applications", text)
+
+    def test_a_dry_run_writes_no_data_file(self):
+        import reviews
+        from store import Store
+        saved = {k: os.environ.pop(k, None) for k in ("CUBI_SPRINT_DIR", "CUBI_RENDER")}
+        os.environ["CUBI_RENDER"] = "1"
+        store = Store(self.data)
+        try:
+            with self.assertRaisesRegex(ValueError, "離線渲染不寫回顧檔"):
+                reviews.brief_dir(store)
+        finally:
+            store.close()
+            for k, v in saved.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+        self.assertFalse(os.path.exists(os.path.join(self.data, "briefs")))

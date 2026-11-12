@@ -139,9 +139,9 @@ private final class ToolBridge: NSObject, WKScriptMessageHandlerWithReply {
     private static let question = LinePrompt()
 
     /// What the agent will be told is shown in full up to 400 characters, so agreeing means seeing it.
-    static func confirmSession(tool: String, spec: SessionNewSpec, hooksInstalled: Bool) async -> Bool {
+    static func confirmSession(tool: String, spec: SessionNewSpec) async -> Bool {
         await question.confirm("\(tool) 想開一個\(spec.restricted ? "受限模式的" : "") Claude Code session",
-                               spec.confirmation(hooksInstalled: hooksInstalled), button: "開啟")
+                               spec.confirmation(), button: "開啟")
     }
 
     func userContentController(_ ucc: WKUserContentController, didReceive message: WKScriptMessage,
@@ -166,7 +166,7 @@ private final class ToolBridge: NSObject, WKScriptMessageHandlerWithReply {
             }
             let spec: SessionNewSpec
             do {
-                spec = try SessionNewSpec.parse((body["args"] as? [String])?.first, promptLimit: ToolPlugin.textLimit) { path in
+                spec = try SessionNewSpec.parse((body["args"] as? [String])?.first, promptLimit: ToolPlugin.textLimit, actions: tool.sessionActions) { path in
                     var isDir: ObjCBool = false
                     return FileManager.default.fileExists(atPath: path, isDirectory: &isDir) && isDir.boolValue
                 }
@@ -182,8 +182,7 @@ private final class ToolBridge: NSObject, WKScriptMessageHandlerWithReply {
                     replyHandler(["ok": false, "err": "已有一個開 session 的確認在等你回答"], nil)
                     return
                 }
-                let hooksInstalled = (try? HookSetup.status())?.hooksInstalled == true
-                guard await Self.confirmSession(tool: tool.displayName, spec: spec, hooksInstalled: hooksInstalled) else {
+                guard await Self.confirmSession(tool: tool.displayName, spec: spec) else {
                     replyHandler(["ok": false, "err": "已取消", "cancelled": true], nil)
                     return
                 }
@@ -195,7 +194,14 @@ private final class ToolBridge: NSObject, WKScriptMessageHandlerWithReply {
                 var restricted: SessionLaunch.Restricted?
                 if spec.restricted {
                     do {
-                        restricted = .init(settingsFile: try HookSetup.writeRestrictedSettings(directory: directory).path, readDirs: spec.readDirs)
+                        // One rule per action the plugin named, each for `<this cubi> --tool-run <this plugin> <action>` only.
+                        let rules = spec.allowActions.map { SessionLaunch.allowRule(cubi: ToolRunner.cubiBinary, tool: tool.id, action: $0) }
+                        guard !rules.contains(nil) else {
+                            replyHandler(["ok": false, "err": "Cubi 的安裝路徑（\(ToolRunner.cubiBinary)）有空白或特殊字元，受限模式沒辦法只放行指定的動作，所以不開 session。把 Cubi.app 放在路徑只有英數、/、.、_、- 的位置。"], nil)
+                            return
+                        }
+                        restricted = .init(settingsFile: try HookSetup.writeRestrictedSettings(directory: directory).path, readDirs: spec.readDirs,
+                                           allowedTools: rules.compactMap { $0 })
                     } catch {
                         // Never fall back to an ordinary session: the plugin asked for the restricted one.
                         replyHandler(["ok": false, "err": "寫不出受限模式的設定檔：\(error.localizedDescription)"], nil)

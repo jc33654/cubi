@@ -122,11 +122,23 @@ class ReviewTests(unittest.TestCase):
         self.store.ticket("PROJ-2")["notes"] = "有 | 直線\n和換行"
         text = review.brief(self.sprint, self.rows(), review.metrics(self.rows()), "~/Applications/Cubi.app/Contents/MacOS/cubi")
         self.assertIn("| PROJ-2 | 工單 PROJ-2 | 處理完畢 | 2 | 3 | 24h00m | 超時完成 | 有 \\| 直線 和換行 |", text)
-        self.assertIn("cat <<'EOF' | ~/Applications/Cubi.app/Contents/MacOS/cubi --tool-run sprint review.update -", text)
+        # One command that begins with the cubi path (what the app's rule matches), the JSON its one argument.
+        block = text.split("## 寫回面板")[1].split("```")[1]
+        self.assertTrue(block.startswith("sh\n~/Applications/Cubi.app/Contents/MacOS/cubi --tool-run sprint review.update '{\n"), block[:120])
+        self.assertTrue(block.rstrip().endswith("}'"))
+        for never in ("<<", "cat ", " | ", "&&", ";", "cd "):
+            self.assertNotIn(never, block)
+        self.assertIn("不要在前面加 `cd … &&`", text)
+        self.assertIn("要寫成 `'\\''`", text)
+        # What is between the quotes is the JSON to fill in, and a quote in it would be written the shell's way.
+        import json as js
+        self.assertEqual(js.loads(block.split("review.update '", 1)[1].rstrip()[:-1])["label"], "Sprint7")
+        self.assertEqual(review.write_back_command("/x/cubi", '{"why": "it\'s"}'), "/x/cubi --tool-run sprint review.update '{\"why\": \"it'\\''s\"}'")
         self.assertIn('"label": "Sprint7"', text)
         # F8: a restricted session writes no files; the Markdown comes from the panel's export.
         self.assertNotIn("存成 Markdown", text)
-        self.assertIn("不要寫檔、不要跑別的指令", text)
+        self.assertIn("其他指令與寫檔都會被拒絕", text)
+        self.assertIn("不會問使用者任何事", text)
         prompt = review.brief_prompt(self.sprint, "/tmp/r/Sprint7-data.md")
         self.assertTrue(prompt.startswith("請讀 /tmp/r/Sprint7-data.md"))
         self.assertNotIn("Markdown", prompt)

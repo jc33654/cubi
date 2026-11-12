@@ -26,7 +26,7 @@ import Testing
 @Test func restrictedLaunchCarriesTheFixedFlagsBeforeTheDoubleDash() {   // F8-1, F8-11
     let cmd = SessionLaunch.command(directory: "/Users/me/My Notes", prompt: "讀 it's 資料 🎯", resume: .none,
                                     restricted: .init(settingsFile: "/Users/me/.cubi/restricted-settings.json", readDirs: ["/Users/me/回顧 資料/📁"]))
-    #expect(cmd == "cd '/Users/me/My Notes' && claude --restricted --permission-mode manual --strict-mcp-config --disable-slash-commands --tools 'Read,Grep,Glob,Bash'"
+    #expect(cmd == "cd '/Users/me/My Notes' && claude --restricted --permission-mode dontAsk --strict-mcp-config --disable-slash-commands --tools 'Read,Grep,Glob,Bash'"
                  + " --settings '/Users/me/.cubi/restricted-settings.json' --add-dir '/Users/me/回顧 資料/📁' -- '讀 it'\\''s 資料 🎯'")
     // `--tools` and `--add-dir` take any number of values: nothing but options between them and `--`.
     let options = cmd.components(separatedBy: " -- ")[0]
@@ -36,10 +36,10 @@ import Testing
 
 @Test func restrictedLaunchWithoutReadDirsOrPrompt() {   // F8-12: the settings file is passed whether or not Cubi's hooks are in it
     #expect(SessionLaunch.command(directory: "/p", prompt: "hi", resume: .none, restricted: .init(settingsFile: "/s.json", readDirs: []))
-            == "cd '/p' && claude --restricted --permission-mode manual --strict-mcp-config --disable-slash-commands --tools 'Read,Grep,Glob,Bash' --settings '/s.json' -- 'hi'")
+            == "cd '/p' && claude --restricted --permission-mode dontAsk --strict-mcp-config --disable-slash-commands --tools 'Read,Grep,Glob,Bash' --settings '/s.json' -- 'hi'")
     // No prompt: the options still end in `--`, so the last one's value list is closed.
     #expect(SessionLaunch.command(directory: "/p", prompt: nil, resume: .none, restricted: .init(settingsFile: "/s.json", readDirs: ["/a", "/b"]))
-            == "cd '/p' && claude --restricted --permission-mode manual --strict-mcp-config --disable-slash-commands --tools 'Read,Grep,Glob,Bash' --settings '/s.json' --add-dir '/a' --add-dir '/b' --")
+            == "cd '/p' && claude --restricted --permission-mode dontAsk --strict-mcp-config --disable-slash-commands --tools 'Read,Grep,Glob,Bash' --settings '/s.json' --add-dir '/a' --add-dir '/b' --")
 }
 
 @Test func launchWithoutRestrictedIsWhatItAlwaysWas() {   // F8-2
@@ -57,14 +57,14 @@ import Testing
     #expect(cmd.hasSuffix("--add-dir '/tmp/x'\\'' --dangerously-skip-permissions '\\''' --"))
 }
 
-@Test func aRestrictedSessionAlwaysAsksWhateverModeTheUserLastHad() {   // F8-22
+@Test func aRestrictedSessionNeverAsksWhateverModeTheUserLastHad() {   // F8-22
     for restricted in [SessionLaunch.Restricted(settingsFile: "/s.json", readDirs: []), .init(settingsFile: "/s 設定.json", readDirs: ["/a"])] {
         for prompt in [nil, "hi"] as [String?] {
             let options = SessionLaunch.command(directory: "/p", prompt: prompt, resume: .none, restricted: restricted).components(separatedBy: " -- ")[0]
-            #expect(options.contains(" --permission-mode manual "))
+            #expect(options.contains(" --permission-mode dontAsk "))
             #expect(options.contains(" --disable-slash-commands "))
             #expect(options.contains(" --settings '\(restricted.settingsFile)'"))   // the file that keeps it out of auto: never left out
-            #expect(!options.contains("auto") && !options.contains("bypassPermissions") && !options.contains("dontAsk") && !options.contains("acceptEdits"))
+            #expect(!options.contains("auto") && !options.contains("bypassPermissions") && !options.contains("manual") && !options.contains("acceptEdits"))
         }
     }
     // Not restricted: the mode is the user's own business, as before.
@@ -145,4 +145,36 @@ private func mode(_ url: URL) -> Int {
     }
     try SessionLaunch.writeScript("y\n", to: folder.appendingPathComponent("new.sh"), now: now)
     #expect(try fm.contentsOfDirectory(atPath: folder.path).sorted() == ["fresh.sh", "new.sh", "notes.txt", "recent.sh"])
+}
+
+// MARK: - What a restricted session may run (PRD F8-29, F8-30, F8-32)
+
+@Test func theRuleForAnActionIsTheOneThatPassedAgainstClaudeCode() {
+    #expect(SessionLaunch.allowRule(cubi: "/Users/me/Applications/Cubi.app/Contents/MacOS/cubi", tool: "sprint", action: "review.update")
+            == "Bash(/Users/me/Applications/Cubi.app/Contents/MacOS/cubi --tool-run sprint review.update:*)")
+    #expect(SessionLaunch.allowRule(cubi: "/opt/cubi-1.2/bin/cubi_dev", tool: "my-tool", action: "a.b-c_d") == "Bash(/opt/cubi-1.2/bin/cubi_dev --tool-run my-tool a.b-c_d:*)")
+}
+
+@Test func noRuleForAPathOrNameThatWouldNeedQuoting() {   // F8-32
+    let cubi = "/Applications/Cubi.app/Contents/MacOS/cubi"
+    for bad in ["/Users/first last/Applications/Cubi.app/Contents/MacOS/cubi", "/Users/me/應用程式/cubi", "/x/cubi'", "/x/cu\"bi", "/x/cubi)", "/x/cubi;rm", "/x/$HOME/cubi",
+                "/x/cu*bi", "~/Applications/Cubi.app/Contents/MacOS/cubi", "Applications/cubi", ""] {
+        #expect(SessionLaunch.allowRule(cubi: bad, tool: "sprint", action: "review.update") == nil, "\(bad)")
+    }
+    for bad in ["review.update && rm", "review update", "review.update:*", "a/b", "更新", "", "x)"] {
+        #expect(SessionLaunch.allowRule(cubi: cubi, tool: "sprint", action: bad) == nil, "\(bad)")
+        #expect(SessionLaunch.allowRule(cubi: cubi, tool: bad, action: "review.update") == nil, "\(bad)")
+    }
+}
+
+@Test func theAllowedCommandsComeLastBeforeTheDoubleDash() {
+    let rule = "Bash(/Applications/Cubi.app/Contents/MacOS/cubi --tool-run sprint review.update:*)"
+    let cmd = SessionLaunch.command(directory: "/p", prompt: "hi", resume: .none,
+                                    restricted: .init(settingsFile: "/s.json", readDirs: ["/Users/me/Library/Application Support/cubi/sprint/briefs"], allowedTools: [rule, "Bash(/x/cubi --tool-run sprint b:*)"]))
+    #expect(cmd == "cd '/p' && claude --restricted --permission-mode dontAsk --strict-mcp-config --disable-slash-commands --tools 'Read,Grep,Glob,Bash' --settings '/s.json'"
+                 + " --add-dir '/Users/me/Library/Application Support/cubi/sprint/briefs' --allowedTools '\(rule)' 'Bash(/x/cubi --tool-run sprint b:*)' -- 'hi'")
+    // None named: no --allowedTools at all, so nothing that needs asking can run.
+    #expect(!SessionLaunch.command(directory: "/p", prompt: "hi", resume: .none, restricted: .init(settingsFile: "/s.json", readDirs: [])).contains("--allowedTools"))
+    // …and `--allowedTools` takes any number of values: with no prompt the closing `--` still ends its list.
+    #expect(SessionLaunch.command(directory: "/p", prompt: nil, resume: .none, restricted: .init(settingsFile: "/s.json", readDirs: [], allowedTools: [rule])).hasSuffix("--allowedTools '\(rule)' --"))
 }

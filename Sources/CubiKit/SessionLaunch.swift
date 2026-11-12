@@ -24,30 +24,52 @@ public enum SessionLaunch {
         public var settingsFile: String
         /// Directories besides the working one the file tools may read.
         public var readDirs: [String]
+        /// The permission rules for what the session may run unasked (`allowRule`): made by the
+        /// app from action names, never handed in by a plugin. Everything else is refused.
+        public var allowedTools: [String]
 
-        public init(settingsFile: String, readDirs: [String]) {
+        public init(settingsFile: String, readDirs: [String], allowedTools: [String] = []) {
             self.settingsFile = settingsFile
             self.readDirs = readDirs
+            self.allowedTools = allowedTools
         }
     }
 
     /// The only tools a restricted session gets. Fixed here: a plugin asks for the mode, never for flags.
     public static let restrictedTools = "Read,Grep,Glob,Bash"
 
+    /// The rule that lets a restricted session run one action of one plugin through this cubi,
+    /// and nothing else: only a single command that begins `<cubi> --tool-run <tool> <action>`
+    /// followed by its arguments (the action name is matched whole: `review.updateX` is not
+    /// `review.update`; a `cd … &&` in front, a `&&`, `;` or `|` behind, or a here-document all
+    /// make the whole line refused — tried against Claude Code 2.1.322).
+    /// The rule is matched against the command line as the session writes it, so the path is
+    /// spelled exactly as plugins are told it (`CUBI_BIN`), and it must not need quoting: nil for
+    /// a path, plugin id or action with anything but letters, digits, `/`, `.`, `_`, `-` in it
+    /// (then the session is not opened at all, rather than opened with a rule that may not hold).
+    public static func allowRule(cubi: String, tool: String, action: String) -> String? {
+        let plain = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/._-")
+        let isPlain = { (s: String) in !s.isEmpty && s.unicodeScalars.allSatisfy(plain.contains) }
+        guard cubi.hasPrefix("/"), isPlain(cubi), isPlain(tool), isPlain(action), !tool.contains("/"), !action.contains("/") else { return nil }
+        return "Bash(\(cubi) --tool-run \(tool) \(action):*)"
+    }
+
     public static func command(directory: String, prompt: String?, resume: Resume, restricted: Restricted? = nil) -> String {
         var parts = ["cd", ClaudeHookInstaller.shellQuote(directory), "&&", "claude"]
         if let restricted {
             // `--tools` and `--add-dir` take any number of values: each is followed by another
             // option or the closing `--`, never by the prompt.
-            // `--permission-mode manual`: restricted mode drops the settings files but not the
-            // permission mode, and "auto" (what an interactive session starts in by default) lets
-            // a classifier pass commands unasked: the one thing this session must never do. The
-            // flag only sets where the session starts; the settings file is what keeps it from
-            // being switched back (shift+tab, or "yes, and switch to auto" on a prompt).
+            // `--permission-mode dontAsk`: whatever would need asking is refused, and nothing is ever
+            // asked. Restricted mode drops the settings files but not the permission mode; "auto"
+            // (what an interactive session starts in) lets a classifier pass commands unasked, and
+            // "manual" offers, on every prompt, to switch to "accept edits" for the rest of the
+            // session — neither can be taken out by a setting. With no prompt there is nothing to
+            // switch on; the settings file still shuts the auto and bypass modes (shift+tab).
             // `--disable-slash-commands`: the user's skills and commands are instructions too.
-            parts += ["--restricted", "--permission-mode", "manual", "--strict-mcp-config", "--disable-slash-commands",
+            parts += ["--restricted", "--permission-mode", "dontAsk", "--strict-mcp-config", "--disable-slash-commands",
                       "--tools", ClaudeHookInstaller.shellQuote(restrictedTools), "--settings", ClaudeHookInstaller.shellQuote(restricted.settingsFile)]
             for dir in restricted.readDirs { parts += ["--add-dir", ClaudeHookInstaller.shellQuote(dir)] }
+            if !restricted.allowedTools.isEmpty { parts += ["--allowedTools"] + restricted.allowedTools.map(ClaudeHookInstaller.shellQuote) }
         }
         switch resume {
         case .none: break

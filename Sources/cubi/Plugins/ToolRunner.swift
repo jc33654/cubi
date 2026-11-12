@@ -34,11 +34,18 @@ enum ToolRunner {
 
     struct HookFailure: Error { var message: String }
 
+    /// The path of the running cubi, as plugins are told it (`CUBI_BIN`) and as the rules that let
+    /// a restricted session run a plugin action spell it: the two must be the same string.
+    static let cubiBinary = Bundle.main.executablePath ?? CommandLine.arguments[0]
+
     static func run(_ invocation: ToolPlugin.Invocation, timeout: TimeInterval? = nil) -> Result {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: invocation.executable)
         p.arguments = invocation.arguments
         p.currentDirectoryURL = URL(fileURLWithPath: invocation.directory)
+        // CUBI_BIN: this very executable, so a plugin can write a `cubi --tool-run …` command line
+        // (for an agent to run) with the same path the app allows a restricted session to run.
+        p.environment = ProcessInfo.processInfo.environment.merging(["CUBI_BIN": cubiBinary]) { _, ours in ours }
         let outPipe = Pipe(), errPipe = Pipe(), inPipe = Pipe()
         p.standardOutput = outPipe
         p.standardError = errPipe

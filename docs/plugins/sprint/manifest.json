@@ -29,7 +29,7 @@
     "time.add":          { "run": ["/usr/bin/python3", "$plugin/sprint.py", "time.add"],          "args": ["text"], "stdin": 1 },
     "time.update":       { "run": ["/usr/bin/python3", "$plugin/sprint.py", "time.update"],       "args": ["text"], "stdin": 1 },
     "time.remove":       { "run": ["/usr/bin/python3", "$plugin/sprint.py", "time.remove"],       "args": ["text"], "stdin": 1 },
-    "review.update":     { "run": ["/usr/bin/python3", "$plugin/sprint.py", "review.update"],     "args": ["text"], "stdin": 1 },
+    "review.update":     { "run": ["/usr/bin/python3", "$plugin/sprint.py", "review.update"],     "args": ["text"], "stdin": 1, "sessionAllowed": true },
     "timer.start":       { "run": ["/usr/bin/python3", "$plugin/sprint.py", "timer.start"],       "args": ["text"], "stdin": 1 },
     "timer.stop":        { "run": ["/usr/bin/python3", "$plugin/sprint.py", "timer.stop"],        "args": ["text"], "stdin": 1 },
     "review.brief":      { "run": ["/usr/bin/python3", "$plugin/sprint.py", "review.brief"],      "args": ["text"], "stdin": 1 },

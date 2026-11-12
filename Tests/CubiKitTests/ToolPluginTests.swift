@@ -164,3 +164,15 @@ private let hooked = #"""
     let widget = try PluginIO.WidgetOutput.parse(echoed, tool: tool)
     #expect(widget.rows.count == 2 && widget.rows[1].url == "https://github.com/jc33654/cubi")
 }
+
+@Test func onlyCommandsTheManifestMarksMayBeRunByARestrictedSession() throws {   // F8-35
+    let marked = sample.replacingOccurrences(of: #""run": ["~/.t/bin/cli", "status", "--json"] }"#, with: #""run": ["~/.t/bin/cli", "status", "--json"], "sessionAllowed": true }"#)
+    #expect(try parse(marked).sessionActions == ["status"])
+    #expect(try parse(marked).commands["config.set"]?.sessionAllowed == false)
+    // Not said, or said in any way but a plain true: not allowed.
+    #expect(try parse(sample).sessionActions == [])
+    for value in [#""true""#, "1", "false", "null", #"["status"]"#] {
+        let odd = sample.replacingOccurrences(of: #""run": ["~/.t/bin/cli", "status", "--json"] }"#, with: #""run": ["~/.t/bin/cli", "status", "--json"], "sessionAllowed": "# + value + " }")
+        #expect(try parse(odd).sessionActions == [], "\(value)")
+    }
+}

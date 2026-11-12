@@ -74,7 +74,7 @@ const pts = v => v == null ? "–" : String(Math.round(v * 100) / 100);
 const CAT_COLORS = ["var(--cubi-c2)", "var(--cubi-c4)", "var(--cubi-c1)", "var(--cubi-c3)", "var(--cubi-c5)"];
 const TABS = { overview: ["dashboard", "總覽"], review: ["review", "回顧"], settings: ["settings", "設定"] };
 let state = null, session = window.cubiSession || null;
-let pendingSprint = false, selectedCategory = null, pendingTime = null, editTime = null, briefPoll = null;
+let pendingSprint = false, selectedCategory = null, pendingTime = null, editTime = null, briefPoll = null, briefLate = null;
 const shownHints = [];         // one-time notes from the plugin: kept while this page lives, until closed
 const weekday = d => d ? "日一二三四五六"[new Date(d + "T00:00").getDay()] : "";
 const openHours = new Set();   // tickets (and "*", the whole sprint) whose hours are shown by kind
@@ -619,6 +619,8 @@ function renderReview() {
   }));
 }
 
+const BRIEF_LATE_AFTER = 3 * 60 * 1000;
+const BRIEF_LATE = "還沒收到回顧，請到終端看那個 session；它的指令被拒絕時，請它照資料檔的寫法重寫";
 async function startBrief() {
   let b;
   try { b = await call("review.brief"); } catch (_) { return; }
@@ -629,11 +631,17 @@ async function startBrief() {
   if (!r.ok) { status(r.cancelled ? "" : (r.err || "開不了 session"), !r.cancelled); return; }
   status(`已在 ${b.directory} 開 session；每 30 秒看一次，寫好就出現（資料檔 ${b.file}）`);
   const before = JSON.stringify(state.sprint?.review), started = Date.now();
-  clearInterval(briefPoll);
+  const arrived = () => JSON.stringify(state.sprint?.review) !== before;
+  clearInterval(briefPoll); clearTimeout(briefLate);
+  // The session is never asked anything, so a write-back it got wrong (a `cd` put in front, a
+  // quote left open) is refused without a sign on this side. Past three minutes, say where to look;
+  // each later look says it again, in case another message took its place meanwhile.
+  briefLate = setTimeout(() => { if (!arrived()) status(BRIEF_LATE, true); }, BRIEF_LATE_AFTER);
   briefPoll = setInterval(async () => {
     if (!await refresh()) return;
-    if (JSON.stringify(state.sprint?.review) !== before) { clearInterval(briefPoll); status("Claude 寫回來了"); }
+    if (arrived()) { clearInterval(briefPoll); clearTimeout(briefLate); status("Claude 寫回來了"); }
     else if (Date.now() - started > 3600 * 1000) { clearInterval(briefPoll); }
+    else if (Date.now() - started >= BRIEF_LATE_AFTER) status(BRIEF_LATE, true);
   }, 30000);
 }
 

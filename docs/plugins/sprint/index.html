@@ -46,6 +46,10 @@
   .lists textarea { min-height: 96px; }
   .timer { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 15px; }
   .timer.long { color: var(--cubi-danger); }
+  #status { display: flex; align-items: flex-start; gap: 10px; }
+  #status[hidden] { display: none; }
+  #status-close { background: none; border: 0; padding: 0; color: inherit; cursor: pointer; line-height: 0; opacity: .8; }
+  #status-close:hover { opacity: 1; }
 </style>
 </head>
 <body>
@@ -62,7 +66,7 @@
     <section id="tab-settings" hidden></section>
   </main>
 </div>
-<div class="cubi-status" id="status"></div>
+<div class="cubi-status" id="status" hidden><span id="status-text"></span><button type="button" id="status-close" title="關閉" aria-label="關閉" hidden></button></div>
 <script>
 "use strict";
 const $ = (s, el = document) => el.querySelector(s);
@@ -74,23 +78,42 @@ const pts = v => v == null ? "–" : String(Math.round(v * 100) / 100);
 const CAT_COLORS = ["var(--cubi-c2)", "var(--cubi-c4)", "var(--cubi-c1)", "var(--cubi-c3)", "var(--cubi-c5)"];
 const TABS = { overview: ["dashboard", "總覽"], review: ["review", "回顧"], settings: ["settings", "設定"] };
 let state = null, session = window.cubiSession || null;
-let pendingSprint = false, selectedCategory = null, pendingTime = null, editTime = null, briefPoll = null, briefLate = null;
+let pendingSprint = false, selectedCategory = null, pendingTime = null, editTime = null, briefPoll = null, briefLate = null, briefLateClosed = false;
 const shownHints = [];         // one-time notes from the plugin: kept while this page lives, until closed
 const weekday = d => d ? "日一二三四五六"[new Date(d + "T00:00").getDay()] : "";
 const openHours = new Set();   // tickets (and "*", the whole sprint) whose hours are shown by kind
 
-function status(msg, isError) { const el = $("#status"); el.textContent = msg || ""; el.className = "cubi-status" + (isError ? " err" : ""); if (msg && !isError) setTimeout(() => { if (el.textContent === msg) el.textContent = ""; }, 4000); }
+// One message at a time, bottom right; the next one replaces it. Errors stay until closed (✕) or
+// replaced; anything else goes after 4 seconds.
+let statusTimer = null;
+function status(msg, isError) {
+  const el = $("#status");
+  clearTimeout(statusTimer);
+  $("#status-text").textContent = msg || "";
+  el.hidden = !msg;
+  el.classList.toggle("err", Boolean(isError));
+  $("#status-close").hidden = !isError;
+  if (msg && !isError) statusTimer = setTimeout(() => status(""), 4000);
+}
+const statusShows = msg => !$("#status").hidden && $("#status-text").textContent === msg;
+$("#status-close").innerHTML = ic("x", 14) || "✕";
+$("#status-close").addEventListener("click", () => {
+  if (statusShows(BRIEF_LATE)) briefLateClosed = true;
+  status("");
+});
 const bridge = () => window.webkit.messageHandlers.cubi;
 
-async function call(action, payload = {}) {
+// `quiet`: a look the user did not ask for (the brief poll) says nothing unless it fails, so what is
+// on screen stays.
+async function call(action, payload = {}, quiet = false) {
   if (session && !("session" in payload)) payload.session = session;
-  status("…");
+  if (!quiet) status("…");
   const r = await bridge().postMessage({ action, args: [JSON.stringify(payload)] });
   if (!r.ok) { status(r.err || "失敗", true); throw new Error(r.err || "failed"); }
   if (action === "review.export") { status("已匯出 " + r.out); return r.out; }
   const data = JSON.parse(r.out);
   if (data.error) { status(data.error, true); throw new Error(data.error); }
-  status("");
+  if (!quiet) status("");
   return data;
 }
 // Never rejects: a failure is already on screen (status); the result says whether it worked.
@@ -100,11 +123,11 @@ async function call(action, payload = {}) {
 // A failed send puts what was sent back as drafts (same sprint and session only), so a form that a
 // re-render dropped can refill.
 let asked = 0, drawn = 0;
-async function refresh(action = "panel.state", payload = {}, sent = []) {
+async function refresh(action = "panel.state", payload = {}, sent = [], quiet = false) {
   sent = [...sent].map(draftOf).filter(Boolean);
   const n = ++asked, from = draftsFor;
   let data;
-  try { data = await call(action, payload); } catch (_) {
+  try { data = await call(action, payload, quiet); } catch (_) {
     if (draftsFor === from) for (const [sel, d] of sent) if (!drafts.has(sel)) drafts.set(sel, d);
     return false;
   }
@@ -112,7 +135,7 @@ async function refresh(action = "panel.state", payload = {}, sent = []) {
   drawn = Math.max(drawn, n);
   for (const [sel, d] of sent) if (drafts.get(sel)?.value === d.value) drafts.delete(sel);
   state = data;
-  render();
+  render(quiet);
   return true;
 }
 const link = key => `<a href="https://${esc(state.site)}/browse/${esc(key)}" title="在 Jira 開">${esc(key)}</a>`;
@@ -161,7 +184,7 @@ document.addEventListener("focusout", e => {
   if (restored.delete(e.target) && unlikeMarkup(e.target)) e.target.dispatchEvent(new Event("change"));
 });
 
-function render() {
+function render(quiet = false) {
   if (composing) { renderLater = true; return; }
   renderLater = false;
   keepTimeForm();
@@ -178,8 +201,8 @@ function render() {
   const open = [...document.querySelectorAll("details[id][open]")].map(d => d.id);
   renderOverview(); renderReview(); renderSettings();
   for (const id of open) document.getElementById(id)?.setAttribute("open", "");
-  if (state.warnings && state.warnings.length) status(state.warnings.join("；"), true);
-  else if (state.notices && state.notices.length) status(state.notices.join("；"), true);   // stays until the next thing is said
+  if (!quiet && state.warnings && state.warnings.length) status(state.warnings.join("；"), true);
+  else if (!quiet && state.notices && state.notices.length) status(state.notices.join("；"), true);
   for (const [sel, d] of drafts) {
     const el = document.querySelector(sel);
     if (!el || fieldValue(el) === d.value) { drafts.delete(sel); carried.delete(sel); continue; }
@@ -636,15 +659,16 @@ async function startBrief() {
   const before = JSON.stringify(state.sprint?.review), started = Date.now();
   const arrived = () => JSON.stringify(state.sprint?.review) !== before;
   clearInterval(briefPoll); clearTimeout(briefLate);
+  briefLateClosed = false;
   // The session is never asked anything, so a write-back it got wrong (a `cd` put in front, a
   // quote left open) is refused without a sign on this side. Past three minutes, say where to look;
-  // each later look says it again, in case another message took its place meanwhile.
-  briefLate = setTimeout(() => { if (!arrived()) status(BRIEF_LATE, true); }, BRIEF_LATE_AFTER);
+  // a later look says it again when nothing else is on screen, until the user closes it.
+  briefLate = setTimeout(() => { if (!arrived() && !briefLateClosed) status(BRIEF_LATE, true); }, BRIEF_LATE_AFTER);
   briefPoll = setInterval(async () => {
-    if (!await refresh()) return;
+    if (!await refresh("panel.state", {}, [], true)) return;
     if (arrived()) { clearInterval(briefPoll); clearTimeout(briefLate); status("Claude 寫回來了"); }
     else if (Date.now() - started > 3600 * 1000) { clearInterval(briefPoll); }
-    else if (Date.now() - started >= BRIEF_LATE_AFTER) status(BRIEF_LATE, true);
+    else if (Date.now() - started >= BRIEF_LATE_AFTER && !briefLateClosed && $("#status").hidden) status(BRIEF_LATE, true);
   }, 30000);
 }
 

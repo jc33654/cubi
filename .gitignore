@@ -8,3 +8,4 @@ build/
 __pycache__/
 # Requirement drafts and acceptance checklists: kept on this machine only
 docs/prd/
+.vscode/

@@ -18,6 +18,7 @@ import traceback
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from card import claude_session_ids, session_info, tick, timer_start  # noqa: E402,F401
 from common import check_payload, dry_run, jira  # noqa: E402,F401
+from estimate_comment import estimate_comment  # noqa: E402
 from estimates import estimate_brief, estimate_dismiss, estimate_suggest  # noqa: E402
 from jira import JiraError  # noqa: E402
 from panel import CONFIG_KEYS, config_set, hint_seen, hours_retry, panel_state  # noqa: E402,F401
@@ -34,7 +35,7 @@ ACTIONS = {
     "tick": tick, "panel.state": panel_state,
     "sprint.new": sprint_new, "sprint.update": sprint_update, "sprint.select": sprint_select, "sprint.sync": sprint_sync,
     "ticket.add": ticket_add, "ticket.remove": ticket_remove, "ticket.update": ticket_update, "ticket.transition": ticket_transition, "points.push": points_push, "hours.push": hours_push, "hours.retry": hours_retry, "estimate.set": estimate_set,
-    "estimate.brief": estimate_brief, "estimate.suggest": estimate_suggest, "estimate.dismiss": estimate_dismiss,
+    "estimate.brief": estimate_brief, "estimate.suggest": estimate_suggest, "estimate.dismiss": estimate_dismiss, "estimate.comment": estimate_comment,
     "time.add": time_add, "time.update": time_update, "time.remove": time_remove,
     "review.update": review_update, "review.export": review_export, "review.resend": review_resend,
     "config.set": config_set, "hint.seen": hint_seen,

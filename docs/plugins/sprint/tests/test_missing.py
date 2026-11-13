@@ -42,6 +42,11 @@ class FakeJira:
         if self.refuse:
             raise self.refuse
 
+    def edit_fields(self, key):
+        # Where the edit screen cannot be asked about, a refused estimate is the original error
+        # (the comment path is test_estimate_comment's).
+        raise JiraError("GET editmeta → 連不上 Jira")
+
 
 class MissingTicketTests(unittest.TestCase):
     def setUp(self):

@@ -73,6 +73,19 @@ class Jira:
     def set_field(self, key, field, value):
         self.api("PUT", f"/rest/api/3/issue/{key}", {"fields": {field: value}})
 
+    def edit_fields(self, key):
+        """The fields the ticket's edit screen has: the ones a PUT may set. Ids, whatever the language."""
+        return set(self.api("GET", f"/rest/api/3/issue/{key}/editmeta").get("fields") or {})
+
+    def comment(self, key, comment_id):
+        return self.api("GET", f"/rest/api/3/issue/{key}/comment/{comment_id}")
+
+    def add_comment(self, key, doc):
+        return self.api("POST", f"/rest/api/3/issue/{key}/comment", {"body": doc})
+
+    def edit_comment(self, key, comment_id, doc):
+        return self.api("PUT", f"/rest/api/3/issue/{key}/comment/{comment_id}", {"body": doc})
+
 
 TICKET_FIELDS = ["summary", "status", "resolutiondate"]
 

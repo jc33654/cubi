@@ -93,6 +93,9 @@ def ticket_rows(sprint, tickets, hours, hours_per_point=8.0, totals=None):
             # An AI estimate: asked for and not back yet, or back and waiting for a person.
             "suggestPending": bool(suggestion.get("pending")),
             "suggestion": {k: suggestion[k] for k in ("points", "confidence", "reason")} if "points" in suggestion else None,
+            # No estimate field on the ticket: the comment waiting for the user's yes, and where the estimate went.
+            "commentAsk": {k: v for k, v in t["commentAsk"].items() if k != "at"} if t.get("commentAsk") else None,
+            "estimateVia": t.get("estimateVia"),
             "doneAt": done_on(t).isoformat() if done_on(t) else None,
             "category": category(bool(t.get("done")), t.get("estimate"), actual),
             "seconds": seconds, "meetingSeconds": h.get("meeting", 0.0),

@@ -6,6 +6,7 @@ import unicodedata
 import common
 import review
 from common import KEY_RE, apply_issue, fetch_tickets, field_refused, jira_field, known_key, target_sprint
+from estimate_comment import ask_for, no_field_ask, refuse_while_sending
 from jira import TICKET_FIELDS, JiraError, parse_issue
 from panel import panel_state
 
@@ -96,17 +97,30 @@ def estimate_set(store, p):
     field = jira_field(store, "pointsField", "估點欄位", required=True)
     value = parse_estimate(p.get("value"))
     j = common.jira(store)
+    refuse_while_sending(store.tickets.get(key, {}).get("commentAsk"))
+    mine = store.tickets.get(key, {}).get("estimateComment")
 
     def write():
-        j.set_field(key, field, value)
         try:
-            return j.issue(key, TICKET_FIELDS + [field]), None
+            j.set_field(key, field, value)
+        except JiraError as e:
+            if e.code != 400 or value is None:
+                raise
+            return None, None, no_field_ask(j, key, field, e, mine)
+        try:
+            return j.issue(key, TICKET_FIELDS + [field]), None, None
         except JiraError as e:   # written, but the read-back failed: the estimate still stands
-            return None, str(e)
+            return None, str(e), None
     try:
-        issue, trouble = store.away(write)
+        issue, trouble, ask = store.away(write)
     except JiraError as e:
         raise field_refused(e, field, "估點")
+    if ask:
+        # No estimate field on this ticket: nothing is written until the user says so on the row.
+        ask_for(store, key, value, ask)
+        return panel_state(store, p)
+    store.ticket(key).pop("commentAsk", None)
+    store.ticket(key).pop("estimateVia", None)
     if issue:
         apply_issue(store, parse_issue(issue, field))
     # The value just written, not what the read-back said: a cleared field comes back empty, and

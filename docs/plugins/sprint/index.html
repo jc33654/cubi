@@ -51,6 +51,7 @@
   .ai-reason { color: var(--cubi-ink2); flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; }
   .dir-note { color: var(--cubi-ink3); font-size: 12px; grid-column: 1 / -1; margin: 0; }
   .ai-hint { color: var(--cubi-ink3); font-size: 12px; flex-basis: 100%; }
+  #c-estimateRules { min-height: 150px; }
   #status { display: flex; align-items: flex-start; gap: 10px; }
   #status[hidden] { display: none; }
   /* A 32×32 target around a small icon; the negative margins keep it from making the box taller. */
@@ -348,7 +349,7 @@ function renderOverview() {
       <td title="${t.notFound ? "這張單在 Jira 被刪除，或你沒有查看權限。這裡是最後一次讀到的資料；不要它就按這列最右邊的 ✕ 移出這一期" : esc(t.status || "")}">${t.notFound
         ? `<span class="cubi-pill danger">Jira 查不到</span>` : `<span class="cubi-pill ${statusTone(t)}">${esc(t.status || "–")}</span>`}</td>
       <td class="num"><input class="est" data-est="${esc(t.key)}" value="${esc(t.estimate ?? "")}" inputmode="decimal" autocomplete="off" placeholder="–" ${t.notFound ? "disabled" : ""}
-        title="${t.notFound ? "Jira 查不到這張單，不能寫估點" : "估點。改了（按 Enter 或離開這一格）就寫回 Jira；清空代表未估點"}" style="width:52px;text-align:right"></td>
+        title="${t.notFound ? "Jira 查不到這張單，不能寫估點" : t.estimateVia ? `這張單在 Jira 沒有估點欄位，估點${t.estimateVia === "comment" ? "記在 Cubi 發的【估點】留言" : "只記在這台電腦"}；改了會先在下面問你` : "估點。改了（按 Enter 或離開這一格）就寫回 Jira；清空代表未估點"}" style="width:52px;text-align:right"></td>
       <td>${t.remaining == null ? `<span class="cubi-muted">未估點</span>` : `<div class="remain"><div class="cubi-bar ${rt}"><i style="width:${used}%"></i></div><span style="color:var(--cubi-${rt || "ink2"})">${t.remaining < 0 ? "超 " + fmtH(-t.remaining) : fmtH(t.remaining)}</span></div>`}</td>
       <td class="num">${hoursButton(t.key, t.seconds, hpp)}</td>
       <td class="num actions"><span class="cubi-row" style="justify-content:flex-end;flex-wrap:nowrap">
@@ -359,6 +360,7 @@ function renderOverview() {
         ${state.config.actualHoursField ? `<button class="cubi-btn icon" data-push-hours="${esc(t.key)}" title="${t.notFound ? "Jira 查不到這張單" : "寫回時數：把這張單的總投入時數（含之前的 sprint）寫進 Jira 的實際時數欄位。會蓋掉那裡原有的數字，包含別人手動填的"}" ${t.notFound ? "disabled" : ""}>${ic("hourglass", 15)}</button>` : ""}
         <button class="cubi-btn icon" data-remove-ticket="${esc(t.key)}" title="從這一期移除。工時紀錄不刪；這張單在 Jira 還貼著本期標籤的話，下次同步會再出現">${ic("x", 15)}</button></span></td></tr>`;
     if (t.suggestion || t.suggestPending) html += suggestionRow(t);
+    if (t.commentAsk) html += commentRow(t);
     if (openHours.has(t.key)) html += `<tr><td colspan="8" style="white-space:normal">${kindsList(t.kinds, hpp)}${entriesList(t.entries, hpp)}</td></tr>`;
     if (pendingTime && pendingTime.key === t.key) html += timeFormRow(t.key);
   }
@@ -480,6 +482,15 @@ function suggestionRow(t) {
     : `<span class="cubi-muted">AI 估點中…結果會出現在這裡</span><span class="cubi-spacer"></span><button class="cubi-btn small" data-ai-dismiss="${k}" title="不等了。那個 session 之後寫回來也不會收">不等了</button>`;
   return `<tr class="ai-row"><td></td><td colspan="7"><div class="cubi-row ai-suggest">${ic("sparkles", 14)}${body}</div></td></tr>`;
 }
+// No estimate field on the ticket: the exact comment, and nothing goes to Jira until "留言到 Jira".
+function commentRow(t) {
+  const a = t.commentAsk, k = esc(t.key), cut = a.text.indexOf("）") + 1;
+  const what = a.edit ? (a.changed ? "Jira 上 Cubi 發的估點留言被改過了，按下會整則改成：" : "會把 Cubi 上次發的估點留言改成：")
+    : a.lost ? "Cubi 上次發的估點留言在 Jira 上找不到了（可能被刪），會發一則新的：" : "這張單在 Jira 沒有估點欄位，會在單上留言：";
+  return `<tr class="ai-row"><td></td><td colspan="7"><div class="cubi-row ai-suggest">${ic("info", 14)}<span class="ai-reason">${what}<b>${esc(a.text.slice(0, cut))}</b>${esc(a.text.slice(cut))}</span><span class="cubi-spacer"></span>
+    <button class="cubi-btn small primary" data-cm="jira" data-cm-key="${k}">留言到 Jira</button><button class="cubi-btn small" data-cm="local" data-cm-key="${k}" title="只記在這台電腦，Jira 不動（例如你已經自己留過言）">只記在本機</button><button class="cubi-btn small" data-cm="cancel" data-cm-key="${k}">取消</button>${a.edit ? `<span class="ai-hint">目前留言：${esc(a.old)}</span>` : ""}</div></td></tr>`;
+}
+const estimateSaid = key => state.sprint?.tickets.find(t => t.key === key)?.commentAsk ? "這張單在 Jira 沒有估點欄位：請在那一列底下確認要不要用留言記錄" : "估點已寫回 Jira";
 
 function timeFormRow(key) {
   return `<tr><td colspan="8" style="white-space:normal;overflow:visible">${timeForm(key, key)}</td></tr>`;
@@ -587,13 +598,20 @@ function bindOverview(el) {
   el.querySelectorAll("[data-remove-ticket]").forEach(b => b.addEventListener("click", () => refresh("ticket.remove", { key: b.dataset.removeTicket })));
   el.querySelectorAll("[data-ai-est]").forEach(b => b.addEventListener("click", () => startEstimate(b.dataset.aiEst)));
   el.querySelectorAll("[data-ai-take]").forEach(b => b.addEventListener("click", async () => {
-    if (await refresh("estimate.set", { key: b.dataset.aiTake, value: b.dataset.points }) && !(state.warnings || []).length) status("估點已寫回 Jira");
+    if (await refresh("estimate.set", { key: b.dataset.aiTake, value: b.dataset.points }) && !(state.warnings || []).length) status(estimateSaid(b.dataset.aiTake));
+  }));
+  el.querySelectorAll("[data-cm]").forEach(b => b.addEventListener("click", async () => {
+    const row = [...b.parentElement.querySelectorAll("[data-cm]")];   // one answer at a time: no second comment
+    row.forEach(x => { x.disabled = true; });
+    const ok = await refresh("estimate.comment", { key: b.dataset.cmKey, how: b.dataset.cm });
+    row.forEach(x => { x.disabled = false; });
+    if (ok && !(state.warnings || []).length && b.dataset.cm !== "cancel") status(b.dataset.cm === "jira" ? "估點已用留言記在 Jira" : "估點已記在本機（Jira 沒動）");
   }));
   el.querySelectorAll("[data-ai-dismiss]").forEach(b => b.addEventListener("click", () => refresh("estimate.dismiss", { key: b.dataset.aiDismiss })));
   el.querySelectorAll("[data-push-hours]").forEach(b => b.addEventListener("click", async () => { if (await refresh("hours.push", { key: b.dataset.pushHours })) status("時數已寫回 Jira"); }));
   // Jira is the truth for an estimate: a failed write puts the field back to what Jira has.
   el.querySelectorAll("[data-est]").forEach(i => i.addEventListener("change", async () => {
-    if (await refresh("estimate.set", { key: i.dataset.est, value: i.value }, [i])) { if (!(state.warnings || []).length) status("估點已寫回 Jira"); return; }
+    if (await refresh("estimate.set", { key: i.dataset.est, value: i.value }, [i])) { if (!(state.warnings || []).length) status(estimateSaid(i.dataset.est)); return; }
     drafts.delete(fieldSel(i)); render();
   }));
   el.querySelectorAll("[data-remove-time]").forEach(b => b.addEventListener("click", () => refresh("time.remove", { id: b.dataset.removeTime })));

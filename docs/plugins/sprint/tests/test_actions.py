@@ -39,6 +39,7 @@ CASES = {
     "estimate.brief": ({"key": "PROJ-1"}, (), "先到設定分頁填"),
     "estimate.suggest": ({"key": "PROJ-1", "points": 2, "confidence": "中", "reason": "理由"}, (), "沒有在等 AI 估點"),
     "estimate.dismiss": ({"key": "PROJ-1"}, ("sprint",), None),
+    "estimate.comment": ({"key": "PROJ-1", "how": "local"}, (), "沒有在等確認的估點留言"),
     "hours.push": ({"key": "PROJ-1"}, (), "實際時數欄位"),
     "hours.retry": ({}, ("sprint", "hoursPush"), None),
     "time.add": ({"key": "PROJ-1", "start": "2026-11-05T10:00", "minutes": 30}, ("sprint",), None),

@@ -113,7 +113,16 @@ struct IslandContent: View {
                 }
                 .buttonStyle(.plain)
                 .help("開新 session")
-                if let u = state.usage, u.fiveHour != nil || u.sevenDay != nil {
+                if state.focusMissShown {
+                    // Short enough for the wing; the session's ticker says it in full.
+                    VStack(alignment: .trailing, spacing: 1) {
+                        ForEach(state.focusMissLines, id: \.self) { Text($0) }
+                    }
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.orange)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                } else if let u = state.usage, u.fiveHour != nil || u.sevenDay != nil {
                     VStack(alignment: .trailing, spacing: 1) {
                         if let w = u.fiveHour { usageLine("5h", w) }
                         if let w = u.sevenDay { usageLine("7d", w) }

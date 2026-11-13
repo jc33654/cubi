@@ -296,6 +296,12 @@ public struct SessionStore: Sendable {
         sessions[id] = s
     }
 
+    /// A word from the app itself (not from a hook) on the session's ticker; the next hook's
+    /// ticker replaces it.
+    public mutating func setTicker(_ text: String, for id: String) {
+        sessions[id]?.ticker = text
+    }
+
     /// Same fallback chain as notify-hook.sh: session name, else cwd basename, else id prefix.
     public static func defaultName(id: String, cwd: String?) -> String {
         if let cwd, let last = cwd.split(separator: "/").last, !last.isEmpty { return String(last) }

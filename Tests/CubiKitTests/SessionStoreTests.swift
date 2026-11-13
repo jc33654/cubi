@@ -354,3 +354,14 @@ private func hook(_ id: String, _ event: CanonicalEvent, cwd: String? = "/Users/
     store.forget("d")
     #expect(store.dismissed.isEmpty && store.manuallyRested.isEmpty && store.sessions.isEmpty)
 }
+
+@Test func theAppsOwnWordOnATickerLastsUntilTheNextHook() {
+    var store = SessionStore()
+    _ = store.apply(hook("aaaa-1111", .sessionStart(source: "startup")), now: 1)
+    store.setTicker("沒跳過去", for: "aaaa-1111")
+    store.setTicker("沒有這個 session", for: "nope")
+    #expect(store.sessions["aaaa-1111"]?.ticker == "沒跳過去")
+    #expect(store.sessions["nope"] == nil)
+    _ = store.apply(hook("aaaa-1111", .sessionStart(source: "resume")), now: 2)
+    #expect(store.sessions["aaaa-1111"]?.ticker == "準備好了")
+}

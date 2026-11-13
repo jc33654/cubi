@@ -145,6 +145,24 @@ final class IslandState {
     var expandedHeight: CGFloat = 190
     /// Account-wide plan usage from the latest status line; nil until one arrives.
     var usage: StatuslineInfo?
+    /// A robot click found no single terminal window of its own, so nothing jumped: the right wing
+    /// says so instead of the usage for a few seconds. Another miss meanwhile only keeps it longer.
+    var focusMissShown = false
+    var focusMissLines: [String] = []
+    @ObservationIgnored private var focusMissGeneration = 0
+    static let focusMissSeconds: Double = 5
+
+    func showFocusMiss(_ lines: [String]) {
+        focusMissLines = lines
+        focusMissGeneration += 1
+        let generation = focusMissGeneration
+        focusMissShown = true
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(Self.focusMissSeconds))
+            guard let self, self.focusMissGeneration == generation else { return }
+            self.focusMissShown = false
+        }
+    }
     /// User setting: the island never hides; its resting mode is compact so every robot stays visible.
     var pinned: Bool {
         didSet { if persists { UserDefaults.standard.set(pinned, forKey: Self.pinnedKey) } }

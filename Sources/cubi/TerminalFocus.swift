@@ -28,7 +28,23 @@ enum TerminalFocus {
         return nil
     }
 
-    static func focus(_ info: SessionInfo) {
+    /// What a miss says: two short lines for the island's wing, the whole of it on the session's
+    /// ticker. A session with no name of its own can be told apart by one (/rename); a named one
+    /// was found in several tabs, or in none whose title still ends with it.
+    struct Miss: Equatable {
+        let wing: [String]
+        let ticker: String
+
+        static let unnamed = Miss(wing: ["找不到它的視窗", "請 /rename 取名"],
+                                  ticker: "沒跳過去：同資料夾有好幾個 Claude 分不出來，到那個視窗打 /rename 取名字就點得到")
+        static let named = Miss(wing: ["找不到它的視窗", "同名的分頁太多"],
+                                ticker: "沒跳過去：有好幾個分頁符合這個名字，請關掉不用的或換個名字")
+    }
+
+    /// `onMiss` runs (on the main actor) when Ghostty answered but no single tab was the session's
+    /// own, so nothing jumped: the island says so instead of staying silent. (Terminal.app goes by
+    /// tty: a miss there is a closed tab, which neither wording fits.)
+    static func focus(_ info: SessionInfo, onMiss: (@MainActor (Miss) -> Void)? = nil) {
         let client = info.client
         let bundle = client.bundleID ?? ""
         // A /rename reaches Claude Code's registry (and the tab title) before the next status line.
@@ -43,9 +59,11 @@ enum TerminalFocus {
         switch kind(for: info) {
         case .terminal:
             guard let tty = client.tty else { return activate(bundle: terminalBundle) }
-            Task { await run(terminalScript(tty: tty), label: "Terminal \(tty)", fallbackBundle: terminalBundle) }
+            Task { await run(terminalScript(tty: tty), label: "Terminal \(tty) \(info.id.prefix(8))", fallbackBundle: terminalBundle) }
         case .ghostty:
-            Task { await run(ghosttyScript(name: name, cwd: cwd, anyClaude: true), label: "Ghostty \(info.name)", fallbackBundle: ghosttyBundle) }
+            let named = name
+            Task { missed(await run(ghosttyScript(name: named, cwd: cwd), label: "Ghostty \(info.name) \(info.id.prefix(8)) \(named.isEmpty ? "unnamed" : "named")", fallbackBundle: ghosttyBundle),
+                          named.isEmpty ? .unnamed : .named, onMiss) }
         case nil where bundle == desktopBundle:
             focusDesktop(info)
         case nil where !bundle.isEmpty:
@@ -56,10 +74,15 @@ enum TerminalFocus {
         }
     }
 
+    /// The script ran and said "none": no window of its own was found (an error is not a miss).
+    private static func missed(_ result: (ok: Bool, error: String), _ miss: Miss, _ onMiss: (@MainActor (Miss) -> Void)?) {
+        if !result.ok, result.error.hasPrefix("none"), let onMiss { onMiss(miss) }
+    }
+
     /// Without an identity, ask each scriptable terminal that is running; stop at the first match.
     private static func guess(name: String, cwd: String, label: String) async {
         if isRunning(ghosttyBundle),
-           await run(ghosttyScript(name: name, cwd: cwd, anyClaude: false), label: "Ghostty? \(label)", fallbackBundle: nil).ok { return }
+           await run(ghosttyScript(name: name, cwd: cwd), label: "Ghostty? \(label)", fallbackBundle: nil).ok { return }
         if isRunning(terminalBundle), !name.isEmpty,
            await run(terminalByTitleScript(name: name), label: "Terminal? \(label)", fallbackBundle: nil).ok { return }
         CubiLog.write("focus: nothing matched for \(label)")
@@ -103,7 +126,7 @@ enum TerminalFocus {
         NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration(), completionHandler: nil)
     }
 
-    /// Runs the script; ok when it printed "ok", else `error` says what it printed instead (its
+    /// Runs the script; ok when what it printed starts with "ok", else `error` says what it printed instead (its
     /// stderr when there is one). Not ok also activates `fallbackBundle` when given.
     @discardableResult
     static func run(_ source: String, label: String, fallbackBundle: String?) async -> (ok: Bool, error: String) {
@@ -122,7 +145,7 @@ enum TerminalFocus {
             return (text(out), text(err))
         }.value
         CubiLog.write("focus \(label): \(result.0.isEmpty ? "(no output)" : result.0)\(result.1.isEmpty ? "" : " err=\(result.1)")")
-        let ok = result.0 == "ok"
+        let ok = result.0.hasPrefix("ok")
         if !ok, let fallbackBundle { activate(bundle: fallbackBundle) }
         let error = result.1.isEmpty ? result.0 : result.1
         return (ok, ok || !error.isEmpty ? error : "osascript 沒有回應（5 秒逾時）")
@@ -171,44 +194,52 @@ enum TerminalFocus {
     }
 
     /// Every step only accepts exactly one terminal: the title (two tabs can carry the same name,
-    /// e.g. a resumed session next to the original; then the cwd narrows them), else the cwd, else
-    /// with `anyClaude` the "Claude Code" title. With several sessions in one project directory
-    /// "the first match" is usually the wrong tab, and no jump beats a wrong one.
-    static func ghosttyScript(name: String, cwd: String, anyClaude: Bool) -> String {
+    /// e.g. a resumed session next to the original; then the cwd narrows them), else the cwd. With
+    /// several sessions in one project directory "the first match" is usually the wrong tab, and
+    /// no jump beats a wrong one; a lone "Claude Code" title is not a match either (that is just
+    /// whichever tab was last cleared). Prints "ok:title" or "ok:cwd", else "none:" with how many
+    /// terminals each step found (t: title, n: title and cwd, c: cwd), for the log.
+    static func ghosttyScript(name: String, cwd: String) -> String {
         """
         tell application "Ghostty"
           set target to missing value
+          set via to ""
+          set titled to -1
+          set narrowedCount to -1
+          set inCwd to -1
           if \(quote(name)) is not "" then
             set hits to {}
             repeat with t in terminals
               if (name of t) ends with (" " & \(quote(name))) then set end of hits to t
             end repeat
+            set titled to count of hits
             if (count of hits) > 1 and \(quote(cwd)) is not "" then
               set narrowed to {}
               repeat with t in hits
                 if (working directory of t) is \(quote(cwd)) then set end of narrowed to t
               end repeat
               set hits to narrowed
+              set narrowedCount to count of hits
             end if
-            if (count of hits) is 1 then set target to item 1 of hits
+            if (count of hits) is 1 then
+              set target to item 1 of hits
+              set via to "title"
+            end if
           end if
           if target is missing value and \(quote(cwd)) is not "" then
             set hits to {}
             repeat with t in terminals
               if (working directory of t) is \(quote(cwd)) then set end of hits to t
             end repeat
-            if (count of hits) is 1 then set target to item 1 of hits
+            set inCwd to count of hits
+            if (count of hits) is 1 then
+              set target to item 1 of hits
+              set via to "cwd"
+            end if
           end if
-          if target is missing value and \(anyClaude) then
-            set hits to {}
-            repeat with t in terminals
-              if (name of t) contains "Claude Code" then set end of hits to t
-            end repeat
-            if (count of hits) is 1 then set target to item 1 of hits
-          end if
-          if target is missing value then return "none"
+          if target is missing value then return "none:t=" & titled & ",n=" & narrowedCount & ",c=" & inCwd
           focus target
-          return "ok"
+          return "ok:" & via
         end tell
         """
     }

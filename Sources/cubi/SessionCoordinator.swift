@@ -52,17 +52,35 @@ final class SessionCoordinator {
         }
         island.state.onFocus = { [weak self] id in
             guard let self, let info = self.store.sessions[id] else { return }
+            CubiLog.write("focus click \(id.prefix(8)) \(Self.clickTrace(NSApp.currentEvent))")
             // A look at the terminal opens the robot's eyes but does not pull it out of the 晚安 zone.
             store.wake(id, now: Date().timeIntervalSinceReferenceDate, leavingRest: false)
             sync()
-            TerminalFocus.focus(info)
+            TerminalFocus.focus(info) { [weak self] miss in self?.focusMissed(id, miss) }
         }
         // A shorter clock takes effect now, not at the next minute.
         timing.onChange = { [weak self] in self?.applyTiming(); self?.tick() }
         notifier.onActivate = { [weak self] id in
             guard let info = self?.store.sessions[id] else { return }
-            TerminalFocus.focus(info)
+            TerminalFocus.focus(info) { [weak self] miss in self?.focusMissed(id, miss) }
         }
+    }
+
+    /// Nothing jumped: say so on the island for a moment and on the session's ticker.
+    private func focusMissed(_ id: String, _ miss: TerminalFocus.Miss) {
+        island.state.showFocusMiss(miss.wing)
+        store.setTicker(miss.ticker, for: id)
+        sync()
+    }
+
+    /// Which event a robot click arrived with: two log lines with the same event number are one
+    /// click handled twice. eventNumber and clickCount exist on mouse events only and raise on any
+    /// other (a key press on the 跳到終端 button, VoiceOver), so those get their type alone.
+    static func clickTrace(_ event: NSEvent?) -> String {
+        guard let event else { return "event=none" }
+        let mouse: Set<NSEvent.EventType> = [.leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp, .otherMouseDown, .otherMouseUp]
+        guard mouse.contains(event.type) else { return "type=\(event.type.rawValue)" }
+        return "event=\(event.eventNumber) type=\(event.type.rawValue) clicks=\(event.clickCount)"
     }
 
     private static let usageKey = "lastUsage"

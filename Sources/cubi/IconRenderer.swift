@@ -66,6 +66,15 @@ enum IconRenderer {
             state.usage = StatuslineInfo(fiveHour: UsageWindow(usedPercent: 42, resetsAt: Date().timeIntervalSince1970 + 5400),
                                          sevenDay: UsageWindow(usedPercent: 81, resetsAt: Date().timeIntervalSince1970 + 200_000),
                                          costUSD: 1.45)
+        case "focus-miss", "focus-miss-named", "focus-miss-detail":
+            // A robot click that found no window of its own: the wing's two lines; the ticker in the detail.
+            state.mode = mode == "focus-miss-detail" ? .expanded : .compact
+            if mode == "focus-miss-detail" { state.selectedSession = "alpha" }
+            state.usage = StatuslineInfo(fiveHour: UsageWindow(usedPercent: 42, resetsAt: Date().timeIntervalSince1970 + 5400),
+                                         sevenDay: UsageWindow(usedPercent: 81, resetsAt: Date().timeIntervalSince1970 + 200_000),
+                                         costUSD: 1.45)
+            state.focusMissShown = true
+            state.focusMissLines = (mode == "focus-miss-named" ? TerminalFocus.Miss.named : .unnamed).wing
         case "diff":
             state.mode = .expanded
             state.showingDiffFor = "alpha"
@@ -110,6 +119,7 @@ enum IconRenderer {
                 ], truncated: false)
             }
             if bs == .tired { bot.model.contextPercent = 92 }
+            if i == 0, mode.hasPrefix("focus-miss") { bot.ticker = (mode == "focus-miss-named" ? TerminalFocus.Miss.named : .unnamed).ticker }
             if i == 0 {
                 bot.cwd = "/Users/me/Documents/cubi"
                 bot.client = HookClient(termProgram: "ghostty", bundleID: "com.mitchellh.ghostty", termSessionID: nil, tty: "/dev/ttys014")

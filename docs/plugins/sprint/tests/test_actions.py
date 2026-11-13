@@ -36,6 +36,9 @@ CASES = {
     "ticket.transition": ({"key": "PROJ-1"}, (), NO_JIRA),
     "points.push": ({"key": "PROJ-1"}, (), "實際點數欄位"),
     "estimate.set": ({"key": "PROJ-1", "value": "3"}, (), NO_JIRA),
+    "estimate.brief": ({"key": "PROJ-1"}, (), "先到設定分頁填"),
+    "estimate.suggest": ({"key": "PROJ-1", "points": 2, "confidence": "中", "reason": "理由"}, (), "沒有在等 AI 估點"),
+    "estimate.dismiss": ({"key": "PROJ-1"}, ("sprint",), None),
     "hours.push": ({"key": "PROJ-1"}, (), "實際時數欄位"),
     "hours.retry": ({}, ("sprint", "hoursPush"), None),
     "time.add": ({"key": "PROJ-1", "start": "2026-11-05T10:00", "minutes": 30}, ("sprint",), None),
@@ -266,10 +269,11 @@ class BriefTests(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.dir.name, "reviews")))      # the user's review folder is not touched
         self.assertTrue(out["prompt"].startswith(f"請讀 {out['file']}"))
         self.assertEqual(out["allowActions"], ["review.update"])
-        # The manifest says which commands a session may run unasked: that one, and only that one.
+        # The manifest says which commands a session may run unasked: the two write-backs (this
+        # one and the AI estimate's), nothing that reaches Jira or the settings.
         with open(os.path.join(os.path.dirname(os.path.abspath(sprint.__file__)), "manifest.json"), encoding="utf-8") as f:
             commands = json.load(f)["commands"]
-        self.assertEqual([name for name, c in commands.items() if c.get("sessionAllowed")], ["review.update"])
+        self.assertEqual(sorted(name for name, c in commands.items() if c.get("sessionAllowed")), ["estimate.suggest", "review.update"])
 
     def test_F8_33_the_command_in_the_data_file_uses_the_cubi_the_app_named(self):
         out = self.brief(CUBI_BIN="/Applications/Cubi.app/Contents/MacOS/cubi")

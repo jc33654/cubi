@@ -3,6 +3,8 @@ burndown, history, the Markdown export, and the brief handed to a Claude Code se
 import json
 from datetime import date, datetime, timedelta
 
+from handback import THIRD_PARTY_CLOSE, THIRD_PARTY_OPEN, REFUSED_NOTE, WRITE_BACK_RULES, third_party, write_back_command  # noqa: F401
+
 
 CATEGORIES = ("提早／準時完成", "超時完成", "未完成", "超時未完成", "未估點")
 REVIEW_FIELDS = ("summary", "wentWell", "toImprove", "suggestions", "thanks")
@@ -80,6 +82,7 @@ def ticket_rows(sprint, tickets, hours, hours_per_point=8.0, totals=None):
         h = hours.get(key, {})
         seconds = h.get("total", 0.0)
         actual = actual_points(seconds, hours_per_point)
+        suggestion = t.get("suggestion") or {}
         rows.append({
             "key": key, "summary": t.get("summary", ""), "status": t.get("status", ""), "done": bool(t.get("done")),
             "statusCategory": t.get("statusCategory") or ("done" if t.get("done") else ""),
@@ -87,6 +90,9 @@ def ticket_rows(sprint, tickets, hours, hours_per_point=8.0, totals=None):
             "remaining": remaining_seconds(t.get("estimate"), (totals or hours).get(key, {}).get("total", 0.0), hours_per_point),
             "estimate": t.get("estimate"), "actual": actual, "notes": t.get("notes", ""),
             "starred": bool(t.get("starred")), "notFound": bool(t.get("notFound")),
+            # An AI estimate: asked for and not back yet, or back and waiting for a person.
+            "suggestPending": bool(suggestion.get("pending")),
+            "suggestion": {k: suggestion[k] for k in ("points", "confidence", "reason")} if "points" in suggestion else None,
             "doneAt": done_on(t).isoformat() if done_on(t) else None,
             "category": category(bool(t.get("done")), t.get("estimate"), actual),
             "seconds": seconds, "meetingSeconds": h.get("meeting", 0.0),
@@ -227,17 +233,6 @@ def markdown(sprint, rows, m, now=None):
     return "\n".join(lines).rstrip() + "\n"
 
 
-def write_back_command(cubi, payload):
-    """The one command a restricted session may run, written out in full: this cubi, this plugin's
-    review.update, the JSON as its single argument in single quotes. It must begin with the cubi
-    path (that is what the app's rule for the session matches on) and be one command: a
-    here-document, a pipe, or anything in front of or behind it gets the whole line refused."""
-    return f"{cubi} --tool-run sprint review.update '" + payload.replace("'", "'\\''") + "'"
-
-
-THIRD_PARTY_OPEN = "<<<第三方資料開始>>>"
-THIRD_PARTY_CLOSE = "<<<第三方資料結束>>>"
-
 
 def brief(sprint, rows, m, cubi, now=None):
     """The data file a Claude Code session reads before writing the review, with the exact
@@ -247,7 +242,7 @@ def brief(sprint, rows, m, cubi, now=None):
     review = sprint.get("review") or {}
     template = {"label": label, "summary": "兩到三句的總結", "wentWell": ["一句話，最多三條"], "toImprove": ["一句話，最多三條"], "suggestions": ["一句話，最多三條"],
                 "thanks": [{"who": "名字", "why": "原因"}]}
-    cell = lambda s: str(s or "").replace("|", "\\|").replace("\r", " ").replace("\n", " ").replace("<<<", "‹‹‹").replace(">>>", "›››")  # noqa: E731
+    cell = lambda s: third_party(s, cell=True)  # noqa: E731
     lines = [f"# {sprint.get('name') or label} 回顧資料", "",
              f"sprint：{label}，{sprint.get('start') or '?'} – {sprint.get('end') or '?'}；目標：{cell(sprint.get('goal')) or '（沒填）'}", "",
              as_of(now), "",
@@ -271,12 +266,7 @@ def brief(sprint, rows, m, cubi, now=None):
               "繁體中文。", "",
               "```sh",
               write_back_command(cubi, json.dumps(template, ensure_ascii=False, indent=2)),
-              "```", "",
-              "這個 session 是受限模式，不會問使用者任何事，只有上面這一條指令能執行，而且要完全照這個寫法：",
-              "- 整條指令以那個 cubi 的完整路徑開頭，一個字都不要改；**不要在前面加 `cd … &&`**，不需要切換目錄。",
-              "- JSON 整段放在一對單引號裡當成一個參數（可以換行）。你寫的文字裡如果有單引號 `'`，要寫成 `'\\''`。",
-              "- 只跑這一條：不要拆成多條，後面不要接 `&&`、`;`、`|`，不要用 `cat`、`<<EOF` 或暫存檔。",
-              "其他指令與寫檔都會被拒絕，不必嘗試；被拒絕時不要換別的寫法繞過，照上面的寫法重寫一次即可。完整回顧的 Markdown 由使用者在面板按「匯出 Markdown」產生。"]
+              "```", ""] + WRITE_BACK_RULES + [REFUSED_NOTE + "完整回顧的 Markdown 由使用者在面板按「匯出 Markdown」產生。"]
     return "\n".join(lines) + "\n"
 
 

@@ -3,6 +3,7 @@ import base64
 import json
 import netrc
 import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -74,6 +75,39 @@ class Jira:
 
 
 TICKET_FIELDS = ["summary", "status", "resolutiondate"]
+
+# Nodes of Jira's document format (a description) that end a line of their own.
+ADF_BLOCKS = {"paragraph", "heading", "listItem", "blockquote", "codeBlock", "tableRow", "rule", "panel"}
+
+
+def adf_text(doc):
+    """A description as plain text: the words of Jira's document format, a line break after each
+    block; a plain string (older API) as it is; nothing for an empty description."""
+    if isinstance(doc, str):
+        return doc.strip()
+    out = []
+
+    def walk(node):
+        if isinstance(node, list):
+            for child in node:
+                walk(child)
+            return
+        if not isinstance(node, dict):
+            return
+        kind, attrs = node.get("type"), node.get("attrs") or {}
+        if kind == "text":
+            out.append(str(node.get("text", "")))
+        elif kind == "hardBreak":
+            out.append("\n")
+        elif kind in ("mention", "emoji"):
+            out.append(str(attrs.get("text", "")))
+        elif kind in ("inlineCard", "blockCard"):
+            out.append(str(attrs.get("url", "")))
+        walk(node.get("content", []))
+        if kind in ADF_BLOCKS:
+            out.append("\n")
+    walk(doc)
+    return re.sub(r"\n{3,}", "\n\n", "".join(out)).strip()
 
 
 def parse_issue(issue, points_field):

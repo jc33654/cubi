@@ -46,11 +46,16 @@
   .lists textarea { min-height: 96px; }
   .timer { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 15px; }
   .timer.long { color: var(--cubi-danger); }
+  table.fixed tr.ai-row td { padding-top: 0; white-space: normal; }
+  .ai-suggest { gap: 10px; align-items: center; padding: 8px 12px; border-radius: 10px; background: var(--cubi-bg); flex-wrap: wrap; }
+  .ai-reason { color: var(--cubi-ink2); flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; }
+  .dir-note { color: var(--cubi-ink3); font-size: 12px; grid-column: 1 / -1; margin: 0; }
   #status { display: flex; align-items: flex-start; gap: 10px; }
   #status[hidden] { display: none; }
   /* A 32×32 target around a small icon; the negative margins keep it from making the box taller. */
   #status-close { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; margin: -8px -10px -8px -6px;
     background: none; border: 0; border-radius: 8px; padding: 0; color: inherit; cursor: pointer; line-height: 0; opacity: .8; }
+  #status-close[hidden] { display: none; }
   #status-close:hover { opacity: 1; background: rgba(255,255,255,.18); }
 </style>
 </head>
@@ -80,7 +85,7 @@ const pts = v => v == null ? "–" : String(Math.round(v * 100) / 100);
 const CAT_COLORS = ["var(--cubi-c2)", "var(--cubi-c4)", "var(--cubi-c1)", "var(--cubi-c3)", "var(--cubi-c5)"];
 const TABS = { overview: ["dashboard", "總覽"], review: ["review", "回顧"], settings: ["settings", "設定"] };
 let state = null, session = window.cubiSession || null;
-let pendingSprint = false, selectedCategory = null, pendingTime = null, editTime = null, briefPoll = null, briefLate = null, briefLateClosed = false;
+let pendingSprint = false, selectedCategory = null, pendingTime = null, editTime = null, briefPoll = null, briefLate = null, briefLateClosed = false, briefLateText = "";
 const shownHints = [];         // one-time notes from the plugin: kept while this page lives, until closed
 const weekday = d => d ? "日一二三四五六"[new Date(d + "T00:00").getDay()] : "";
 const openHours = new Set();   // tickets (and "*", the whole sprint) whose hours are shown by kind
@@ -100,7 +105,7 @@ function status(msg, isError) {
 const statusShows = msg => !$("#status").hidden && $("#status-text").textContent === msg;
 $("#status-close").innerHTML = ic("x", 14) || "✕";
 $("#status-close").addEventListener("click", () => {
-  if (statusShows(BRIEF_LATE)) briefLateClosed = true;
+  if (briefLateText && statusShows(briefLateText)) briefLateClosed = true;
   status("");
 });
 const bridge = () => window.webkit.messageHandlers.cubi;
@@ -331,7 +336,7 @@ function renderOverview() {
     <div class="cubi-card" style="margin-top:16px"><div class="cubi-card-head"><h2 class="cubi-card-title">工單</h2><span class="cubi-muted">${m.tickets} 張</span><span class="cubi-spacer"></span>
       <input id="add-key" placeholder="加單號" size="12"><button class="cubi-btn small" id="add-btn">${ic("plus", 13)}加</button></div>
     <div class="scroll-x"><table class="cubi-table fixed" style="min-width:720px">
-    <colgroup><col style="width:36px"><col style="width:112px"><col><col style="width:104px"><col style="width:68px"><col style="width:150px"><col style="width:128px"><col style="width:${118 + (state.config.actualPointsField ? 34 : 0) + (state.config.actualHoursField ? 34 : 0)}px"></colgroup>
+    <colgroup><col style="width:36px"><col style="width:112px"><col><col style="width:104px"><col style="width:68px"><col style="width:150px"><col style="width:128px"><col style="width:${152 + (state.config.actualPointsField ? 34 : 0) + (state.config.actualHoursField ? 34 : 0)}px"></colgroup>
     <thead><tr>${sortTh("starred", "★")}${sortTh("key", "單號")}<th>摘要</th>${sortTh("status", "狀態")}${sortTh("estimate", "估", "num")}${sortTh("remaining", "剩餘")}${sortTh("seconds", "投入", "num")}<th></th></tr></thead><tbody>`;
   for (const t of sortedTickets(s.tickets)) {
     const rt = remainTone(t), budget = (t.estimate || 0) * hpp * 3600;
@@ -347,10 +352,12 @@ function renderOverview() {
       <td class="num">${hoursButton(t.key, t.seconds, hpp)}</td>
       <td class="num actions"><span class="cubi-row" style="justify-content:flex-end;flex-wrap:nowrap">
         <button class="cubi-btn icon" data-time="${esc(t.key)}" title="補時數（會議、討論）">${ic("plus", 15)}</button>
+        <button class="cubi-btn icon" data-ai-est="${esc(t.key)}" title="${esc(aiEstimateOff(t) || "AI 估點：開一個 Claude Code 讀這張單與程式碼，給建議點數；你按「採用」才寫進 Jira")}" ${aiEstimateOff(t) ? "disabled" : ""}>${ic("sparkles", 15)}</button>
         <button class="cubi-btn icon" data-transition="${esc(t.key)}" title="${t.notFound ? "Jira 查不到這張單" : "換 Jira 狀態"}" ${t.notFound ? "disabled" : ""}>${ic("flag", 15)}</button>
         ${state.config.actualPointsField ? `<button class="cubi-btn icon" data-push="${esc(t.key)}" title="${t.notFound ? "Jira 查不到這張單" : "這張單所有投入（含之前的 sprint）換算的點數寫回 Jira"}" ${t.notFound ? "disabled" : ""}>${ic("download", 15)}</button>` : ""}
         ${state.config.actualHoursField ? `<button class="cubi-btn icon" data-push-hours="${esc(t.key)}" title="${t.notFound ? "Jira 查不到這張單" : "寫回時數：把這張單的總投入時數（含之前的 sprint）寫進 Jira 的實際時數欄位。會蓋掉那裡原有的數字，包含別人手動填的"}" ${t.notFound ? "disabled" : ""}>${ic("hourglass", 15)}</button>` : ""}
         <button class="cubi-btn icon" data-remove-ticket="${esc(t.key)}" title="從這一期移除。工時紀錄不刪；這張單在 Jira 還貼著本期標籤的話，下次同步會再出現">${ic("x", 15)}</button></span></td></tr>`;
+    if (t.suggestion || t.suggestPending) html += suggestionRow(t);
     if (openHours.has(t.key)) html += `<tr><td colspan="8" style="white-space:normal">${kindsList(t.kinds, hpp)}${entriesList(t.entries, hpp)}</td></tr>`;
     if (pendingTime && pendingTime.key === t.key) html += timeFormRow(t.key);
   }
@@ -458,6 +465,21 @@ function manualCard(s) {
 }
 
 // The ＋時數 form sits right under its ticket's row and keeps what was typed across re-renders.
+// Why a ticket's AI-estimate button is off, or "" while it is on.
+const aiEstimateOff = t => !state.config.estimateSessionDir ? "先到設定分頁填「AI 估點讀的程式碼資料夾」" : t.notFound ? "Jira 查不到這張單" : "";
+const CONFIDENCE_TONE = { "高": "good", "中": "warning", "低": "danger" };
+// Under a ticket: the AI estimate on its way, or back and waiting for a person. Only the number is
+// ever written to Jira (estimate.set); the reason stays here.
+function suggestionRow(t) {
+  const g = t.suggestion, k = esc(t.key);
+  const body = g
+    ? `<b>AI 建議 ${esc(pts(g.points))} 點</b><span class="cubi-pill ${CONFIDENCE_TONE[g.confidence] || ""}">把握 ${esc(g.confidence)}</span><span class="ai-reason">${esc(g.reason)}</span><span class="cubi-spacer"></span>
+      <button class="cubi-btn small primary" data-ai-take="${k}" data-points="${esc(g.points)}" ${t.notFound ? "disabled" : ""} title="把 ${esc(pts(g.points))} 點寫進 Jira 的估點（只寫數字，理由不送出）">採用</button>
+      <button class="cubi-btn small" data-ai-dismiss="${k}">不要</button>`
+    : `<span class="cubi-muted">AI 估點中…結果會出現在這裡</span><span class="cubi-spacer"></span><button class="cubi-btn small" data-ai-dismiss="${k}" title="不等了。那個 session 之後寫回來也不會收">不等了</button>`;
+  return `<tr class="ai-row"><td></td><td colspan="7"><div class="cubi-row ai-suggest">${ic("sparkles", 14)}${body}</div></td></tr>`;
+}
+
 function timeFormRow(key) {
   return `<tr><td colspan="8" style="white-space:normal;overflow:visible">${timeForm(key, key)}</td></tr>`;
 }
@@ -562,6 +584,11 @@ function bindOverview(el) {
   el.querySelectorAll("[data-hours]").forEach(b => b.addEventListener("click", () => { const k = b.dataset.hours; if (!openHours.delete(k)) openHours.add(k); render(); }));
   el.querySelectorAll("[data-push]").forEach(b => b.addEventListener("click", () => refresh("points.push", { key: b.dataset.push })));
   el.querySelectorAll("[data-remove-ticket]").forEach(b => b.addEventListener("click", () => refresh("ticket.remove", { key: b.dataset.removeTicket })));
+  el.querySelectorAll("[data-ai-est]").forEach(b => b.addEventListener("click", () => startEstimate(b.dataset.aiEst)));
+  el.querySelectorAll("[data-ai-take]").forEach(b => b.addEventListener("click", async () => {
+    if (await refresh("estimate.set", { key: b.dataset.aiTake, value: b.dataset.points }) && !(state.warnings || []).length) status("估點已寫回 Jira");
+  }));
+  el.querySelectorAll("[data-ai-dismiss]").forEach(b => b.addEventListener("click", () => refresh("estimate.dismiss", { key: b.dataset.aiDismiss })));
   el.querySelectorAll("[data-push-hours]").forEach(b => b.addEventListener("click", async () => { if (await refresh("hours.push", { key: b.dataset.pushHours })) status("時數已寫回 Jira"); }));
   // Jira is the truth for an estimate: a failed write puts the field back to what Jira has.
   el.querySelectorAll("[data-est]").forEach(i => i.addEventListener("change", async () => {
@@ -649,28 +676,37 @@ function renderReview() {
 
 const BRIEF_LATE_AFTER = 3 * 60 * 1000;
 const BRIEF_LATE = "還沒收到回顧，請到終端看那個 session；它的指令被拒絕時，請它照資料檔的寫法重寫";
-async function startBrief() {
+const estimateLate = key => `還沒收到 ${key} 的 AI 估點，請到終端看那個 session；它的指令被拒絕時，請它照資料檔的寫法重寫`;
+const startBrief = () => openSession("review.brief", {}, () => JSON.stringify(state.sprint?.review), BRIEF_LATE, "Claude 寫回來了");
+const startEstimate = key => openSession("estimate.brief", { key },
+  () => JSON.stringify(state.sprint?.tickets.find(t => t.key === key)?.suggestion ?? null), estimateLate(key), `${key} 的 AI 估點回來了`);
+// A restricted Claude Code session that hands its answer back to the panel: `action` writes its data
+// file, cubi opens it, then the panel looks every 30 seconds until `snapshot` changes. One wait at a
+// time: a new session replaces the wait for the last one.
+async function openSession(action, payload, snapshot, late, done) {
   let b;
-  try { b = await call("review.brief"); } catch (_) { return; }
+  try { b = await call(action, payload); } catch (_) { return; }
   status("正在開 Claude Code…");
   let r;
   try { r = await bridge().postMessage({ action: "session.new", args: [JSON.stringify({ directory: b.directory, prompt: b.prompt, restricted: true, readDirs: b.readDirs, allowActions: b.allowActions })] }); }
   catch (e) { status(String(e.message || e), true); return; }
   if (!r.ok) { status(r.cancelled ? "" : (r.err || "開不了 session"), !r.cancelled); return; }
   status(`已在 ${b.directory} 開 session；每 30 秒看一次，寫好就出現（資料檔 ${b.file}）`);
-  const before = JSON.stringify(state.sprint?.review), started = Date.now();
-  const arrived = () => JSON.stringify(state.sprint?.review) !== before;
+  await refresh("panel.state", {}, [], true);   // what the action itself changed is not the answer
+  const before = snapshot(), started = Date.now();
+  const arrived = () => snapshot() !== before;
   clearInterval(briefPoll); clearTimeout(briefLate);
   briefLateClosed = false;
+  briefLateText = late;
   // The session is never asked anything, so a write-back it got wrong (a `cd` put in front, a
   // quote left open) is refused without a sign on this side. Past three minutes, say where to look;
   // a later look says it again when nothing else is on screen, until the user closes it.
-  briefLate = setTimeout(() => { if (!arrived() && !briefLateClosed) status(BRIEF_LATE, true); }, BRIEF_LATE_AFTER);
+  briefLate = setTimeout(() => { if (!arrived() && !briefLateClosed) status(late, true); }, BRIEF_LATE_AFTER);
   briefPoll = setInterval(async () => {
     if (!await refresh("panel.state", {}, [], true)) return;
-    if (arrived()) { clearInterval(briefPoll); clearTimeout(briefLate); status("Claude 寫回來了"); }
+    if (arrived()) { clearInterval(briefPoll); clearTimeout(briefLate); status(done); }
     else if (Date.now() - started > 3600 * 1000) { clearInterval(briefPoll); }
-    else if (Date.now() - started >= BRIEF_LATE_AFTER && !briefLateClosed && $("#status").hidden) status(BRIEF_LATE, true);
+    else if (Date.now() - started >= BRIEF_LATE_AFTER && !briefLateClosed && $("#status").hidden) status(late, true);
   }, 30000);
 }
 
@@ -747,8 +783,12 @@ function renderSettings() {
     <div class="cubi-section-title">回顧</div><div class="cubi-form">
       ${field("reviewDir", "Markdown 資料夾", "匯出 <資料夾>/<標籤>.md；整理用的資料檔也在這")}
       ${field("reviewSessionDir", "整理用的 session 開在", "「用 Claude 整理」在這裡開 Claude Code")}
+    </div>
+    <div class="cubi-section-title">AI 估點</div><div class="cubi-form">
+      ${field("estimateSessionDir", "AI 估點讀的程式碼資料夾", "工單表每列的「AI 估點」在這裡開 Claude Code，讀這張單和資料夾裡的程式碼，給建議點數。留空就不能用")}
+      <p class="dir-note">這個資料夾裡的檔案 Claude 都讀得到，請勿選含機密的資料夾（例如放了 .env、金鑰、憑證的資料夾）。建議值與理由只存在這台電腦；你按「採用」時只把點數寫進 Jira。</p>
     </div></div>`;
-  $("#c-save", el).onclick = () => { const p = {}; ["site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "actualHoursField", "hoursPerPoint", "cadenceAnchor", "reviewEventStart", "reviewEventMinutes", "reviewDir", "reviewSessionDir"].forEach(k => { p[k] = $("#c-" + k).value; }); p.autoPushHours = $("#c-autoPushHours").checked; refresh("config.set", p, el.querySelectorAll("[id^=c-]")); };
+  $("#c-save", el).onclick = () => { const p = {}; ["site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "actualHoursField", "hoursPerPoint", "cadenceAnchor", "reviewEventStart", "reviewEventMinutes", "reviewDir", "reviewSessionDir", "estimateSessionDir"].forEach(k => { p[k] = $("#c-" + k).value; }); p.autoPushHours = $("#c-autoPushHours").checked; refresh("config.set", p, el.querySelectorAll("[id^=c-]")); };
 }
 
 // ---------- boot ----------

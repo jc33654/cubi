@@ -112,6 +112,8 @@ def estimate_set(store, p):
     # The value just written, not what the read-back said: a cleared field comes back empty, and
     # an empty answer never clears the local estimate (common.apply_issue).
     store.ticket(key)["estimate"] = value
+    # A person set the estimate: an AI suggestion for it has done its job, taken or not.
+    store.ticket(key).pop("suggestion", None)
     state = panel_state(store, p)
     if trouble:
         state["warnings"] = state.get("warnings", []) + [f"估點已寫進 Jira，但回讀工單失敗：{trouble}"]

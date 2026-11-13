@@ -50,6 +50,9 @@ DEFAULT_CONFIG = {
     "reviewDir": "~/Documents/sprint-reviews",
     # Where the "用 Claude 整理回顧" session opens.
     "reviewSessionDir": "~/Documents",
+    # Where the "AI 估點" session opens and reads code. Empty until the user picks one: everything
+    # in it is readable to that session.
+    "estimateSessionDir": "",
 }
 
 

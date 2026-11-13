@@ -9,7 +9,8 @@ import review
 from common import FIELD_RE, rows_for
 from store import empty_review
 
-CONFIG_KEYS = ("site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "actualHoursField", "autoPushHours", "hoursPerPoint", "cadenceAnchor", "reviewEventStart", "reviewEventMinutes", "reviewDir", "reviewSessionDir", "estimateSessionDir")
+CONFIG_KEYS = ("site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "actualHoursField", "autoPushHours", "hoursPerPoint", "cadenceAnchor", "reviewEventStart", "reviewEventMinutes", "reviewDir", "reviewSessionDir", "estimateSessionDir", "estimateRules")
+ESTIMATE_RULES_MAX = 500
 
 
 def panel_state(store, p):
@@ -129,6 +130,12 @@ def config_set(store, p):
             raise ValueError("review 事件長度要在 5 到 480 分鐘之間")
     if new.get("estimateSessionDir") and not os.path.isdir(os.path.expanduser(new["estimateSessionDir"])):
         raise ValueError(f"AI 估點的資料夾不存在：{new['estimateSessionDir']}")
+    if "estimateRules" in new:
+        new["estimateRules"] = rules = new["estimateRules"].replace("\r\n", "\n")
+        if len(rules) > ESTIMATE_RULES_MAX:
+            raise ValueError(f"補充估點規則太長：{len(rules)} 字，要在 {ESTIMATE_RULES_MAX} 字內")
+        if "<<<" in rules or ">>>" in rules:
+            raise ValueError("補充估點規則不能有 <<< 或 >>>：資料檔用它們圈出別人寫的原文")
     for name, label, required in (("pointsField", "估點欄位", True), ("actualPointsField", "實際點數欄位", False), ("actualHoursField", "實際時數欄位", False)):
         if name in new and (new[name] or required) and not FIELD_RE.fullmatch(new[name]):
             raise ValueError(f"「{label}」要是 customfield_<數字>（例如 customfield_10016）" + ("" if required else "，或留空"))

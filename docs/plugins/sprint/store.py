@@ -53,6 +53,8 @@ DEFAULT_CONFIG = {
     # Where the "AI 估點" session opens and reads code. Empty until the user picks one: everything
     # in it is readable to that session.
     "estimateSessionDir": "",
+    # The user's own additions to how an estimate is made, written into its data file as they are.
+    "estimateRules": "",
 }
 
 

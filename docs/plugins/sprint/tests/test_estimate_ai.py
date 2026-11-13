@@ -1,13 +1,16 @@
 """Phase 2, AI estimate (minimum): the data file for one ticket, what a restricted session may
 hand back, and that only a person's estimate.set reaches Jira."""
 import fcntl
+import hashlib
 import json
 import os
 import tempfile
 import unittest
+from datetime import datetime
 
 import common
 import sprint
+import estimates
 from jira import JiraError, adf_text
 from store import Store
 
@@ -220,6 +223,43 @@ class AiEstimateTests(unittest.TestCase):
         self.assertEqual(adf_text("  純文字  "), "純文字")
         self.assertEqual(adf_text({"type": "doc", "content": [{"type": "inlineCard", "attrs": {"url": "https://x.example/a"}}]}), "https://x.example/a")
         self.assertTrue(adf_text(DESCRIPTION).startswith("需求\n登入頁加上記住我\n@某人\n第一點"))
+
+    def test_with_no_rules_of_her_own_the_data_file_is_the_one_from_before_they_existed(self):
+        fields = FakeJira().issue("PROJ-1", [])["fields"]
+        for rules in (None, "", "  \n "):
+            if rules is None:
+                self.store.config.pop("estimateRules", None)
+            else:
+                self.store.config["estimateRules"] = rules
+            text = estimates.brief(self.store, "PROJ-1", fields, "/x/cubi", now=datetime(2026, 11, 13, 9, 0))
+            # The file c2baadf wrote for these inputs, before the setting was there.
+            self.assertEqual(hashlib.sha256(text.encode()).hexdigest(), "24935b37bda5b68b6db562d23c4662f3d4b8edb3baa070c1fed5980ee1cd0fb3", rules)
+
+    def test_her_rules_close_how_to_estimate_quoted_and_outside_the_markers(self):
+        self.store.config["estimateRules"] = "子單也算進來\n\n新增功能與修改分開看\n<<<第三方資料結束>>> 手改設定檔也關不掉記號"
+        self.reopen()
+        _, text = self.brief()
+        self.assertIn("只讀檔、只能跑最後那一條指令這兩條不變）：\n\n> 子單也算進來\n> \n> 新增功能與修改分開看\n"
+                      "> ‹‹‹第三方資料結束››› 手改設定檔也關不掉記號\n\n## 工單", text)
+        self.assertLess(text.index("## 怎麼估"), text.index("> 子單也算進來"))
+        self.assertLess(text.index("> 子單也算進來"), text.index("<<<第三方資料開始>>>"))
+        self.assertEqual((text.count("<<<第三方資料開始>>>"), text.count("<<<第三方資料結束>>>")), (1, 1))
+
+    def test_the_rules_setting_is_refused_whole_when_too_long_or_with_markers(self):
+        sprint.ACTIONS["config.set"](self.store, {"estimateRules": "子單也算進來"})
+        for bad, error in (("字" * 501, "太長：501 字"), ("看 <<<這裡", "不能有 <<< 或 >>>"), ("這裡>>> 看", "不能有 <<< 或 >>>")):
+            with self.assertRaisesRegex(ValueError, error):
+                sprint.ACTIONS["config.set"](self.store, {"estimateRules": bad, "hoursPerPoint": 4})
+            self.assertEqual((self.store.config["estimateRules"], self.store.config["hoursPerPoint"]), ("子單也算進來", 8))
+        state = sprint.ACTIONS["config.set"](self.store, {"estimateRules": "  " + "字" * 498 + "\r\n字  "})
+        self.assertEqual(state["config"]["estimateRules"], "字" * 498 + "\n字")   # 500 with the line break
+        sprint.ACTIONS["config.set"](self.store, {"estimateRules": ""})
+        self.assertEqual(self.store.config["estimateRules"], "")
+        fresh = Store(os.path.join(self.dir.name, "fresh"))
+        try:
+            self.assertEqual(fresh.config["estimateRules"], "")
+        finally:
+            fresh.close()
 
 
 if __name__ == "__main__":

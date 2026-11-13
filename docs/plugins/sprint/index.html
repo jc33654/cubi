@@ -50,6 +50,7 @@
   .ai-suggest { gap: 10px; align-items: center; padding: 8px 12px; border-radius: 10px; background: var(--cubi-bg); flex-wrap: wrap; }
   .ai-reason { color: var(--cubi-ink2); flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; }
   .dir-note { color: var(--cubi-ink3); font-size: 12px; grid-column: 1 / -1; margin: 0; }
+  .ai-hint { color: var(--cubi-ink3); font-size: 12px; flex-basis: 100%; }
   #status { display: flex; align-items: flex-start; gap: 10px; }
   #status[hidden] { display: none; }
   /* A 32×32 target around a small icon; the negative margins keep it from making the box taller. */
@@ -475,7 +476,7 @@ function suggestionRow(t) {
   const body = g
     ? `<b>AI 建議 ${esc(pts(g.points))} 點</b><span class="cubi-pill ${CONFIDENCE_TONE[g.confidence] || ""}">把握 ${esc(g.confidence)}</span><span class="ai-reason">${esc(g.reason)}</span><span class="cubi-spacer"></span>
       <button class="cubi-btn small primary" data-ai-take="${k}" data-points="${esc(g.points)}" ${t.notFound ? "disabled" : ""} title="把 ${esc(pts(g.points))} 點寫進 Jira 的估點（只寫數字，理由不送出）">採用</button>
-      <button class="cubi-btn small" data-ai-dismiss="${k}">不要</button>`
+      <button class="cubi-btn small" data-ai-dismiss="${k}">不要</button><span class="ai-hint">還沒採用前，可以請 Claude 重送一次，新的會蓋掉這筆；採用後想改，請直接改估點，或再按一次 ✨ 重估。</span>`
     : `<span class="cubi-muted">AI 估點中…結果會出現在這裡</span><span class="cubi-spacer"></span><button class="cubi-btn small" data-ai-dismiss="${k}" title="不等了。那個 session 之後寫回來也不會收">不等了</button>`;
   return `<tr class="ai-row"><td></td><td colspan="7"><div class="cubi-row ai-suggest">${ic("sparkles", 14)}${body}</div></td></tr>`;
 }
@@ -678,12 +679,14 @@ const BRIEF_LATE_AFTER = 3 * 60 * 1000;
 const BRIEF_LATE = "還沒收到回顧，請到終端看那個 session；它的指令被拒絕時，請它照資料檔的寫法重寫";
 const estimateLate = key => `還沒收到 ${key} 的 AI 估點，請到終端看那個 session；它的指令被拒絕時，請它照資料檔的寫法重寫`;
 const startBrief = () => openSession("review.brief", {}, () => JSON.stringify(state.sprint?.review), BRIEF_LATE, "Claude 寫回來了");
-const startEstimate = key => openSession("estimate.brief", { key },
-  () => JSON.stringify(state.sprint?.tickets.find(t => t.key === key)?.suggestion ?? null), estimateLate(key), `${key} 的 AI 估點回來了`);
+// Waiting: [null, true]; back: [suggestion, false]; gone (taken, dismissed, given up on): "null".
+const aiSnapshot = key => { const t = state.sprint?.tickets.find(t => t.key === key); return JSON.stringify(t?.suggestion || t?.suggestPending ? [t.suggestion, t.suggestPending] : null); };
+const startEstimate = key => openSession("estimate.brief", { key }, () => aiSnapshot(key), estimateLate(key), `${key} 的 AI 估點回來了`, `${key} 的 AI 估點更新了`);
 // A restricted Claude Code session that hands its answer back to the panel: `action` writes its data
-// file, cubi opens it, then the panel looks every 30 seconds until `snapshot` changes. One wait at a
-// time: a new session replaces the wait for the last one.
-async function openSession(action, payload, snapshot, late, done) {
+// file, cubi opens it, then the panel looks every 30 seconds until `snapshot` changes. With `again`,
+// it keeps looking for a resend until the answer is gone (taken or dismissed: snapshot "null") or
+// an hour has passed. One wait at a time: a new session replaces the wait for the last one.
+async function openSession(action, payload, snapshot, late, done, again = "") {
   let b;
   try { b = await call(action, payload); } catch (_) { return; }
   status("正在開 Claude Code…");
@@ -693,20 +696,24 @@ async function openSession(action, payload, snapshot, late, done) {
   if (!r.ok) { status(r.cancelled ? "" : (r.err || "開不了 session"), !r.cancelled); return; }
   status(`已在 ${b.directory} 開 session；每 30 秒看一次，寫好就出現（資料檔 ${b.file}）`);
   await refresh("panel.state", {}, [], true);   // what the action itself changed is not the answer
-  const before = snapshot(), started = Date.now();
-  const arrived = () => snapshot() !== before;
+  let before = snapshot(), got = false;
+  const started = Date.now();
   clearInterval(briefPoll); clearTimeout(briefLate);
   briefLateClosed = false;
   briefLateText = late;
   // The session is never asked anything, so a write-back it got wrong (a `cd` put in front, a
   // quote left open) is refused without a sign on this side. Past three minutes, say where to look;
   // a later look says it again when nothing else is on screen, until the user closes it.
-  briefLate = setTimeout(() => { if (!arrived() && !briefLateClosed) status(late, true); }, BRIEF_LATE_AFTER);
+  briefLate = setTimeout(() => { if (!got && snapshot() === before && !briefLateClosed) status(late, true); }, BRIEF_LATE_AFTER);
   briefPoll = setInterval(async () => {
     if (!await refresh("panel.state", {}, [], true)) return;
-    if (arrived()) { clearInterval(briefPoll); clearTimeout(briefLate); status(done); }
-    else if (Date.now() - started > 3600 * 1000) { clearInterval(briefPoll); }
-    else if (Date.now() - started >= BRIEF_LATE_AFTER && !briefLateClosed && $("#status").hidden) status(late, true);
+    const now = snapshot(), gone = again && now === "null";
+    if (now !== before) {
+      if (!again || gone) clearInterval(briefPoll);
+      if (!gone) status(got ? again : done);
+      before = now; got = true; clearTimeout(briefLate);
+    } else if (Date.now() - started > 3600 * 1000) { clearInterval(briefPoll); }
+    else if (!got && Date.now() - started >= BRIEF_LATE_AFTER && !briefLateClosed && $("#status").hidden) status(late, true);
   }, 30000);
 }
 
@@ -787,8 +794,9 @@ function renderSettings() {
     <div class="cubi-section-title">AI 估點</div><div class="cubi-form">
       ${field("estimateSessionDir", "AI 估點讀的程式碼資料夾", "工單表每列的「AI 估點」在這裡開 Claude Code，讀這張單和資料夾裡的程式碼，給建議點數。留空就不能用")}
       <p class="dir-note">這個資料夾裡的檔案 Claude 都讀得到，請勿選含機密的資料夾（例如放了 .env、金鑰、憑證的資料夾）。建議值與理由只存在這台電腦；你按「採用」時只把點數寫進 Jira。</p>
+      <div class="cubi-field" style="grid-column: 1 / -1"><label for="c-estimateRules">補充估點規則 ${tip("寫進給 Claude 的估點資料「怎麼估」那一節最後，例如「子單也算進來」「新增功能與修改分開看」。500 字內；留空就照預設方式估")}</label><textarea id="c-estimateRules" placeholder="一行一條，可留空">${esc(c.estimateRules ?? "")}</textarea></div>
     </div></div>`;
-  $("#c-save", el).onclick = () => { const p = {}; ["site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "actualHoursField", "hoursPerPoint", "cadenceAnchor", "reviewEventStart", "reviewEventMinutes", "reviewDir", "reviewSessionDir", "estimateSessionDir"].forEach(k => { p[k] = $("#c-" + k).value; }); p.autoPushHours = $("#c-autoPushHours").checked; refresh("config.set", p, el.querySelectorAll("[id^=c-]")); };
+  $("#c-save", el).onclick = () => { const p = {}; ["site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "actualHoursField", "hoursPerPoint", "cadenceAnchor", "reviewEventStart", "reviewEventMinutes", "reviewDir", "reviewSessionDir", "estimateSessionDir", "estimateRules"].forEach(k => { p[k] = $("#c-" + k).value; }); p.autoPushHours = $("#c-autoPushHours").checked; refresh("config.set", p, el.querySelectorAll("[id^=c-]")); };
 }
 
 // ---------- boot ----------

@@ -37,6 +37,8 @@ def estimate_brief(store, p):
     cubi (built-in session.new) for a restricted session that may run estimate.suggest only.
     Jira is asked without the lock held."""
     key = known_key(store, p.get("key"))
+    if review.ai_waiting(store.tickets[key].get("suggestion")):
+        raise ValueError("已在估，要重開請先按「不等了」")
     directory = session_dir(store)
     j = common.jira(store)
     issue = store.away(lambda: j.issue(key, ["summary", "status", "issuetype", "description"]))

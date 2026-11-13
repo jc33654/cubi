@@ -438,11 +438,12 @@ function kindsList(kinds, hpp) {
 
 // The ticket's hand-added stretches in this sprint, newest first, with what each adds to the totals
 // above (this ticket's share, the sprint's part, minus minutes its session already counted).
+const OVERLAP_TIP = "這張單同一段時間已經有其他紀錄，只算一次（這版之後新增的紀錄才這樣算）";
 function entriesList(entries, hpp) {
   if (!entries.length) return "";
   return `<table class="cubi-table tight entries"><tbody>${entries.map(x => `<tr><td>${new Date(x.start * 1000).toLocaleString("zh-TW", { dateStyle: "short", timeStyle: "short" })}</td>
       <td><span class="cubi-pill">${esc(x.kind)}</span></td>
-      <td class="num">${x.seconds >= 60 ? fmtH(x.seconds) + asPts(x.seconds, hpp) : x.session ? `<span class="cubi-muted" title="這段時間 session 已經記過，算在「Session」">已算在 Session</span>` : `<span class="cubi-muted">本 sprint 內不到 1 分鐘</span>`}${x.pct < 100 ? ` <small class="cubi-muted">（${Math.round(x.pct)}%）</small>` : ""}</td>
+      <td class="num">${x.seconds >= 60 ? fmtH(x.seconds) + asPts(x.seconds, hpp) : x.session ? `<span class="cubi-muted" title="這段時間 session 已經記過，算在「Session」">已算在 Session</span>` : x.overlap >= 60 ? `<span class="cubi-muted" title="${OVERLAP_TIP}">跟其他紀錄重疊</span>` : `<span class="cubi-muted">本 sprint 內不到 1 分鐘</span>`}${x.pct < 100 ? ` <small class="cubi-muted">（${Math.round(x.pct)}%）</small>` : ""}${x.seconds >= 60 && x.overlap >= 60 ? ` <small class="cubi-muted" title="${OVERLAP_TIP}">（重疊 ${fmtH(x.overlap)} 不算）</small>` : ""}</td>
       <td class="note">${esc(x.note) || `<span class="cubi-muted">沒寫備註</span>`}</td></tr>`).join("")}</tbody></table>`;
 }
 
@@ -469,7 +470,7 @@ function manualCard(s) {
 
 // The ＋時數 form sits right under its ticket's row and keeps what was typed across re-renders.
 // Why a ticket's AI-estimate button is off, or "" while it is on.
-const aiEstimateOff = t => !state.config.estimateSessionDir ? "先到設定分頁填「AI 估點讀的程式碼資料夾」" : t.notFound ? "Jira 查不到這張單" : "";
+const aiEstimateOff = t => !state.config.estimateSessionDir ? "先到設定分頁填「AI 估點讀的程式碼資料夾」" : t.notFound ? "Jira 查不到這張單" : t.suggestWaiting ? "已在估，要重開請先按「不等了」" : "";
 const CONFIDENCE_TONE = { "高": "good", "中": "warning", "低": "danger" };
 // Under a ticket: the AI estimate on its way, or back and waiting for a person. Only the number is
 // ever written to Jira (estimate.set); the reason stays here.
@@ -596,7 +597,11 @@ function bindOverview(el) {
   el.querySelectorAll("[data-hours]").forEach(b => b.addEventListener("click", () => { const k = b.dataset.hours; if (!openHours.delete(k)) openHours.add(k); render(); }));
   el.querySelectorAll("[data-push]").forEach(b => b.addEventListener("click", () => refresh("points.push", { key: b.dataset.push })));
   el.querySelectorAll("[data-remove-ticket]").forEach(b => b.addEventListener("click", () => refresh("ticket.remove", { key: b.dataset.removeTicket })));
-  el.querySelectorAll("[data-ai-est]").forEach(b => b.addEventListener("click", () => startEstimate(b.dataset.aiEst)));
+  // A second click before the row redraws opens nothing; a failed start gives the button back.
+  el.querySelectorAll("[data-ai-est]").forEach(b => b.addEventListener("click", () => {
+    const k = b.dataset.aiEst; b.disabled = true;
+    startEstimate(k).finally(() => { const t = state.sprint?.tickets.find(x => x.key === k); if (b.isConnected && t) b.disabled = !!aiEstimateOff(t); });
+  }));
   el.querySelectorAll("[data-ai-take]").forEach(b => b.addEventListener("click", async () => {
     if (await refresh("estimate.set", { key: b.dataset.aiTake, value: b.dataset.points }) && !(state.warnings || []).length) status(estimateSaid(b.dataset.aiTake));
   }));

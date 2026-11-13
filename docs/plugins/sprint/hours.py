@@ -1,5 +1,6 @@
 """Work segments: what cubi reports per session, manual stretches, the seconds they add up to
 per ticket, and what of it belongs on the calendar."""
+import time
 import uuid
 
 from review import MEETING_KINDS, sprint_range
@@ -12,10 +13,11 @@ class HoursMixin:
     """Store methods for `segments["sessions"]` and `segments["manual"]`."""
 
     def record_segments(self, session, shares):
-        """Upsert the stretches cubi reports; the shares a stretch started with stay with it."""
+        """Upsert the stretches cubi reports; the shares a stretch started with stay with it. A
+        stretch first seen now is marked `added` (see hours_by_key)."""
         sess = self.segments["sessions"].setdefault(session["id"], {})
         for seg in session.get("segments") or []:
-            entry = sess.setdefault(str(int(seg["start"])), {"shares": shares})
+            entry = sess.setdefault(str(int(seg["start"])), {"shares": shares, "added": time.time()})
             entry["end"] = seg["end"]
             entry["open"] = bool(seg.get("open"))
             entry["name"] = session.get("name", "")
@@ -35,7 +37,7 @@ class HoursMixin:
         if start != start:
             raise ValueError("開始時間與長度要是數字")
         entry = {"id": uuid.uuid4().hex[:12], "key": key, "start": start, "end": start + minutes * 60,
-                 "kind": kind, "note": note, "calendar": bool(calendar)}
+                 "kind": kind, "note": note, "calendar": bool(calendar), "added": time.time()}
         if key is None:
             entry.update(sprint=sprint, counted=bool(counted))
         self.segments["manual"].append(entry)
@@ -53,6 +55,42 @@ class HoursMixin:
         secs = overlap(m["start"], m["end"], since, until)
         secs -= sum(overlap(max(m["start"], float(st)), min(m["end"], seg["end"]), since, until) for st, seg in own.items())
         return max(0.0, secs)
+
+    def _timer_pieces(self, m):
+        """A manual entry's time as pieces; a booked timer's without its own session's stretches."""
+        own = self.segments["sessions"].get(m.get("session") or "", {}) if m.get("session") else {}
+        return subtract((m["start"], m["end"]), [(float(st), seg["end"]) for st, seg in own.items()])
+
+    def _add_fresh(self, fresh, since, until, bucket, add):
+        """hours_by_key's marked records: each adds, per ticket, only what the ticket's time does
+        not already fill (see `take`), the unmarked records counted first."""
+        cover = {}
+        for sess in self.segments["sessions"].values():
+            for start, seg in sess.items():
+                if "added" not in seg:
+                    for key, pct in (seg.get("shares") or {}).items():
+                        cover.setdefault(key, []).extend(clip([(float(start), seg["end"])], since, until, pct))
+        for m in self.segments["manual"]:
+            if m.get("key") is not None and "added" not in m:
+                for key, pct in (m.get("shares") or {m["key"]: 100}).items():
+                    cover.setdefault(key, []).extend(clip(self._timer_pieces(m), since, until, pct))
+        for _, _, _, m, pieces, shares in sorted(fresh, key=lambda f: f[:3]):
+            for key, pct in shares.items():
+                spans = clip(pieces, since, until, pct)
+                got = sum(take(cover.setdefault(key, []), lo, hi, rate) for lo, hi, rate in spans)
+                b = bucket(key)
+                if m is None:
+                    b["session"] += got
+                    add(b, SESSION_KIND, got)
+                    continue
+                whole = sum((hi - lo) * rate for lo, hi, rate in spans)
+                b["entries"].append({"id": m["id"], "start": m["start"], "kind": m.get("kind") or "其他",
+                                     "note": m.get("note") or m.get("reason") or "", "pct": pct, "seconds": got,
+                                     "session": bool(m.get("session")), "overlap": whole - got})
+                b["manual"] += got
+                add(b, m.get("kind") or "其他", got)
+                if m.get("kind") in MEETING_KINDS:
+                    b["meeting"] += got
 
     def session_seconds(self, sid, since=None, until=None, key=None):
         """This session's own work in [since, until]: its stretches plus its booked timers, each
@@ -89,8 +127,14 @@ class HoursMixin:
         """Seconds per key within [since, until]: session stretches split by their shares, manual
         entries whole. 'meeting' is the part of 'manual' whose kind is a meeting or discussion;
         'kinds' is the same seconds by kind, session stretches as SESSION_KIND; 'entries' lists the
-        manual entries in the window with the seconds each one adds here (so they sum to 'manual')."""
-        out = {}
+        manual entries in the window with the seconds each one adds here (so they sum to 'manual').
+
+        A record marked `added` (written since that mark exists) counts only the time its ticket is
+        not already counted at: per ticket and moment, the shares of everything there add up to
+        100% at most, records in the order they were added. Different tickets are never compared.
+        Unmarked records count as they always did, in the same order, so old numbers stay exactly
+        as they were."""
+        out, fresh = {}, []
 
         def bucket(key):
             return out.setdefault(key, {"session": 0.0, "manual": 0.0, "meeting": 0.0, "kinds": {}, "entries": []})
@@ -98,8 +142,11 @@ class HoursMixin:
         def add(b, kind, secs):
             b["kinds"][kind] = b["kinds"].get(kind, 0.0) + secs
 
-        for sess in self.segments["sessions"].values():
+        for sid, sess in self.segments["sessions"].items():
             for start, seg in sess.items():
+                if "added" in seg:
+                    fresh.append((seg["added"], sid, float(start), None, [(float(start), seg["end"])], seg.get("shares") or {}))
+                    continue
                 secs = overlap(float(start), seg["end"], since, until)
                 for key, pct in (seg.get("shares") or {}).items():
                     bucket(key)["session"] += secs * pct / 100
@@ -108,6 +155,9 @@ class HoursMixin:
             if m.get("key") is None:
                 continue
             if not overlap(m["start"], m["end"], since, until):
+                continue
+            if "added" in m:
+                fresh.append((m["added"], m["id"], m["start"], m, self._timer_pieces(m), m.get("shares") or {m["key"]: 100}))
                 continue
             secs = self._timer_extra(m, since, until)
             for key, pct in (m.get("shares") or {m["key"]: 100}).items():
@@ -119,6 +169,8 @@ class HoursMixin:
                 add(bucket(key), m.get("kind") or "其他", part)
                 if m.get("kind") in MEETING_KINDS:
                     bucket(key)["meeting"] += part
+        if fresh:
+            self._add_fresh(fresh, since, until, bucket, add)
         for b in out.values():
             b["total"] = b["session"] + b["manual"]
         return out
@@ -181,6 +233,28 @@ def subtract(span, cuts):
     for c0, c1 in cuts:
         pieces = [p for lo, hi in pieces for p in ((lo, min(hi, c0)), (max(lo, c1), hi)) if p[1] > p[0]]
     return pieces
+
+
+def clip(pieces, since, until, pct):
+    """(start, end) pieces cut to [since, until], each with its share as a rate (1.0 = 100%)."""
+    return [(lo, hi, pct / 100) for lo, hi in ((max(a, since) if since is not None else a, min(b, until) if until is not None else b)
+                                                for a, b in pieces) if hi > lo]
+
+
+def take(cover, lo, hi, rate):
+    """The seconds of [lo, hi) at `rate` that the ticket's time there does not already fill
+    (`cover`: (start, end, rate) already counted; at most 1.0 in all at any moment). What is taken
+    joins `cover`."""
+    cuts = sorted({lo, hi} | {x for s, e, _ in cover for x in (s, e) if lo < x < hi})
+    got, taken = 0.0, []
+    for a, b in zip(cuts, cuts[1:]):
+        full = sum(r for s, e, r in cover if s <= a and b <= e)
+        r = min(rate, 1.0 - full)
+        if r > 1e-9:
+            got += (b - a) * r
+            taken.append((a, b, r))
+    cover.extend(taken)
+    return got
 
 
 def overlap(start, end, since, until):

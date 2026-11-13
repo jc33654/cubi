@@ -273,7 +273,8 @@ class HoursPushTests(unittest.TestCase):
         state = sprint.hours_push(self.store, {"key": "PROJ-1"})
         self.assertEqual(self.fake.sent, [("PROJ-1", "customfield_20001", 1.0)])       # what was worked when the button was pressed
         self.assertEqual(sorted(m.get("note", "") for m in self.store.segments["manual"]), ["", "同時記的"])
-        self.assertEqual(next(t for t in state["sprint"]["tickets"] if t["key"] == "PROJ-1")["seconds"], 5400)
+        # Both start at 10:00: the 30 min lie inside the hour and count once (batch 19: was 5400).
+        self.assertEqual(next(t for t in state["sprint"]["tickets"] if t["key"] == "PROJ-1")["seconds"], 3600)
 
     def test_F7_7_a_dry_run_never_reaches_jira(self):
         self.add("2026-11-18T10:00", 60)

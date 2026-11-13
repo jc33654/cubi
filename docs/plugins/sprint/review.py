@@ -1,6 +1,7 @@
 """Numbers and text for a sprint: per-ticket rows with actual points, categories, totals,
 burndown, history, the Markdown export, and the brief handed to a Claude Code session."""
 import json
+import time
 from datetime import date, datetime, timedelta
 
 from handback import THIRD_PARTY_CLOSE, THIRD_PARTY_OPEN, REFUSED_NOTE, WRITE_BACK_RULES, third_party, write_back_command  # noqa: F401
@@ -31,6 +32,16 @@ def fmt_hours(secs):
         return "–"
     h, m = divmod(int(secs // 60), 60)
     return f"{h}h{m:02d}m" if h else f"{m}m"
+
+
+AI_WAIT_FOR = 3600   # as long as the panel keeps looking for an AI estimate (index.html openSession)
+
+
+def ai_waiting(suggestion, now=None):
+    """An AI estimate asked for and not back, within that hour: another ✨ would only open a second
+    session for the same ticket. Past it the session is taken as gone."""
+    s = suggestion or {}
+    return bool(s.get("pending")) and (now or time.time()) - s.get("asked", 0) < AI_WAIT_FOR
 
 
 def pts(v):
@@ -92,6 +103,7 @@ def ticket_rows(sprint, tickets, hours, hours_per_point=8.0, totals=None):
             "starred": bool(t.get("starred")), "notFound": bool(t.get("notFound")),
             # An AI estimate: asked for and not back yet, or back and waiting for a person.
             "suggestPending": bool(suggestion.get("pending")),
+            "suggestWaiting": ai_waiting(suggestion),   # pending and not yet given up on: ✨ is off
             "suggestion": {k: suggestion[k] for k in ("points", "confidence", "reason")} if "points" in suggestion else None,
             # No estimate field on the ticket: the comment waiting for the user's yes, and where the estimate went.
             "commentAsk": {k: v for k, v in t["commentAsk"].items() if k != "at"} if t.get("commentAsk") else None,

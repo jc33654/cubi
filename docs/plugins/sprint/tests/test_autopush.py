@@ -144,7 +144,8 @@ class AutoPushTests(unittest.TestCase):
             sprint.time_add(self.store, {"key": "PROJ-1", "minutes": minutes})
         self.assertEqual(self.waiting(), ["PROJ-1"])
         self.tick()
-        self.assertEqual(FakeJira.calls, [("PROJ-1", "customfield_20001", 2.25)])
+        # All three end now: one ticket's same minutes count once (batch 19), so 60 min, not 30+45+60.
+        self.assertEqual(FakeJira.calls, [("PROJ-1", "customfield_20001", 1.0)])
 
     # ---------- tick writes them ----------
 
@@ -271,7 +272,8 @@ class AutoPushTests(unittest.TestCase):
         self.assertTrue(seen["tick saved first"])
         self.assertEqual([m.get("note") for m in self.store.segments["manual"]][-1], "同時記的")
         self.assertEqual(self.waiting(), ["PROJ-2"])                                # PROJ-1 written; the one noted meanwhile still waits
-        self.assertEqual(FakeJira.calls, [("PROJ-1", "customfield_20001", 1.12)])   # its hour + half of the session's 15 min
+        # Its hour; the session's 15 min fall inside that hour, so they add nothing (batch 19: was 1.12).
+        self.assertEqual(FakeJira.calls, [("PROJ-1", "customfield_20001", 1.0)])
 
     def test_F7_18_a_dry_run_notes_nothing_and_asks_nothing(self):
         saved = {k: os.environ.pop(k, None) for k in ("CUBI_SPRINT_DIR", "CUBI_RENDER")}

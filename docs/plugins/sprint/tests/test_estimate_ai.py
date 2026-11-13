@@ -224,6 +224,28 @@ class AiEstimateTests(unittest.TestCase):
         self.assertEqual(adf_text({"type": "doc", "content": [{"type": "inlineCard", "attrs": {"url": "https://x.example/a"}}]}), "https://x.example/a")
         self.assertTrue(adf_text(DESCRIPTION).startswith("需求\n登入頁加上記住我\n@某人\n第一點"))
 
+    def test_a_ticket_already_being_estimated_opens_no_second_session_for_the_hour(self):
+        self.brief()
+        self.reopen()
+        self.assertTrue(self.row(sprint.panel_state(self.store, {}))["suggestWaiting"])
+        with self.assertRaisesRegex(ValueError, "已在估，要重開請先按「不等了」"):
+            self.brief()
+        self.assertEqual(len(self.fake.asked), 1)                                  # refused before Jira
+        self.store.ticket("PROJ-1")["suggestion"]["asked"] -= 3601                  # past the hour: taken as gone
+        self.reopen()
+        self.assertFalse(self.row(sprint.panel_state(self.store, {}))["suggestWaiting"])
+        self.brief()
+        self.reopen()
+        for state in ({"points": 2, "confidence": "中", "reason": "r", "at": 1}, None):   # an answer back, or 不要／不等了
+            if state:
+                self.store.ticket("PROJ-1")["suggestion"] = state
+            else:
+                sprint.ACTIONS["estimate.dismiss"](self.store, {"key": "PROJ-1"})
+            self.reopen()
+            self.brief()
+            self.reopen()
+        self.assertEqual(len(self.fake.asked), 4)
+
     def test_with_no_rules_of_her_own_the_data_file_is_the_one_from_before_they_existed(self):
         fields = FakeJira().issue("PROJ-1", [])["fields"]
         for rules in (None, "", "  \n "):

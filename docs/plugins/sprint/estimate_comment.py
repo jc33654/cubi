@@ -9,21 +9,17 @@ from jira import JiraError, adf_text
 from panel import panel_state
 from review import pts
 
-TAIL = "。此單類型沒有估點欄位，所以用留言記錄，供 sprint 統計用。"
 HOW = ("jira", "local", "cancel")
 
 
-def head(value):
-    return f"【估點】本單 {pts(value)} 點（1 點＝1 人天）"
-
-
 def comment_text(value):
-    return head(value) + TAIL
+    """The whole comment, in bold (Jade: the number alone, no sentence after it)."""
+    return f"【估點】本單 {pts(value)} 點（1 點＝1 人天）"
 
 
 def comment_doc(value):
     return {"type": "doc", "version": 1, "content": [{"type": "paragraph", "content": [
-        {"type": "text", "text": head(value), "marks": [{"type": "strong"}]}, {"type": "text", "text": TAIL}]}]}
+        {"type": "text", "text": comment_text(value), "marks": [{"type": "strong"}]}]}]}
 
 
 def no_field_ask(j, key, field, error, mine):

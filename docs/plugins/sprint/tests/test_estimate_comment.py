@@ -104,17 +104,16 @@ class EstimateCommentTests(unittest.TestCase):
         return next(t for t in state["sprint"]["tickets"] if t["key"] == "PROJ-1")
 
     def test_the_words_and_their_bold_part(self):
-        self.assertEqual(comment_text(0.3), "【估點】本單 0.3 點（1 點＝1 人天）。此單類型沒有估點欄位，所以用留言記錄，供 sprint 統計用。")
+        self.assertEqual(comment_text(0.3), "【估點】本單 0.3 點（1 點＝1 人天）")
         para = comment_doc(3.0)["content"][0]["content"]
-        self.assertEqual([(n["text"], n.get("marks")) for n in para],
-                         [("【估點】本單 3 點（1 點＝1 人天）", [{"type": "strong"}]), ("。此單類型沒有估點欄位，所以用留言記錄，供 sprint 統計用。", None)])
+        self.assertEqual([(n["text"], n.get("marks")) for n in para], [("【估點】本單 3 點（1 點＝1 人天）", [{"type": "strong"}])])
         self.assertEqual(adf_text(comment_doc(1.5)), comment_text(1.5))      # what Cubi wrote reads back the same
 
     def test_no_field_on_the_edit_screen_asks_first_and_writes_nothing(self):
         state = self.act("estimate.set", value="0.3")
         ask = self.row(state)["commentAsk"]
         self.assertEqual(ask, {"edit": None, "old": None, "lost": False, "changed": False, "value": 0.3,
-                               "text": "【估點】本單 0.3 點（1 點＝1 人天）。此單類型沒有估點欄位，所以用留言記錄，供 sprint 統計用。"})
+                               "text": "【估點】本單 0.3 點（1 點＝1 人天）"})
         self.assertEqual(self.fake.writes(), [])
         self.assertIsNone(self.store.tickets["PROJ-1"]["estimate"])
 
@@ -161,6 +160,21 @@ class EstimateCommentTests(unittest.TestCase):
         self.assertEqual(self.store.tickets["PROJ-1"]["estimateComment"]["id"], "101")
         ask = self.row(self.act("estimate.set", value="2.5"))["commentAsk"]       # untouched since: not "changed"
         self.assertEqual((ask["old"], ask["changed"]), (comment_text(2.0), False))
+
+    def test_a_comment_in_the_first_wording_is_not_taken_for_one_a_person_changed(self):
+        # Batch 18 wrote the number and then a sentence; Cubi kept that whole text. Unchanged since,
+        # it is Cubi's own, and the next estimate turns it into the number alone.
+        first = "【估點】本單 1 點（1 點＝1 人天）。此單類型沒有估點欄位，所以用留言記錄，供 sprint 統計用。"
+        self.fake.comments["90"] = {"type": "doc", "version": 1, "content": [{"type": "paragraph", "content": [
+            {"type": "text", "text": "【估點】本單 1 點（1 點＝1 人天）", "marks": [{"type": "strong"}]},
+            {"type": "text", "text": "。此單類型沒有估點欄位，所以用留言記錄，供 sprint 統計用。"}]}]}
+        self.store.ticket("PROJ-1").update(estimate=1.0, estimateVia="comment", estimateComment={"id": "90", "text": first})
+        self.reopen()
+        ask = self.row(self.act("estimate.set", value="2"))["commentAsk"]
+        self.assertEqual((ask["edit"], ask["old"], ask["changed"], ask["text"]), ("90", first, False, "【估點】本單 2 點（1 點＝1 人天）"))
+        self.act("estimate.comment", how="jira")
+        self.assertEqual(self.fake.writes(), [("edit", "PROJ-1", "90", comment_doc(2.0))])
+        self.assertEqual(self.store.tickets["PROJ-1"]["estimateComment"], {"id": "90", "text": "【估點】本單 2 點（1 點＝1 人天）"})
 
     def test_a_deleted_comment_is_said_on_the_row_and_a_new_one_needs_another_press(self):
         self.act("estimate.set", value="1")

@@ -9,6 +9,7 @@ from common import KEY_RE, apply_issue, fetch_tickets, field_refused, jira_field
 from estimate_comment import ask_for, no_field_ask, refuse_while_sending
 from jira import TICKET_FIELDS, JiraError, parse_issue
 from panel import panel_state
+from reassign import HAND_ADDED, LET_BE, note
 
 ESTIMATE = re.compile(r"[0-9]+(\.[0-9]+)?")
 
@@ -21,6 +22,8 @@ def ticket_add(store, p):
     if not s:
         raise ValueError("先建一個 sprint")
     for key in keys:
+        if key not in s["keys"]:
+            note(s, HAND_ADDED, key)   # chosen by the user: not asked about if it is someone else's
         store.add_to_sprint(s["label"], key)
     fetch_tickets(store, keys)
     return panel_state(store, p)
@@ -163,14 +166,39 @@ def ticket_remove(store, p):
     changes: the ticket, the hours booked on it and what sessions are bound to it all stay, and
     adding it back brings its numbers back. Jira is not asked; a ticket that still carries the
     sprint's label there returns with the next sync."""
+    return take_out(store, p, [p["key"]])
+
+
+def tickets_remove(store, p):
+    """Several at once (the tickets now someone else's): as ticket.remove, all or none."""
+    keys = p.get("keys")
+    if not keys:
+        raise ValueError("keys 要列出要移出的單號")
+    return take_out(store, p, keys)
+
+
+def take_out(store, p, keys):
+    s = target_sprint(store, p)
+    for key in keys:
+        if not isinstance(key, str) or not KEY_RE.fullmatch(key) or key not in s["keys"]:
+            raise ValueError(f"{s['label']} 裡沒有這張單：{key}")
+    since, until = review.sprint_range(s)
+    hours = store.hours_by_key(since, until)
+    worked = [(key, hours.get(key, {}).get("total", 0.0)) for key in dict.fromkeys(keys)]
+    for key, _ in worked:
+        s["keys"].remove(key)
+    state = panel_state(store, p)
+    notices = [f"{key} 在這一期有 {review.fmt_hours(sec)} 工時，移出後不算進這一期（紀錄還在，加回來就恢復）" for key, sec in worked if sec >= 60]
+    if notices:
+        state["notices"] = notices
+    return state
+
+
+def ticket_keep(store, p):
+    """略過: a ticket now someone else's stays in the sprint and is not asked about again there."""
     s = target_sprint(store, p)
     key = p["key"]
     if not isinstance(key, str) or not KEY_RE.fullmatch(key) or key not in s["keys"]:
         raise ValueError(f"{s['label']} 裡沒有這張單")
-    since, until = review.sprint_range(s)
-    worked = store.hours_by_key(since, until).get(key, {}).get("total", 0.0)
-    s["keys"].remove(key)
-    state = panel_state(store, p)
-    if worked >= 60:
-        state["notices"] = [f"{key} 在這一期有 {review.fmt_hours(worked)} 工時，移出後不算進這一期（紀錄還在，加回來就恢復）"]
-    return state
+    note(s, LET_BE, key)
+    return panel_state(store, p)

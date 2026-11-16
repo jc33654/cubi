@@ -6,6 +6,7 @@ from datetime import date
 
 import autopush
 import cadence
+import reassign
 import remind
 import review
 from common import FIELD_RE, rows_for
@@ -34,10 +35,13 @@ def panel_state(store, p):
                          "keys": list(store.timer_shares(sid))} for sid, t in store.segments["timers"].items()]}
     if sprint:
         rows, other = rows_for(store, sprint), store.other_work(sprint["label"])
+        ask = reassign.annotate(store, sprint, rows)
         state["sprint"] = {**{k: sprint.get(k) for k in ("label", "name", "start", "end", "goal")}, "review": {**empty_review(), **(sprint.get("review") or {})},
                            "tickets": rows, "metrics": review.metrics(rows, other), "other": other, "burndown": review.burndown(sprint, rows),
                            "capacity": review.capacity(sprint, rows, store.hours_per_point()),
                            "categories": list(review.CATEGORIES),
+                           # Now someone else's and not yet answered: the panel asks whether to take them out.
+                           "reassigned": ask, "ownerKnown": "me" in store.sprints,
                            # The sprint's tickets' stretches, wherever they fall; sprintOf says which sprint's days hold
                            # each (the reading the hours are counted by), so the panel can say "not in this one".
                            "manual": [{**m, "sprintOf": store.sprint_of(m)} for m in store.segments["manual"]

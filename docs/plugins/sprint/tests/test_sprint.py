@@ -106,6 +106,9 @@ class CardTests(unittest.TestCase):
                 if key == "PROJ-2":
                     raise sprint.JiraError("not found", code=404)
                 return {"key": key, "fields": {"summary": key, "status": {"name": "待辦", "statusCategory": {"key": "new"}}}}
+
+            def myself(self):   # who the sync compares assignees with (batch 33)
+                return {"id": "me", "name": "我"}
         self.store.config["jql"] = "labels = {label}"
         self.store.new_sprint("Sprint7")
         for k in ("PROJ-1", "PROJ-2"):
@@ -135,6 +138,9 @@ class CardTests(unittest.TestCase):
                 if jql.startswith("key in"):
                     return [issue("PROJ-9", "進行中", "indeterminate")]
                 return [issue("PROJ-1", "進行中", "indeterminate")]
+
+            def myself(self):   # who the sync compares assignees with (batch 33)
+                return {"id": "me", "name": "我"}
         self.store.config["jql"] = "labels = {label}"
         self.store.new_sprint("Sprint7")
         self.store.add_to_sprint("Sprint7", "PROJ-9")                      # added by hand, read before categories were kept

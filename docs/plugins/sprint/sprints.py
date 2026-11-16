@@ -3,7 +3,7 @@ import cadence
 import common
 import review
 from common import apply_issue, fetch_tickets, jira_field, target_sprint
-from jira import TICKET_FIELDS, parse_issue
+from jira import TICKET_FIELDS, JiraError, parse_issue
 from panel import panel_state
 
 
@@ -50,8 +50,8 @@ def sprint_sync(store, p):
     projects = store.project_keys()
     jql = store.config["jql"].format(projects=", ".join(projects), project=projects[0] if projects else "", label=s["label"])
     field = jira_field(store, "pointsField", "估點欄位", required=True)
-    found = []
-    for issue in common.jira(store).search(jql, TICKET_FIELDS + [field]):
+    found, j = [], common.jira(store)
+    for issue in j.search(jql, TICKET_FIELDS + [field]):
         apply_issue(store, parse_issue(issue, field))
         found.append(issue["key"])
     if p.get("replace"):
@@ -62,7 +62,16 @@ def sprint_sync(store, p):
     # Tickets the query does not return (added by hand) are refreshed too, so their status and its
     # colour never stay as they were first read; not the ones Jira already said it does not know.
     fetch_tickets(store, [k for k in s["keys"] if k not in found and not store.tickets.get(k, {}).get("notFound")])
-    return panel_state(store, p)
+    # Who "me" is, for telling the tickets now assigned to someone else. Not known: nothing is told
+    # (never every ticket as someone else's), and the panel says so.
+    try:
+        store.sprints["me"] = j.myself()
+    except JiraError:
+        store.sprints.pop("me", None)
+    state = panel_state(store, p)
+    if "me" not in store.sprints:
+        state["notices"] = ["讀不到你的 Jira 帳號（/myself），這次沒有檢查哪些單已轉派"]
+    return state
 
 
 def sprint_at(store, ts):

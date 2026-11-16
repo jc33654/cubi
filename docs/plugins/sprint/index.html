@@ -72,6 +72,9 @@
   .nav-mini .cubi-brand, .nav-mini .cubi-nav-item { justify-content: center; padding-left: 0; padding-right: 0; }
   .nav-mini .nav-t { display: none; }
   .ai-pickbar { margin: 4px 0 8px; }
+  .owner-tag { font-size: 11.5px; color: var(--cubi-warning); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+  .reassign-bar { margin: 4px 0 8px; }
+  .reassign-bar .who { display: inline-flex; align-items: center; gap: 6px; margin-right: 10px; white-space: nowrap; }
   .outside-tag { display: block; margin: 2px 0 0 auto; padding: 0; border: 0; background: none; font: inherit; font-size: 11px; color: var(--cubi-ink3); cursor: pointer; text-decoration: underline dotted; }
   .outside-tag.on, .outside-tag:hover { color: var(--cubi-accent); }
   /* The ＋時數, 沒有單號 and 修改 forms: one height for every control, kept in groups that wrap whole. */
@@ -126,7 +129,7 @@ let state = null, session = window.cubiSession || null;
 let pendingSprint = false, selectedCategory = null, pendingTime = null, editTime = null, briefPoll = null, briefLate = null, briefLateClosed = false, briefLateText = "";
 const shownHints = [];         // one-time notes from the plugin: kept while this page lives, until closed
 const weekday = d => d ? "日一二三四五六"[new Date(d + "T00:00").getDay()] : "";
-let confirmRemove = null, confirmDelete = null;   // 移出這一期 / deleting a shared stretch, waiting for a yes
+let confirmRemove = null, confirmDelete = null, confirmReassign = false;   // 移出這一期 / deleting a shared stretch, waiting for a yes
 const openHours = new Set();   // tickets (and "*", the whole sprint) whose hours are shown by kind
 
 // One message at a time, bottom right; the next one replaces it. Errors stay until closed (✕) or
@@ -406,6 +409,7 @@ function renderOverview() {
       <button class="cubi-btn small ${aiPicking ? "on" : ""}" id="ai-multi" title="勾幾張單一起開 AI 估點（一次最多 ${AI_MAX} 張，每張都會跳一次確認）">${ic("sparkles", 13)}多張 AI 估點</button>
       <input id="add-key" placeholder="加單號" size="12"><button class="cubi-btn small" id="add-btn">${ic("plus", 13)}加</button></div>
     ${aiPicking ? aiPickBar() : ""}
+    ${reassignBar(s.reassigned || [])}
     <div class="scroll-x"><table class="cubi-table fixed tickets${compactTickets ? " compact" : ""}" style="min-width:${compactTickets ? 480 : 720}px">
     <colgroup>${compactTickets ? `<col style="width:28px"><col><col style="width:0"><col style="width:70px"><col style="width:60px"><col style="width:70px"><col style="width:72px"><col style="width:110px">`
       : `<col style="width:36px"><col style="width:112px"><col><col style="width:104px"><col style="width:68px"><col style="width:150px"><col style="width:128px"><col style="width:${152 + (state.config.actualPointsField ? 34 : 0) + (state.config.actualHoursField ? 34 : 0)}px">`}</colgroup>
@@ -414,8 +418,8 @@ function renderOverview() {
     const rt = remainTone(t), budget = (t.estimate || 0) * hpp * 3600;
     const used = budget ? Math.min(100, Math.max(0, (budget - t.remaining) / budget * 100)) : 0;
     html += `<tr><td>${aiPicking ? aiPickBox(t) : `<button class="star ${t.starred ? "on" : ""}" data-star="${esc(t.key)}" title="${t.starred ? "取消重點" : "標成重點"}">${t.starred ? "★" : "☆"}</button>`}</td>
-      <td class="clip"><span class="key"><span class="cubi-dot ${statusTone(t)}"></span>${link(t.key)}</span>${compactTickets ? `<div class="sum2" title="${esc(t.summary)}">${esc(t.summary)}</div>` : ""}</td>
-      <td class="clip sum" title="${esc(t.summary)}${t.notes ? "\n" + esc(t.notes) : ""}">${esc(t.summary)}</td>
+      <td class="clip"><span class="key"><span class="cubi-dot ${statusTone(t)}"></span>${link(t.key)}</span>${compactTickets ? `<div class="sum2" title="${esc(t.summary)}">${esc(t.summary)}</div>` : ""}${compactTickets ? ownerTag(t.owner) : ""}</td>
+      <td class="clip sum" title="${esc(t.summary)}${t.notes ? "\n" + esc(t.notes) : ""}">${esc(t.summary)}${compactTickets ? "" : ownerTag(t.owner)}</td>
       <td title="${t.notFound ? "這張單在 Jira 被刪除，或你沒有查看權限。這裡是最後一次讀到的資料；不要它就按這列最右邊的 ✕ 移出這一期" : esc(t.status || "")}">${t.notFound
         ? `<span class="cubi-pill danger">Jira 查不到</span>` : `<span class="cubi-pill ${statusTone(t)}">${esc(t.status || "–")}</span>`}</td>
       <td class="num"><input class="est" data-est="${esc(t.key)}" value="${esc(t.estimate ?? "")}" inputmode="decimal" autocomplete="off" placeholder="–" ${t.notFound ? "disabled" : ""}
@@ -581,6 +585,23 @@ function manualCard(s) {
 // A ticket's code folder: its project's own, else the default (the plugin picks the same way).
 const projectOf = key => String(key).split("-")[0];   // the plugin reads it the same way
 const codeDirFor = key => { const d = state.config.estimateDirs; return (d && typeof d === "object" ? d : {})[projectOf(key)] || state.config.estimateSessionDir; };
+// Jira has the ticket assigned to someone else, or to nobody (read at the last sync).
+function ownerTag(o) {
+  if (!o) return "";
+  const text = o.kind === "none" ? "沒有負責人" : `已轉派給 ${o.name || "別人"}`;
+  const why = o.kind === "none" ? "Jira 上這張單現在沒有負責人（上次同步讀到的）" : `Jira 上這張單現在的負責人是 ${o.name || "別人"}（上次同步讀到的）`;
+  return `<div class="owner-tag" title="${esc(why)}">${esc(text)}</div>`;
+}
+// The open ones now someone else's, not yet answered: take them out on a yes, or let one be.
+function reassignBar(list) {
+  if (!list.length) { confirmReassign = false; return ""; }
+  const keys = list.map(a => a.key).join("、");
+  return `<div class="cubi-row ai-suggest reassign-bar">${ic("info", 14)}<span class="ai-reason"><div>有 ${list.length} 張單在 Jira 已轉派給別人，要移出本期嗎？</div>
+      <div>${list.map(a => `<span class="who" title="${esc(a.summary)}">${link(a.key)}<span class="cubi-muted">給 ${esc(a.name || "別人")}</span><button class="cubi-btn small" data-keep="${esc(a.key)}" title="留在本期，這一期不再問">略過這張</button></span>`).join("")}</div></span>
+    <span class="cubi-spacer"></span>${confirmReassign
+      ? `<span class="ai-reason">把 ${esc(keys)} 移出這一期？工時紀錄不會刪，加回來就恢復。</span><button class="cubi-btn small primary" id="reassign-yes">移出</button><button class="cubi-btn small" id="reassign-no">取消</button>`
+      : `<button class="cubi-btn small" id="reassign-go">移出這 ${list.length} 張</button>`}</div>`;
+}
 const aiEstimateOff = t => !codeDirFor(t.key) ? `${projectOf(t.key)} 還沒指定程式碼資料夾（設定分頁「AI 估點」）` : t.notFound ? "Jira 查不到這張單" : t.suggestWaiting ? "已在估，要重開請先按「不等了」" : aiRoom() <= 0 ? `已經有 ${AI_MAX} 張在等 AI 估點，等它們回來或按「不等了」再開` : "";
 const CONFIDENCE_TONE = { "高": "good", "中": "warning", "低": "danger" };
 // Under a ticket: the AI estimate on its way, or back and waiting for a person. Only the number is
@@ -754,8 +775,18 @@ function bindOverview(el) {
   el.querySelectorAll("[data-unbind-sid]").forEach(x => x.addEventListener("click", () => refresh("session.unbind", { sid: x.dataset.unbindSid, key: x.dataset.unbindKey })));
   el.querySelectorAll("[data-hours]").forEach(b => b.addEventListener("click", () => { const k = b.dataset.hours; if (!openHours.delete(k)) openHours.add(k); render(); }));
   el.querySelectorAll("[data-push]").forEach(b => b.addEventListener("click", () => refresh("points.push", { key: b.dataset.push })));
+  el.querySelectorAll("[data-keep]").forEach(b => b.addEventListener("click", async () => { if (await refresh("ticket.keep", { key: b.dataset.keep })) status(`${b.dataset.keep} 留在本期，這一期不再問`); }));
+  el.querySelector("#reassign-go")?.addEventListener("click", () => { confirmReassign = true; render(); });
+  el.querySelector("#reassign-no")?.addEventListener("click", () => { confirmReassign = false; render(); });
+  el.querySelector("#reassign-yes")?.addEventListener("click", async e => {
+    if (e.currentTarget.disabled) return;   // a second click would send them again and be refused
+    e.currentTarget.disabled = true;
+    const keys = (state.sprint?.reassigned || []).map(a => a.key);
+    confirmReassign = false;
+    if (await refresh("tickets.remove", { keys }) && !state.notices?.length) status(`已把 ${keys.length} 張移出這一期`);
+  });
   el.querySelectorAll("[data-remove-ticket]").forEach(b => b.addEventListener("click", () => { confirmRemove = confirmRemove === b.dataset.removeTicket ? null : b.dataset.removeTicket; render(); }));
-  el.querySelectorAll("[data-remove-yes]").forEach(b => b.addEventListener("click", async () => { confirmRemove = null; if (await refresh("ticket.remove", { key: b.dataset.removeYes })) status(`${b.dataset.removeYes} 已移出這一期`); }));
+  el.querySelectorAll("[data-remove-yes]").forEach(b => b.addEventListener("click", async () => { confirmRemove = null; if (await refresh("ticket.remove", { key: b.dataset.removeYes }) && !state.notices?.length) status(`${b.dataset.removeYes} 已移出這一期`); }));
   el.querySelectorAll("[data-remove-no]").forEach(b => b.addEventListener("click", () => { confirmRemove = null; render(); }));
   // A second click before the row redraws opens nothing; a failed start gives the button back.
   el.querySelectorAll("[data-ai-est]").forEach(b => b.addEventListener("click", () => {

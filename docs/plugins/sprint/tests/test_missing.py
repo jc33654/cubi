@@ -42,6 +42,9 @@ class FakeJira:
         if self.refuse:
             raise self.refuse
 
+    def myself(self):   # who the sync compares assignees with (batch 33)
+        return {"id": "me", "name": "我"}
+
     def edit_fields(self, key):
         # Where the edit screen cannot be asked about, a refused estimate is the original error
         # (the comment path is test_estimate_comment's).

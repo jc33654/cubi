@@ -86,8 +86,15 @@ class Jira:
     def edit_comment(self, key, comment_id, doc):
         return self.api("PUT", f"/rest/api/3/issue/{key}/comment/{comment_id}", {"body": doc})
 
+    def myself(self):
+        """Who the netrc's token belongs to: {"id": accountId, "name": displayName}."""
+        me = self.api("GET", "/rest/api/3/myself") or {}
+        if not me.get("accountId"):
+            raise JiraError("Jira 的 /myself 沒有回帳號 ID")
+        return {"id": me["accountId"], "name": me.get("displayName") or ""}
 
-TICKET_FIELDS = ["summary", "status", "resolutiondate"]
+
+TICKET_FIELDS = ["summary", "status", "resolutiondate", "assignee"]
 
 # Nodes of Jira's document format (a description) that end a line of their own.
 ADF_BLOCKS = {"paragraph", "heading", "listItem", "blockquote", "codeBlock", "tableRow", "rule", "panel"}
@@ -137,4 +144,18 @@ def parse_issue(issue, points_field):
         "statusCategory": (status.get("statusCategory") or {}).get("key") or "",
         "estimate": float(points) if isinstance(points, (int, float)) else None,
         "resolutionDate": (f.get("resolutiondate") or "")[:10] or None,
+        "owner": owner(f),
     }
+
+
+def owner(fields):
+    """Who the ticket is assigned to: {"id", "name"}; {"id": None} when Jira says nobody; None
+    when the answer has no assignee field (not asked for, or not visible): not known."""
+    if "assignee" not in fields:
+        return None
+    a = fields["assignee"]
+    if a is None:
+        return {"id": None}
+    if not isinstance(a, dict) or not a.get("accountId"):
+        return None
+    return {"id": a["accountId"], "name": a.get("displayName") or ""}

@@ -14,7 +14,7 @@ FIELD_RE = re.compile(r"customfield_[0-9]+")
 TEXT, NUMBER, OBJECT, LIST = "文字", "數字", "物件", "清單"
 FIELD_KINDS = {"key": TEXT, "input": TEXT, "label": TEXT, "name": TEXT, "goal": TEXT, "start": TEXT, "end": TEXT, "sid": TEXT,
                "notes": TEXT, "note": TEXT, "kind": TEXT, "summary": TEXT, "cwd": TEXT,
-               "now": NUMBER, "shares": OBJECT, "session": OBJECT, "sessions": LIST, "segments": LIST}
+               "now": NUMBER, "shares": OBJECT, "session": OBJECT, "sessions": LIST, "segments": LIST, "keys": LIST}
 KIND_OF = {TEXT: str, NUMBER: (int, float), OBJECT: dict, LIST: list}
 MAX_EPOCH = 1e11   # the year 5138: far past any clock, well inside what a date can hold
 
@@ -141,6 +141,11 @@ def apply_issue(store, parsed):
     was_done = t.get("done")
     t.update({k: parsed[k] for k in ("summary", "status", "statusCategory", "done", "resolutionDate")})
     t.pop("notFound", None)
+    # Read again on every refresh; an answer without it leaves nothing stale behind.
+    if parsed.get("owner") is None:
+        t.pop("owner", None)
+    else:
+        t["owner"] = parsed["owner"]
     if parsed["estimate"] is not None:
         t["estimate"] = parsed["estimate"]
     if parsed["done"] and not was_done and not t.get("doneAt"):

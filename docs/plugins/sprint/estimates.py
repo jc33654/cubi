@@ -11,7 +11,7 @@ import review
 from common import known_key
 from handback import REFUSED_NOTE, THIRD_PARTY_CLOSE, THIRD_PARTY_OPEN, WRITE_BACK_RULES, third_party, write_back_command
 from jira import adf_text
-from panel import panel_state
+from panel import check_code_dir, panel_state
 from reviews import brief_dir, cubi_binary
 from tickets import parse_estimate
 
@@ -22,14 +22,17 @@ REFERENCE_MAX = 15
 SUGGEST_FIELDS = {"key", "points", "confidence", "reason", "session"}
 
 
-def session_dir(store):
-    raw = str(store.config.get("estimateSessionDir") or "").strip()
+def session_dir(store, key):
+    """The code folder for this ticket: its project's own (設定 → 各專案的程式碼資料夾), else the
+    default one."""
+    project = key.split("-", 1)[0]
+    dirs = store.config.get("estimateDirs")
+    raw = str((dirs if isinstance(dirs, dict) else {}).get(project) or store.config.get("estimateSessionDir") or "").strip()
     if not raw:
-        raise ValueError("先到設定分頁填「AI 估點讀的程式碼資料夾」")
-    directory = os.path.expanduser(raw)
-    if not os.path.isdir(directory):
-        raise ValueError(f"AI 估點的資料夾不存在：{directory}（設定分頁可改）")
-    return directory
+        raise ValueError(f"{project} 還沒指定程式碼資料夾（設定分頁「AI 估點」）")
+    # Checked again here, not only when saved: config.json may have been edited by hand.
+    check_code_dir(raw, f"{project} ")
+    return os.path.expanduser(raw)
 
 
 def estimate_brief(store, p):
@@ -39,7 +42,7 @@ def estimate_brief(store, p):
     key = known_key(store, p.get("key"))
     if review.ai_waiting(store.tickets[key].get("suggestion")):
         raise ValueError("已在估，要重開請先按「不等了」")
-    directory = session_dir(store)
+    directory = session_dir(store, key)
     j = common.jira(store)
     issue = store.away(lambda: j.issue(key, ["summary", "status", "issuetype", "description"]))
     folder = brief_dir(store)

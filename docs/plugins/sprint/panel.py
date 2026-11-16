@@ -1,5 +1,6 @@
 """The panel's state (what every panel action answers with) and its settings."""
 import os
+import re
 import time
 from datetime import date
 
@@ -10,7 +11,7 @@ import review
 from common import FIELD_RE, rows_for
 from store import empty_review
 
-CONFIG_KEYS = ("site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "actualHoursField", "autoPushHours", "hoursPerPoint", "cadenceAnchor", "reviewEventStart", "reviewEventMinutes", "reviewDir", "reviewSessionDir", "estimateSessionDir", "estimateRules")
+CONFIG_KEYS = ("site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "actualHoursField", "autoPushHours", "hoursPerPoint", "cadenceAnchor", "reviewEventStart", "reviewEventMinutes", "reviewDir", "reviewSessionDir", "estimateSessionDir", "estimateRules", "estimateDirs")
 ESTIMATE_RULES_MAX = 500
 
 
@@ -103,12 +104,79 @@ def bindings_overview(store, sprint, session):
                    if (keys := store.bound_keys(rec)) and (sid == here or store.active_in(sid, since, until))), key=lambda b: b["name"])
 
 
+PROJECT_RE = re.compile(r"[A-Z][A-Z0-9_]*")
+# What a restricted session must not open in: the same list cubi keeps from its read folders
+# (SessionNewSpec.privateFolders), under the home directory.
+PRIVATE_FOLDERS = (".ssh", ".aws", ".gnupg", ".kube", ".docker", ".config/gcloud", ".config/atlassian", "Library/Keychains")
+
+
+# On a Mac every folder of the data volume also lives under this prefix (a firmlink), which
+# realpath does not resolve: /System/Volumes/Data/Users/x/.ssh is ~/.ssh.
+FIRMLINK_ROOT = "/System/Volumes/Data"
+
+
+def _ident(path):
+    st = os.stat(path)
+    return st.st_dev, st.st_ino
+
+
+def _upward(path):
+    """path, its parent, … up to /."""
+    while True:
+        yield path
+        parent = os.path.dirname(path)
+        if parent == path:
+            return
+        path = parent
+
+
+def check_code_dir(folder, who):
+    """A folder an AI-estimate session may open in and read: it must exist; it may not be or hold
+    the home directory (the root, /Users), nor be, hold or sit inside a folder of keys and
+    credentials (~/.config holds two of them, ~/Library the keychains). Folders are compared by
+    what they are (device and inode), not by how they are written, so neither case (~/.SSH),
+    links, nor the firmlink path (/System/Volumes/Data/Users/…) gets past."""
+    real = os.path.realpath(os.path.expanduser(folder))
+    if not os.path.isdir(real):
+        raise ValueError(f"{who}的程式碼資料夾不存在：{folder}")
+    home = os.path.realpath(os.path.expanduser("~"))
+    private = [p for p in (os.path.join(home, f) for f in PRIVATE_FOLDERS) if os.path.isdir(p)]
+    me, keys = _ident(real), {_ident(p) for p in private}
+    inside_keys = any(_ident(a) in keys for a in _upward(real) if os.path.isdir(a))
+    above = False
+    for guarded in [home] + private:
+        for way in (guarded, FIRMLINK_ROOT + guarded):   # the two names it goes by, every folder above each
+            if os.path.isdir(way) and any(_ident(a) == me for a in _upward(way)):
+                above = True
+    if inside_keys or above:
+        raise ValueError(f"{who}的程式碼資料夾不能是根目錄、家目錄（或它的上層）或放金鑰與憑證的資料夾（或它的上層）：{folder}")
+
+
+def estimate_dirs(raw):
+    """Project key → code folder for the AI estimate; an empty folder drops the project (it then
+    uses the default folder). Every folder given must pass check_code_dir."""
+    if not isinstance(raw, dict):
+        raise ValueError("各專案的程式碼資料夾格式不對")
+    out = {}
+    for key, folder in raw.items():
+        key, folder = str(key).strip().upper(), str(folder or "").strip()
+        if not folder:
+            continue
+        if not PROJECT_RE.fullmatch(key):
+            raise ValueError(f"專案代號不對：{key}")
+        check_code_dir(folder, f"{key} ")
+        out[key] = folder
+    return out
+
+
 def config_set(store, p):
     """Everything is checked before anything is stored, so a bad value leaves the file as it was."""
     new = {}
     for k in CONFIG_KEYS:
-        if k in p:
+        if k in p and k != "estimateDirs":
             new[k] = str(p[k]).strip()
+    if "estimateDirs" in p:
+        new["estimateDirs"] = estimate_dirs(p["estimateDirs"])
     if "autoPushHours" in new:
         if not isinstance(p["autoPushHours"], bool):
             raise ValueError("「自動寫回時數」要是開或關")
@@ -133,8 +201,8 @@ def config_set(store, p):
             raise ValueError("review 事件長度要是分鐘數")
         if not 5 <= new["reviewEventMinutes"] <= 480:
             raise ValueError("review 事件長度要在 5 到 480 分鐘之間")
-    if new.get("estimateSessionDir") and not os.path.isdir(os.path.expanduser(new["estimateSessionDir"])):
-        raise ValueError(f"AI 估點的資料夾不存在：{new['estimateSessionDir']}")
+    if new.get("estimateSessionDir"):
+        check_code_dir(new["estimateSessionDir"], "AI 估點預設")
     if "estimateRules" in new:
         new["estimateRules"] = rules = new["estimateRules"].replace("\r\n", "\n")
         if len(rules) > ESTIMATE_RULES_MAX:

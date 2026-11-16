@@ -55,6 +55,9 @@ DEFAULT_CONFIG = {
     "estimateSessionDir": "",
     # The user's own additions to how an estimate is made, written into its data file as they are.
     "estimateRules": "",
+    # A project's own code folder for the AI estimate ({"WEB": "~/code/web"}); a project with none
+    # uses estimateSessionDir.
+    "estimateDirs": {},
 }
 
 

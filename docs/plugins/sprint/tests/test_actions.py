@@ -36,7 +36,7 @@ CASES = {
     "ticket.transition": ({"key": "PROJ-1"}, (), NO_JIRA),
     "points.push": ({"key": "PROJ-1"}, (), "實際點數欄位"),
     "estimate.set": ({"key": "PROJ-1", "value": "3"}, (), NO_JIRA),
-    "estimate.brief": ({"key": "PROJ-1"}, (), "先到設定分頁填"),
+    "estimate.brief": ({"key": "PROJ-1"}, (), "PROJ 還沒指定程式碼資料夾"),
     "estimate.suggest": ({"key": "PROJ-1", "points": 2, "confidence": "中", "reason": "理由"}, (), "沒有在等 AI 估點"),
     "estimate.dismiss": ({"key": "PROJ-1"}, ("sprint",), None),
     "estimate.comment": ({"key": "PROJ-1", "how": "local"}, (), "沒有在等確認的估點留言"),

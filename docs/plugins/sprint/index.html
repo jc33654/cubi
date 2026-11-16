@@ -60,6 +60,10 @@
   table.tickets.compact .sum2 { font-size: 12px; color: var(--cubi-ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
   table.tickets.compact .remain .cubi-bar, table.tickets.compact td.num .hours-btn small { display: none; }
   table.tickets.compact input.est { width: 44px !important; }
+  .dir-row { grid-column: 1 / -1; flex-wrap: nowrap; }
+  .cubi-field:has(> #c-estimateSessionDir) { grid-column: 1 / -1; }   /* as wide as the project rows below it */
+  .dir-row .dir-key { width: 56px; font-weight: 600; flex: none; }
+  .dir-row input { flex: 1 1 auto; min-width: 0; }
   .outside-tag { display: block; margin: 2px 0 0 auto; padding: 0; border: 0; background: none; font: inherit; font-size: 11px; color: var(--cubi-ink3); cursor: pointer; text-decoration: underline dotted; }
   .outside-tag.on, .outside-tag:hover { color: var(--cubi-accent); }
   /* The ＋時數, 沒有單號 and 修改 forms: one height for every control, kept in groups that wrap whole. */
@@ -554,7 +558,10 @@ function manualCard(s) {
 
 // The ＋時數 form sits right under its ticket's row and keeps what was typed across re-renders.
 // Why a ticket's AI-estimate button is off, or "" while it is on.
-const aiEstimateOff = t => !state.config.estimateSessionDir ? "先到設定分頁填「AI 估點讀的程式碼資料夾」" : t.notFound ? "Jira 查不到這張單" : t.suggestWaiting ? "已在估，要重開請先按「不等了」" : "";
+// A ticket's code folder: its project's own, else the default (the plugin picks the same way).
+const projectOf = key => String(key).split("-")[0];   // the plugin reads it the same way
+const codeDirFor = key => { const d = state.config.estimateDirs; return (d && typeof d === "object" ? d : {})[projectOf(key)] || state.config.estimateSessionDir; };
+const aiEstimateOff = t => !codeDirFor(t.key) ? `${projectOf(t.key)} 還沒指定程式碼資料夾（設定分頁「AI 估點」）` : t.notFound ? "Jira 查不到這張單" : t.suggestWaiting ? "已在估，要重開請先按「不等了」" : "";
 const CONFIDENCE_TONE = { "高": "good", "中": "warning", "低": "danger" };
 // Under a ticket: the AI estimate on its way, or back and waiting for a person. Only the number is
 // ever written to Jira (estimate.set); the reason stays here.
@@ -917,6 +924,14 @@ function historyChart(hist) {
 }
 
 // ---------- settings ----------
+// The projects a code folder can be set for: the configured ones, those this sprint's tickets carry,
+// and any already set.
+function projectsForDirs() {
+  const keys = String(state.config.projectKey || "").toUpperCase().split(/[,\s]+/).filter(Boolean);
+  for (const t of state.sprint?.tickets || []) keys.push(projectOf(t.key));
+  keys.push(...Object.keys(state.config.estimateDirs || {}));
+  return [...new Set(keys)];
+}
 function renderSettings() {
   const el = $("#tab-settings"), c = state.config;
   const projects = String(c.projectKey ?? "").split(/[,\s]+/).filter(Boolean);
@@ -945,11 +960,18 @@ function renderSettings() {
       ${field("reviewSessionDir", "整理用的 session 開在", "「用 Claude 整理」在這裡開 Claude Code")}
     </div>
     <div class="cubi-section-title">AI 估點</div><div class="cubi-form">
-      ${field("estimateSessionDir", "AI 估點讀的程式碼資料夾", "工單表每列的「AI 估點」在這裡開 Claude Code，讀這張單和資料夾裡的程式碼，給建議點數。留空就不能用")}
+      ${field("estimateSessionDir", "預設的程式碼資料夾", "工單表每列的「AI 估點」在程式碼資料夾開 Claude Code，讀這張單和資料夾裡的程式碼，給建議點數。下面沒有指定資料夾的專案用這個；兩邊都留空，那個專案的單就不能用")}
+      <div class="cubi-field" style="grid-column: 1 / -1"><label>各專案的程式碼資料夾 ${tip("依單號前面的專案代號（例如 WEB-123 的 WEB）選資料夾；留空就用上面的預設資料夾")}</label>
+        ${projectsForDirs().map(k => `<div class="cubi-row dir-row"><span class="dir-key">${esc(k)}</span><input id="c-dir-${esc(k)}" data-dir-project="${esc(k)}" value="${esc((c.estimateDirs || {})[k] || "")}" placeholder="留空＝用預設資料夾"><button class="cubi-btn small" data-pick-dir="${esc(k)}">選資料夾</button></div>`).join("")}</div>
       <p class="dir-note">這個資料夾裡的檔案 Claude 都讀得到，請勿選含機密的資料夾（例如放了 .env、金鑰、憑證的資料夾）。建議值與理由只存在這台電腦；你按「採用」時只把點數寫進 Jira。</p>
       <div class="cubi-field" style="grid-column: 1 / -1"><label for="c-estimateRules">補充估點規則 ${tip("寫進給 Claude 的估點資料「怎麼估」那一節最後，例如「子單也算進來」「新增功能與修改分開看」。500 字內；留空就照預設方式估")}</label><textarea id="c-estimateRules" placeholder="一行一條，可留空">${esc(c.estimateRules ?? "")}</textarea></div>
     </div></div>`;
-  $("#c-save", el).onclick = () => { const p = {}; ["site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "actualHoursField", "hoursPerPoint", "cadenceAnchor", "reviewEventStart", "reviewEventMinutes", "reviewDir", "reviewSessionDir", "estimateSessionDir", "estimateRules"].forEach(k => { p[k] = $("#c-" + k).value; }); p.autoPushHours = $("#c-autoPushHours").checked; refresh("config.set", p, el.querySelectorAll("[id^=c-]")); };
+  el.querySelectorAll("[data-pick-dir]").forEach(b => b.addEventListener("click", async () => {
+    const r = await bridge().postMessage({ action: "pick.dir" });
+    if (r && r.ok && r.path) { const f = $(`#c-dir-${CSS.escape(b.dataset.pickDir)}`); f.value = r.path; f.dispatchEvent(new Event("input", { bubbles: true })); }
+  }));
+  $("#c-save", el).onclick = () => { const p = {}; ["site", "netrc", "projectKey", "jql", "pointsField", "actualPointsField", "actualHoursField", "hoursPerPoint", "cadenceAnchor", "reviewEventStart", "reviewEventMinutes", "reviewDir", "reviewSessionDir", "estimateSessionDir", "estimateRules"].forEach(k => { p[k] = $("#c-" + k).value; });
+    p.estimateDirs = Object.fromEntries([...el.querySelectorAll("[data-dir-project]")].map(i => [i.dataset.dirProject, i.value])); p.autoPushHours = $("#c-autoPushHours").checked; refresh("config.set", p, el.querySelectorAll("[id^=c-]")); };
 }
 
 // ---------- boot ----------

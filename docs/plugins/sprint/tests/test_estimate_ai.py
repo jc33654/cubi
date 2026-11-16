@@ -80,13 +80,95 @@ class AiEstimateTests(unittest.TestCase):
 
     def test_no_folder_set_or_a_missing_one_is_refused_before_jira(self):
         self.store.config["estimateSessionDir"] = ""
-        with self.assertRaisesRegex(ValueError, "先到設定分頁填「AI 估點讀的程式碼資料夾」"):
+        with self.assertRaisesRegex(ValueError, "PROJ 還沒指定程式碼資料夾（設定分頁「AI 估點」）"):
             self.brief()
         self.store.config["estimateSessionDir"] = os.path.join(self.dir.name, "nowhere")
         self.reopen()
-        with self.assertRaisesRegex(ValueError, "資料夾不存在"):
+        with self.assertRaisesRegex(ValueError, "PROJ 的程式碼資料夾不存在"):
             self.brief()
         self.assertEqual(self.fake.asked, [])
+
+    def test_a_project_s_own_folder_comes_first_then_the_default(self):
+        own = os.path.join(self.dir.name, "proj-code")
+        os.makedirs(own)
+        self.store.config.update(estimateDirs={"PROJ": own})
+        self.reopen()
+        out, _ = self.brief()
+        self.assertEqual(out["directory"], own)                                 # its own, not the default
+        self.store.config.update(estimateDirs={"OTHER": own})
+        self.reopen()
+        out, _ = self.brief("PROJ-2")
+        self.assertEqual(out["directory"], self.code)                           # no entry: the default
+        self.store.config.update(estimateDirs={"OTHER": own}, estimateSessionDir="")
+        self.reopen()
+        with self.assertRaisesRegex(ValueError, "PROJ 還沒指定程式碼資料夾"):
+            self.brief("PROJ-3")
+        self.store.config.update(estimateDirs={"PROJ": os.path.join(self.dir.name, "gone")})
+        self.reopen()
+        with self.assertRaisesRegex(ValueError, "PROJ 的程式碼資料夾不存在"):
+            self.brief("PROJ-3")
+
+    def test_the_project_folders_setting(self):
+        own = os.path.join(self.dir.name, "proj-code")
+        os.makedirs(own)
+        state = sprint.ACTIONS["config.set"](self.store, {"estimateDirs": {"proj": f"  {own} ", "OPS2": ""}})
+        self.assertEqual(state["config"]["estimateDirs"], {"PROJ": own})        # upper case, trimmed; empty dropped
+        for bad, error in (({"PROJ": os.path.join(self.dir.name, "gone")}, "PROJ 的程式碼資料夾不存在"),
+                           ({"proj-1": own}, "專案代號不對"), ("PROJ", "格式不對")):
+            with self.assertRaisesRegex(ValueError, error):
+                sprint.ACTIONS["config.set"](self.store, {"estimateDirs": bad, "hoursPerPoint": 4})
+            self.assertEqual((self.store.config["estimateDirs"], self.store.config["hoursPerPoint"]), ({"PROJ": own}, 8))
+        fresh = Store(os.path.join(self.dir.name, "fresh"))
+        try:
+            self.assertEqual(fresh.config["estimateDirs"], {})
+        finally:
+            fresh.close()
+
+    def test_a_code_folder_is_never_the_root_home_or_a_key_folder(self):
+        home = os.path.join(self.dir.name, "home")
+        for sub in (".ssh/x", ".aws", "Library/Keychains", "Library/Caches", ".config/atlassian", ".config/other", "code"):
+            os.makedirs(os.path.join(home, sub))
+        os.symlink(os.path.join(home, ".ssh"), os.path.join(home, "code", "looks-fine"))
+        # On a Mac the same folders also go by /System/Volumes/Data/… (a firmlink realpath keeps).
+        data = "/System/Volumes/Data" + os.path.realpath(home)
+        firmlinked = (data, data + "/.ssh", data + "/Library/Keychains", "/System/Volumes/Data", "/System/Volumes") \
+            if os.path.isdir(data) and os.path.samefile(data, home) else ()
+        old = os.environ.get("HOME")
+        os.environ["HOME"] = home
+        try:
+            for folder in ("~", "~/.ssh", "~/.ssh/x", "~/.aws", "~/Library/Keychains", "/", "~/code/looks-fine", home + "/",
+                           "~/.SSH", "~/library/keychains", "~/.Config/Atlassian",        # the disk does not tell the case apart
+                           "~/.config", "~/Library", os.path.dirname(home)) + firmlinked:  # above a key folder, above home
+                if folder in ("~/.SSH", "~/library/keychains", "~/.Config/Atlassian") and not os.path.isdir(os.path.expanduser(folder)):
+                    continue   # on a disk that tells case apart these are just folders that are not there
+                for p in ({"estimateDirs": {"WEB": folder}}, {"estimateSessionDir": folder}):
+                    with self.subTest(folder=folder, key=list(p)[0]):
+                        with self.assertRaisesRegex(ValueError, "不能是根目錄、家目錄"):
+                            sprint.ACTIONS["config.set"](self.store, p)
+            for fine in ("~/code", "~/Library/Caches", "~/.config/other"):          # beside a key folder, not in or above it
+                sprint.ACTIONS["config.set"](self.store, {"estimateDirs": {"WEB": fine}})
+                self.assertEqual(self.store.config["estimateDirs"], {"WEB": fine})
+            # Set by hand in config.json, it is refused when a session would open there.
+            self.store.config.update(estimateDirs={"PROJ": "~/.ssh"})
+            self.reopen()
+            with self.assertRaisesRegex(ValueError, "PROJ 的程式碼資料夾不能是根目錄、家目錄"):
+                self.brief()
+            self.assertEqual(self.fake.asked, [])
+        finally:
+            if old is None:
+                os.environ.pop("HOME")
+            else:
+                os.environ["HOME"] = old
+
+    def test_an_odd_project_key_or_a_hand_edited_map_does_not_break_the_settings(self):
+        sprint.ACTIONS["config.set"](self.store, {"site": "y.example", "estimateDirs": {"AB_C": "", "B_2": self.code}})
+        self.assertEqual((self.store.config["site"], self.store.config["estimateDirs"]), ("y.example", {"B_2": self.code}))
+        with self.assertRaisesRegex(ValueError, "專案代號不對：1AB"):
+            sprint.ACTIONS["config.set"](self.store, {"estimateDirs": {"1ab": self.code}})
+        self.store.config["estimateDirs"] = "not a map"                          # config.json edited by hand
+        self.reopen()
+        out, _ = self.brief()
+        self.assertEqual(out["directory"], self.code)                           # read as no map: the default
 
     def test_only_a_known_ticket(self):
         for key in ("PROJ-404", "proj-1", "PROJ-1/../x", "", None):
@@ -206,7 +288,7 @@ class AiEstimateTests(unittest.TestCase):
         self.assertEqual(len(self.fake.sent), 1)
 
     def test_the_folder_setting_must_exist_and_may_be_empty(self):
-        with self.assertRaisesRegex(ValueError, "AI 估點的資料夾不存在"):
+        with self.assertRaisesRegex(ValueError, "AI 估點預設的程式碼資料夾不存在"):
             sprint.ACTIONS["config.set"](self.store, {"estimateSessionDir": os.path.join(self.dir.name, "nowhere")})
         sprint.ACTIONS["config.set"](self.store, {"estimateSessionDir": ""})
         self.assertEqual(self.store.config["estimateSessionDir"], "")

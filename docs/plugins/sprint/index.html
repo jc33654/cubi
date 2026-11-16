@@ -51,6 +51,10 @@
   .ai-reason { color: var(--cubi-ink2); flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; }
   .dir-note { color: var(--cubi-ink3); font-size: 12px; grid-column: 1 / -1; margin: 0; }
   .ai-hint { color: var(--cubi-ink3); font-size: 12px; flex-basis: 100%; }
+  /* 改／✕ icon buttons keep their size in a squeezed table column (they shrank to empty slivers). */
+  .cubi-btn.icon, .cubi-btn.icon > svg { flex: none; }
+  .outside-tag { display: block; margin: 2px 0 0 auto; padding: 0; border: 0; background: none; font: inherit; font-size: 11px; color: var(--cubi-ink3); cursor: pointer; text-decoration: underline dotted; }
+  .outside-tag.on, .outside-tag:hover { color: var(--cubi-accent); }
   /* The ＋時數, 沒有單號 and 修改 forms: one height for every control, kept in groups that wrap whole. */
   [data-time-form] { gap: 8px 12px; align-items: center; }
   [data-time-form] input:not([type=checkbox]), [data-time-form] select, [data-time-form] .cubi-btn { height: 32px; box-sizing: border-box; font-size: 13px; line-height: 1; }
@@ -63,8 +67,7 @@
   [data-time-form] .brk { flex-basis: 100%; height: 0; }   /* line 1: what and when; line 2: note, ticks, buttons */
   /* Inside the tickets table (wider than the card on a narrow panel, so it scrolls) a form keeps to
      the part that shows: as wide as the scroller, held at its left edge. */
-  .scroll-x { container-type: inline-size; }
-  .scroll-x [data-time-form] { position: sticky; left: 0; max-width: calc(100cqw - 24px); box-sizing: border-box; }
+  .scroll-x [data-time-form] { position: sticky; left: 0; box-sizing: border-box; }   /* its max-width: fitForms */
   #c-estimateRules { min-height: 150px; }
   #status { display: flex; align-items: flex-start; gap: 10px; }
   #status[hidden] { display: none; }
@@ -208,6 +211,13 @@ document.addEventListener("focusout", e => {
   if (restored.delete(e.target) && unlikeMarkup(e.target)) e.target.dispatchEvent(new Event("change"));
 });
 
+// A form inside the tickets table keeps to the part of the scroller that shows (the table is wider
+// than a narrow panel and scrolls sideways). Measured here, not a CSS container query: a
+// `container-type` on the scroller made the page jump to the top on every redraw (batch 27).
+function fitForms() {
+  for (const f of document.querySelectorAll(".scroll-x [data-time-form]")) f.style.maxWidth = `${f.closest(".scroll-x").clientWidth - 24}px`;
+}
+window.addEventListener("resize", fitForms);
 function render(quiet = false) {
   if (composing) { renderLater = true; return; }
   renderLater = false;
@@ -225,6 +235,7 @@ function render(quiet = false) {
   const open = [...document.querySelectorAll("details[id][open]")].map(d => d.id);
   renderOverview(); renderReview(); renderSettings();
   for (const id of open) document.getElementById(id)?.setAttribute("open", "");
+  fitForms();
   if (!quiet && state.warnings && state.warnings.length) status(state.warnings.join("；"), true);
   else if (!quiet && state.notices && state.notices.length) status(state.notices.join("；"), true);
   for (const [sel, d] of drafts) {
@@ -366,7 +377,7 @@ function renderOverview() {
       <td class="num"><input class="est" data-est="${esc(t.key)}" value="${esc(t.estimate ?? "")}" inputmode="decimal" autocomplete="off" placeholder="–" ${t.notFound ? "disabled" : ""}
         title="${t.notFound ? "Jira 查不到這張單，不能寫估點" : t.estimateVia ? `這張單在 Jira 沒有估點欄位，估點${t.estimateVia === "comment" ? "記在 Cubi 發的【估點】留言" : "只記在這台電腦"}；改了會先在下面問你` : "估點。改了（按 Enter 或離開這一格）就寫回 Jira；清空代表未估點"}" style="width:52px;text-align:right"></td>
       <td>${t.remaining == null ? `<span class="cubi-muted">未估點</span>` : `<div class="remain"><div class="cubi-bar ${rt}"><i style="width:${used}%"></i></div><span style="color:var(--cubi-${rt || "ink2"})">${t.remaining < 0 ? "超 " + fmtH(-t.remaining) : fmtH(t.remaining)}</span></div>`}</td>
-      <td class="num">${t.seconds < 60 && outsideOf(t.key).length ? `<button class="hours-btn ${openHours.has(t.key) ? "on" : ""}" data-hours="${esc(t.key)}" title="這張單在這一期的日期裡沒有工時，但有記在別期的時段；點開可以改或刪">別期 ${outsideOf(t.key).length} 筆</button>` : hoursButton(t.key, t.seconds, hpp)}</td>
+      <td class="num">${hoursButton(t.key, t.seconds, hpp)}${outsideOf(t.key).length ? `<button class="outside-tag ${openHours.has(t.key) ? "on" : ""}" data-hours="${esc(t.key)}" title="這張單有記在本期日期以外的時段；點一下在下面展開，可以改或刪">＋別期 ${outsideOf(t.key).length}</button>` : ""}</td>
       <td class="num actions"><span class="cubi-row" style="justify-content:flex-end;flex-wrap:nowrap">
         <button class="cubi-btn icon" data-time="${esc(t.key)}" title="補時數（會議、討論）">${ic("plus", 15)}</button>
         <button class="cubi-btn icon" data-ai-est="${esc(t.key)}" title="${esc(aiEstimateOff(t) || "AI 估點：開一個 Claude Code 讀這張單與程式碼，給建議點數；你按「採用」才寫進 Jira")}" ${aiEstimateOff(t) ? "disabled" : ""}>${ic("sparkles", 15)}</button>
@@ -509,7 +520,7 @@ function otherCard(s, hpp) {
       <td class="num"><span class="cubi-row" style="justify-content:flex-end;flex-wrap:nowrap">${editButton(x, "other")}<button class="cubi-btn icon" data-remove-time="${esc(x.id)}" title="刪除">${ic("x", 14)}</button></span></td></tr>${editRow(x, 5, "other")}`).join("");
   return `<div class="cubi-card"><div class="cubi-card-head"><h2 class="cubi-card-title">沒有單號的工作</h2>${tip("會議、支援、面試…沒有 Jira 單但花了時間的事。記在開始時間落在的那個 sprint（沒有就記在目前的）；勾「計入工時」的會算進上方投入，不算進任何一張單")}
       <span class="cubi-spacer"></span><button class="cubi-btn small" data-time="">${ic("plus", 13)}記一筆</button></div>
-    ${form}${rows ? `<div class="scroll-x"><table class="cubi-table tight fixed" style="min-width:560px"><colgroup><col style="width:170px"><col style="width:130px"><col><col style="width:84px"><col style="width:84px"></colgroup><tbody>${rows}</tbody></table></div>`
+    ${form}${rows ? `<div class="scroll-x"><table class="cubi-table tight fixed" style="min-width:470px"><colgroup><col style="width:150px"><col style="width:120px"><col><col style="width:84px"><col style="width:84px"></colgroup><tbody>${rows}</tbody></table></div>`
       : form ? "" : `<div class="cubi-muted">還沒有。</div>`}</div>`;
 }
 
@@ -584,7 +595,9 @@ function keepTimeForm() {
 const localTime = ts => { const d = new Date(ts * 1000); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
 // `where` the 改 was pressed (a stretch is listed under its ticket and in the 手動時段 card): the
 // form opens there only, so there is one form and one #e-save.
-const editButton = (x, where) => `<button class="cubi-btn small" data-edit-time="${esc(x.id)}" data-edit-where="${esc(where)}" title="改時數、開始時間、種類、備註">改</button>`;
+// Same shape as cubiIcon's (the kit has no pencil), so 改 and ✕ sit side by side at one size.
+const PENCIL = `<svg class="cubi-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>`;
+const editButton = (x, where) => `<button class="cubi-btn icon" data-edit-time="${esc(x.id)}" data-edit-where="${esc(where)}" title="改（時數、開始時間、種類、備註）" aria-label="改">${PENCIL}</button>`;
 function editRow(x, columns, where) {
   if (!editTime || editTime.id !== x.id || editTime.where !== where) return "";
   const e = editTime, off = e.timed ? "disabled" : "";

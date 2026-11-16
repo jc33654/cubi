@@ -53,6 +53,13 @@
   .ai-hint { color: var(--cubi-ink3); font-size: 12px; flex-basis: 100%; }
   /* 改／✕ icon buttons keep their size in a squeezed table column (they shrank to empty slivers). */
   .cubi-btn.icon, .cubi-btn.icon > svg { flex: none; }
+  /* The tickets table on a narrow panel (fitTickets): the summary under the key, no bars or points, buttons in rows of three. */
+  td.actions .acts { justify-content: flex-end; flex-wrap: nowrap; gap: 4px; }
+  table.tickets.compact td.actions .acts { flex-wrap: wrap; }
+  table.tickets.compact .sum { padding: 0; overflow: hidden; font-size: 0; border-left: 0; border-right: 0; }
+  table.tickets.compact .sum2 { font-size: 12px; color: var(--cubi-ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+  table.tickets.compact .remain .cubi-bar, table.tickets.compact td.num .hours-btn small { display: none; }
+  table.tickets.compact input.est { width: 44px !important; }
   .outside-tag { display: block; margin: 2px 0 0 auto; padding: 0; border: 0; background: none; font: inherit; font-size: 11px; color: var(--cubi-ink3); cursor: pointer; text-decoration: underline dotted; }
   .outside-tag.on, .outside-tag:hover { color: var(--cubi-accent); }
   /* The ＋時數, 沒有單號 and 修改 forms: one height for every control, kept in groups that wrap whole. */
@@ -214,6 +221,17 @@ document.addEventListener("focusout", e => {
 // A form inside the tickets table keeps to the part of the scroller that shows (the table is wider
 // than a narrow panel and scrolls sideways). Measured here, not a CSS container query: a
 // `container-type` on the scroller made the page jump to the top on every redraw (batch 27).
+let compactTickets = false;
+// The tickets table needs ~860px for all its columns; on a narrower panel it switches to the compact
+// layout. Measured after a redraw (not a CSS container query, which made the page jump: batch 27),
+// redrawn once more only when that changes.
+function fitTickets() {
+  const sx = document.querySelector("#tab-overview .scroll-x");
+  if (!sx || !sx.querySelector("table.tickets")) return;
+  const want = sx.clientWidth < 860;
+  if (want !== compactTickets) { compactTickets = want; render(true); }
+}
+window.addEventListener("resize", () => fitTickets());
 function fitForms() {
   for (const f of document.querySelectorAll(".scroll-x [data-time-form]")) f.style.maxWidth = `${f.closest(".scroll-x").clientWidth - 24}px`;
 }
@@ -236,6 +254,7 @@ function render(quiet = false) {
   renderOverview(); renderReview(); renderSettings();
   for (const id of open) document.getElementById(id)?.setAttribute("open", "");
   fitForms();
+  fitTickets();
   if (!quiet && state.warnings && state.warnings.length) status(state.warnings.join("；"), true);
   else if (!quiet && state.notices && state.notices.length) status(state.notices.join("；"), true);
   for (const [sel, d] of drafts) {
@@ -363,22 +382,23 @@ function renderOverview() {
     </div>
     <div class="cubi-card" style="margin-top:16px"><div class="cubi-card-head"><h2 class="cubi-card-title">工單</h2><span class="cubi-muted">${m.tickets} 張</span><span class="cubi-spacer"></span>
       <input id="add-key" placeholder="加單號" size="12"><button class="cubi-btn small" id="add-btn">${ic("plus", 13)}加</button></div>
-    <div class="scroll-x"><table class="cubi-table fixed" style="min-width:720px">
-    <colgroup><col style="width:36px"><col style="width:112px"><col><col style="width:104px"><col style="width:68px"><col style="width:150px"><col style="width:128px"><col style="width:${152 + (state.config.actualPointsField ? 34 : 0) + (state.config.actualHoursField ? 34 : 0)}px"></colgroup>
-    <thead><tr>${sortTh("starred", "★")}${sortTh("key", "單號")}<th>摘要</th>${sortTh("status", "狀態")}${sortTh("estimate", "估", "num")}${sortTh("remaining", "剩餘")}${sortTh("seconds", "投入", "num")}<th></th></tr></thead><tbody>`;
+    <div class="scroll-x"><table class="cubi-table fixed tickets${compactTickets ? " compact" : ""}" style="min-width:${compactTickets ? 480 : 720}px">
+    <colgroup>${compactTickets ? `<col style="width:28px"><col><col style="width:0"><col style="width:70px"><col style="width:60px"><col style="width:70px"><col style="width:72px"><col style="width:110px">`
+      : `<col style="width:36px"><col style="width:112px"><col><col style="width:104px"><col style="width:68px"><col style="width:150px"><col style="width:128px"><col style="width:${152 + (state.config.actualPointsField ? 34 : 0) + (state.config.actualHoursField ? 34 : 0)}px">`}</colgroup>
+    <thead><tr>${sortTh("starred", "★")}${sortTh("key", compactTickets ? "單號／摘要" : "單號")}<th class="sum">摘要</th>${sortTh("status", "狀態")}${sortTh("estimate", "估", "num")}${sortTh("remaining", "剩餘")}${sortTh("seconds", "投入", "num")}<th></th></tr></thead><tbody>`;
   for (const t of sortedTickets(s.tickets)) {
     const rt = remainTone(t), budget = (t.estimate || 0) * hpp * 3600;
     const used = budget ? Math.min(100, Math.max(0, (budget - t.remaining) / budget * 100)) : 0;
     html += `<tr><td><button class="star ${t.starred ? "on" : ""}" data-star="${esc(t.key)}" title="${t.starred ? "取消重點" : "標成重點"}">${t.starred ? "★" : "☆"}</button></td>
-      <td><span class="key"><span class="cubi-dot ${statusTone(t)}"></span>${link(t.key)}</span></td>
-      <td class="clip" title="${esc(t.summary)}${t.notes ? "\n" + esc(t.notes) : ""}">${esc(t.summary)}</td>
+      <td class="clip"><span class="key"><span class="cubi-dot ${statusTone(t)}"></span>${link(t.key)}</span>${compactTickets ? `<div class="sum2" title="${esc(t.summary)}">${esc(t.summary)}</div>` : ""}</td>
+      <td class="clip sum" title="${esc(t.summary)}${t.notes ? "\n" + esc(t.notes) : ""}">${esc(t.summary)}</td>
       <td title="${t.notFound ? "這張單在 Jira 被刪除，或你沒有查看權限。這裡是最後一次讀到的資料；不要它就按這列最右邊的 ✕ 移出這一期" : esc(t.status || "")}">${t.notFound
         ? `<span class="cubi-pill danger">Jira 查不到</span>` : `<span class="cubi-pill ${statusTone(t)}">${esc(t.status || "–")}</span>`}</td>
       <td class="num"><input class="est" data-est="${esc(t.key)}" value="${esc(t.estimate ?? "")}" inputmode="decimal" autocomplete="off" placeholder="–" ${t.notFound ? "disabled" : ""}
         title="${t.notFound ? "Jira 查不到這張單，不能寫估點" : t.estimateVia ? `這張單在 Jira 沒有估點欄位，估點${t.estimateVia === "comment" ? "記在 Cubi 發的【估點】留言" : "只記在這台電腦"}；改了會先在下面問你` : "估點。改了（按 Enter 或離開這一格）就寫回 Jira；清空代表未估點"}" style="width:52px;text-align:right"></td>
       <td>${t.remaining == null ? `<span class="cubi-muted">未估點</span>` : `<div class="remain"><div class="cubi-bar ${rt}"><i style="width:${used}%"></i></div><span style="color:var(--cubi-${rt || "ink2"})">${t.remaining < 0 ? "超 " + fmtH(-t.remaining) : fmtH(t.remaining)}</span></div>`}</td>
       <td class="num">${hoursButton(t.key, t.seconds, hpp)}${outsideOf(t.key).length ? `<button class="outside-tag ${openHours.has(t.key) ? "on" : ""}" data-hours="${esc(t.key)}" title="這張單有記在本期日期以外的時段；點一下在下面展開，可以改或刪">＋別期 ${outsideOf(t.key).length}</button>` : ""}</td>
-      <td class="num actions"><span class="cubi-row" style="justify-content:flex-end;flex-wrap:nowrap">
+      <td class="num actions"><span class="cubi-row acts">
         <button class="cubi-btn icon" data-time="${esc(t.key)}" title="補時數（會議、討論）">${ic("plus", 15)}</button>
         <button class="cubi-btn icon" data-ai-est="${esc(t.key)}" title="${esc(aiEstimateOff(t) || "AI 估點：開一個 Claude Code 讀這張單與程式碼，給建議點數；你按「採用」才寫進 Jira")}" ${aiEstimateOff(t) ? "disabled" : ""}>${ic("sparkles", 15)}</button>
         <button class="cubi-btn icon" data-transition="${esc(t.key)}" title="${t.notFound ? "Jira 查不到這張單" : "換 Jira 狀態"}" ${t.notFound ? "disabled" : ""}>${ic("flag", 15)}</button>

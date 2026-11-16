@@ -60,6 +60,7 @@
   table.tickets.compact .sum2 { font-size: 12px; color: var(--cubi-ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
   table.tickets.compact .remain .cubi-bar, table.tickets.compact td.num .hours-btn small { display: none; }
   table.tickets.compact input.est { width: 44px !important; }
+  table.tickets.compact td.st { padding-left: 4px; padding-right: 4px; }
   .dir-row { grid-column: 1 / -1; flex-wrap: nowrap; }
   .cubi-field:has(> #c-estimateSessionDir) { grid-column: 1 / -1; }   /* as wide as the project rows below it */
   .dir-row .dir-key { width: 56px; font-weight: 600; flex: none; }
@@ -238,28 +239,59 @@ document.addEventListener("focusout", e => {
 // than a narrow panel and scrolls sideways). Measured here, not a CSS container query: a
 // `container-type` on the scroller made the page jump to the top on every redraw (batch 27).
 let compactTickets = false;
-// Below this the full side menu would push the tickets table into its compact layout; the menu goes
-// to icons instead. Measured like the table (no CSS container query: batch 27).
-const NAV_MINI_BELOW = 1140;
+// The tickets table: the full layout from the width its fixed columns, the status column and a 160px
+// summary need (so the switch moves with the status names); below that the compact one. Neither
+// changes the scroller's width, so it does not flip back and forth at the edge. Measured after a
+// redraw (not a CSS container query, which made the page jump: batch 27).
+const SUMMARY_MIN = 160;
+function actionsWidth() { return 152 + (state.config.actualPointsField ? 34 : 0) + (state.config.actualHoursField ? 34 : 0); }
+function fullFrom() { return 36 + 112 + 68 + 150 + 128 + actionsWidth() + statusWidth(state.sprint?.tickets || []) + SUMMARY_MIN; }
+// The side menu goes to icons when the full one (282px around the table, 146 with icons) would push
+// the table into its compact layout.
+const NAV_ROOM = 282;
 function fitNav() {
   const app = document.querySelector(".cubi-app");
-  app.classList.toggle("nav-mini", app.clientWidth < NAV_MINI_BELOW);
+  app.classList.toggle("nav-mini", app.clientWidth < (state ? fullFrom() : 860) + NAV_ROOM);
 }
-window.addEventListener("resize", fitNav);
-// The tickets table needs ~860px for all its columns; on a narrower panel it switches to the compact
-// layout. Measured after a redraw (not a CSS container query, which made the page jump: batch 27),
-// redrawn once more only when that changes.
 function fitTickets() {
-  const sx = document.querySelector("#tab-overview .scroll-x");
-  if (!sx || !sx.querySelector("table.tickets")) return;
-  const want = sx.clientWidth < 860;
-  if (want !== compactTickets) { compactTickets = want; render(true); }
+  const sx = document.querySelector("#tab-overview .scroll-x"), table = sx?.querySelector("table.tickets");
+  // A hidden tab measures 0: deciding then left the table compact on a wide panel (batch 34).
+  if (!table || !sx.clientWidth) return;
+  const want = sx.clientWidth < fullFrom();
+  if (want !== compactTickets) { compactTickets = want; return render(true); }
+  if (!compactTickets) return;
+  // Compact does not scroll sideways on a 700px panel (batch 27): the status column takes what the
+  // other columns (340px) and the longest key (at least 100px) leave, down to six characters and …
+  const key = Math.max(100, ...[...table.querySelectorAll("tbody .key")].map(k => k.scrollWidth + 20));
+  const st = Math.max(Math.min(compactStatus(), sx.clientWidth - 340 - key), Math.min(compactStatus(), statusText(["一二三四五六…"]) + 8));
+  table.querySelectorAll("col")[3].style.width = `${st}px`;
+  table.style.minWidth = `${340 + key + st}px`;
 }
-window.addEventListener("resize", () => fitTickets());
 function fitForms() {
-  for (const f of document.querySelectorAll(".scroll-x [data-time-form]")) f.style.maxWidth = `${f.closest(".scroll-x").clientWidth - 24}px`;
+  for (const f of document.querySelectorAll(".scroll-x [data-time-form]")) {
+    const w = f.closest(".scroll-x").clientWidth;
+    if (w) f.style.maxWidth = `${w - 24}px`;
+  }
 }
-window.addEventListener("resize", fitForms);
+// Measured again whenever the panel or the tickets tab changes width (a tab shown again goes from 0),
+// not on window resize events alone.
+let fittedTo = "";
+const fitObserver = new ResizeObserver(() => {
+  const to = `${document.querySelector(".cubi-app").clientWidth}|${document.querySelector("#tab-overview").clientWidth}`;
+  if (to === fittedTo) return;
+  fittedTo = to; fitNav(); fitForms(); fitTickets();
+});
+// The status column fits the longest status name of the tickets: 72–160px, in the compact layout
+// at most 120px (its cell padding is 4px there). A longer name ends in … and the cell's title has it all.
+let measure;
+function statusText(names) {
+  measure ||= document.createElement("canvas").getContext("2d");
+  measure.font = `600 11.5px ${getComputedStyle(document.body).fontFamily}`;   // .cubi-pill
+  return Math.ceil(Math.max(0, ...names.map(n => measure.measureText(n).width))) + 18 + 2;   // pill padding, rounding
+}
+const statusNames = tickets => tickets.map(t => t.notFound ? "Jira 查不到" : t.status || "–");
+function statusWidth(tickets) { return Math.min(160, Math.max(72, statusText(statusNames(tickets)) + 20)); }
+function compactStatus() { return Math.min(120, Math.max(72, statusText(statusNames(state.sprint?.tickets || [])) + 8)); }
 function render(quiet = false) {
   if (composing) { renderLater = true; return; }
   renderLater = false;
@@ -392,7 +424,7 @@ function renderOverview() {
   if (state.session) html += sessionCard();
   if (!s) { el.innerHTML = html + `<div class="cubi-card cubi-muted">還沒有 sprint。按「新 sprint」，再「同步 Jira」。</div>`; bindOverview(el); return; }
   const m = s.metrics, prev = prevSprint(), hpp = state.config.hoursPerPoint;
-  const rate = m.tickets ? Math.round(m.done / m.tickets * 100) : 0;
+  const rate = m.tickets ? Math.round(m.done / m.tickets * 100) : 0, stW = compactTickets ? compactStatus() : statusWidth(s.tickets);
   html += `<div class="cubi-kpis">
       ${kpi("完成點數", "check", `${pts(m.donePoints)}<span class="cubi-muted"> / ${pts(m.estimate)}</span>`, prev ? `上個 sprint ${pts(prev.donePoints)} 點` : "估點合計", prev ? Math.round((m.donePoints - prev.donePoints) * 10) / 10 : null)}
       ${kpi("完成率", "target", `${rate}%`, `${m.done} / ${m.tickets} 張`, null)}
@@ -410,9 +442,9 @@ function renderOverview() {
       <input id="add-key" placeholder="加單號" size="12"><button class="cubi-btn small" id="add-btn">${ic("plus", 13)}加</button></div>
     ${aiPicking ? aiPickBar() : ""}
     ${reassignBar(s.reassigned || [])}
-    <div class="scroll-x"><table class="cubi-table fixed tickets${compactTickets ? " compact" : ""}" style="min-width:${compactTickets ? 480 : 720}px">
-    <colgroup>${compactTickets ? `<col style="width:28px"><col><col style="width:0"><col style="width:70px"><col style="width:60px"><col style="width:70px"><col style="width:72px"><col style="width:110px">`
-      : `<col style="width:36px"><col style="width:112px"><col><col style="width:104px"><col style="width:68px"><col style="width:150px"><col style="width:128px"><col style="width:${152 + (state.config.actualPointsField ? 34 : 0) + (state.config.actualHoursField ? 34 : 0)}px">`}</colgroup>
+    <div class="scroll-x"><table class="cubi-table fixed tickets${compactTickets ? " compact" : ""}" style="min-width:${compactTickets ? 440 + stW : 720}px">
+    <colgroup>${compactTickets ? `<col style="width:28px"><col><col style="width:0"><col style="width:${stW}px"><col style="width:60px"><col style="width:70px"><col style="width:72px"><col style="width:110px">`
+      : `<col style="width:36px"><col style="width:112px"><col><col style="width:${stW}px"><col style="width:68px"><col style="width:150px"><col style="width:128px"><col style="width:${actionsWidth()}px">`}</colgroup>
     <thead><tr>${sortTh("starred", "★")}${sortTh("key", compactTickets ? "單號／摘要" : "單號")}<th class="sum">摘要</th>${sortTh("status", "狀態")}${sortTh("estimate", "估", "num")}${sortTh("remaining", "剩餘")}${sortTh("seconds", "投入", "num")}<th></th></tr></thead><tbody>`;
   for (const t of sortedTickets(s.tickets)) {
     const rt = remainTone(t), budget = (t.estimate || 0) * hpp * 3600;
@@ -420,7 +452,7 @@ function renderOverview() {
     html += `<tr><td>${aiPicking ? aiPickBox(t) : `<button class="star ${t.starred ? "on" : ""}" data-star="${esc(t.key)}" title="${t.starred ? "取消重點" : "標成重點"}">${t.starred ? "★" : "☆"}</button>`}</td>
       <td class="clip"><span class="key"><span class="cubi-dot ${statusTone(t)}"></span>${link(t.key)}</span>${compactTickets ? `<div class="sum2" title="${esc(t.summary)}">${esc(t.summary)}</div>` : ""}${compactTickets ? ownerTag(t.owner) : ""}</td>
       <td class="clip sum" title="${esc(t.summary)}${t.notes ? "\n" + esc(t.notes) : ""}">${esc(t.summary)}${compactTickets ? "" : ownerTag(t.owner)}</td>
-      <td title="${t.notFound ? "這張單在 Jira 被刪除，或你沒有查看權限。這裡是最後一次讀到的資料；不要它就按這列最右邊的 ✕ 移出這一期" : esc(t.status || "")}">${t.notFound
+      <td class="st" title="${t.notFound ? "這張單在 Jira 被刪除，或你沒有查看權限。這裡是最後一次讀到的資料；不要它就按這列最右邊的 ✕ 移出這一期" : esc(t.status || "")}">${t.notFound
         ? `<span class="cubi-pill danger">Jira 查不到</span>` : `<span class="cubi-pill ${statusTone(t)}">${esc(t.status || "–")}</span>`}</td>
       <td class="num"><input class="est" data-est="${esc(t.key)}" value="${esc(t.estimate ?? "")}" inputmode="decimal" autocomplete="off" placeholder="–" ${t.notFound ? "disabled" : ""}
         title="${t.notFound ? "Jira 查不到這張單，不能寫估點" : t.estimateVia ? `這張單在 Jira 沒有估點欄位，估點${t.estimateVia === "comment" ? "記在 Cubi 發的【估點】留言" : "只記在這台電腦"}；改了會先在下面問你` : "估點。改了（按 Enter 或離開這一格）就寫回 Jira；清空代表未估點"}" style="width:52px;text-align:right"></td>
@@ -1126,11 +1158,13 @@ function renderSettings() {
 function showTab(tab) {
   document.querySelectorAll(".cubi-nav-item").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
   for (const k of Object.keys(TABS)) $("#tab-" + k).hidden = k !== tab;
+  fitForms(); fitTickets();
 }
 $("#brand").innerHTML = ic("target", 18) + `<span class="nav-t">Sprint</span>`;
 $("#brand").title = "Sprint";
 document.querySelectorAll(".cubi-nav-item").forEach(b => { const [i, t] = TABS[b.dataset.tab]; b.innerHTML = ic(i) + `<span class="nav-t">${t}</span>`; b.title = t; b.addEventListener("click", () => showTab(b.dataset.tab)); });
 fitNav();
+for (const el of [$(".cubi-app"), $("#tab-overview")]) fitObserver.observe(el);
 setInterval(() => state && state.timers.length && document.querySelectorAll(".timer[data-since]").forEach(t => { const secs = Date.now() / 1000 - Number(t.dataset.since); t.textContent = clock(secs); t.classList.toggle("long", secs > 8 * 3600); }), 1000);
 window.addEventListener("cubisession", () => { session = window.cubiSession || null; refresh(); });
 refresh();

@@ -51,6 +51,20 @@
   .ai-reason { color: var(--cubi-ink2); flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; }
   .dir-note { color: var(--cubi-ink3); font-size: 12px; grid-column: 1 / -1; margin: 0; }
   .ai-hint { color: var(--cubi-ink3); font-size: 12px; flex-basis: 100%; }
+  /* The ＋時數, 沒有單號 and 修改 forms: one height for every control, kept in groups that wrap whole. */
+  [data-time-form] { gap: 8px 12px; align-items: center; }
+  [data-time-form] input:not([type=checkbox]), [data-time-form] select, [data-time-form] .cubi-btn { height: 32px; box-sizing: border-box; font-size: 13px; line-height: 1; }
+  [data-time-form] input:not([type=checkbox]), [data-time-form] select { padding: 0 8px; }
+  [data-time-form] .cubi-btn { padding: 0 12px; justify-content: center; min-width: 56px; }
+  [data-time-form] .grp { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; height: 32px; }
+  [data-time-form] .grp input[type=checkbox] { margin: 0; }
+  [data-time-form] .grp.actions { margin-left: auto; }
+  [data-time-form] #t-note, [data-time-form] #e-note { flex: 1 1 140px; min-width: 120px; }
+  [data-time-form] .brk { flex-basis: 100%; height: 0; }   /* line 1: what and when; line 2: note, ticks, buttons */
+  /* Inside the tickets table (wider than the card on a narrow panel, so it scrolls) a form keeps to
+     the part that shows: as wide as the scroller, held at its left edge. */
+  .scroll-x { container-type: inline-size; }
+  .scroll-x [data-time-form] { position: sticky; left: 0; max-width: calc(100cqw - 24px); box-sizing: border-box; }
   #c-estimateRules { min-height: 150px; }
   #status { display: flex; align-items: flex-start; gap: 10px; }
   #status[hidden] { display: none; }
@@ -540,25 +554,22 @@ function timeFormRow(key) {
 function timeForm(key, title) {
   const p = pendingTime;
   const kinds = `<select id="t-kind">${["開發", "會議", "討論", "其他"].map(k => `<option ${k === p.kind ? "selected" : ""}>${k}</option>`).join("")}</select>`;
-  const cal = `<label class="cubi-row" style="gap:4px"><input id="t-cal" type="checkbox" ${p.calendar ? "checked" : ""}> 寫進行事曆</label>`;
-  const buttons = `<span class="cubi-spacer"></span><button class="cubi-btn primary small" id="t-save">加</button><button class="cubi-btn small" id="t-cancel">取消</button>`;
-  const start = `<label class="cubi-row" style="gap:4px">開始 <input id="t-start" type="datetime-local" value="${esc(p.start)}"></label><button class="cubi-btn small" id="t-now" title="填回現在往前推所填時數">現在</button>`;
+  const cal = `<label class="grp"><input id="t-cal" type="checkbox" ${p.calendar ? "checked" : ""}> 寫進行事曆</label>`;
+  const buttons = `<span class="grp actions"><button class="cubi-btn primary" id="t-save">加</button><button class="cubi-btn" id="t-cancel">取消</button></span>`;
+  const start = `<span class="grp"><label for="t-start">開始</label><input id="t-start" type="datetime-local" value="${esc(p.start)}"><button class="cubi-btn" id="t-now" title="填回現在往前推所填時數">現在</button></span>`;
+  const hours = `<span class="grp"><input id="t-hours" type="number" min="0.02" max="24" step="0.25" value="${esc(p.hours)}" style="width:80px"> 小時</span>`;
   if (!key) return `<div class="cubi-inline cubi-row" data-time-form=""><b>${esc(title)}</b>
-    ${start}
-    <input id="t-hours" type="number" min="0.02" max="24" step="0.25" value="${esc(p.hours)}" style="width:80px"> 小時
-    ${kinds}
+    ${start}${hours}${kinds}<span class="brk"></span>
     <input id="t-note" placeholder="做了什麼（必填）" value="${esc(p.note)}" size="18">
-    ${cal}
-    <label class="cubi-row" style="gap:4px"><input id="t-counted" type="checkbox" ${p.counted ? "checked" : ""}> 計入工時</label>
+    ${cal}<label class="grp"><input id="t-counted" type="checkbox" ${p.counted ? "checked" : ""}> 計入工時</label>
     ${buttons}</div>`;
   // Hours and kind always; 進階 holds the start (filled in, she changes the hour and minute), the
   // note and the calendar. Without 進階 it ended just now.
   return `<div class="cubi-inline cubi-row" data-time-form="${esc(key)}"><b>${esc(title)}</b>
-    <input id="t-hours" type="number" min="0.02" max="24" step="0.25" value="${esc(p.hours)}" style="width:80px"> 小時
-    ${kinds}
-    ${p.more ? `${start}<input id="t-note" placeholder="備註" value="${esc(p.note)}" size="18">${cal}`
-      : `<span class="cubi-muted">${nowHint(key)}${p.calendar ? " · 寫進行事曆" : ""}</span>
-        <button class="cubi-btn small" id="t-more" title="開始時間、備註、要不要寫進行事曆">進階</button>`}
+    ${hours}${kinds}
+    ${p.more ? `${start}<span class="brk"></span><input id="t-note" placeholder="備註" value="${esc(p.note)}" size="18">${cal}`
+      : `<span class="grp"><span class="cubi-muted">${nowHint(key)}${p.calendar ? " · 寫進行事曆" : ""}</span>
+        <button class="cubi-btn" id="t-more" title="開始時間、備註、要不要寫進行事曆">進階</button></span>`}
     ${buttons}</div>`;
 }
 function keepTimeForm() {
@@ -578,12 +589,12 @@ function editRow(x, columns, where) {
   if (!editTime || editTime.id !== x.id || editTime.where !== where) return "";
   const e = editTime, off = e.timed ? "disabled" : "";
   return `<tr><td colspan="${columns}" style="white-space:normal;overflow:visible"><div class="cubi-inline cubi-row" data-time-form="edit"><b>修改</b>
-    <input id="e-hours" type="number" min="0.02" max="24" step="0.25" value="${esc(e.hours)}" style="width:80px"> 小時
-    <input id="e-start" type="datetime-local" value="${esc(e.start)}" ${off}>
+    <span class="grp"><input id="e-hours" type="number" min="0.02" max="24" step="0.25" value="${esc(e.hours)}" style="width:80px"> 小時</span>
+    <span class="grp"><label for="e-start">開始</label><input id="e-start" type="datetime-local" value="${esc(e.start)}" ${off}></span>
     <select id="e-kind" ${off}>${[...new Set([x.kind, "開發", "會議", "討論", "其他"])].map(k => `<option ${k === e.kind ? "selected" : ""}>${esc(k)}</option>`).join("")}</select>
     <input id="e-note" placeholder="${x.key ? "備註" : "做了什麼（必填）"}" value="${esc(e.note)}" size="18" ${off}>
     ${e.timed ? `<span class="cubi-muted">計時記下的，只能改長度</span>` : ""}
-    <span class="cubi-spacer"></span><button class="cubi-btn primary small" id="e-save">儲存</button><button class="cubi-btn small" id="e-cancel">取消</button></div></td></tr>`;
+    <span class="grp actions"><button class="cubi-btn primary" id="e-save">儲存</button><button class="cubi-btn" id="e-cancel">取消</button></span></div></td></tr>`;
 }
 function keepEditForm() {
   if (!editTime || !$(`[data-time-form="edit"]`)) return;

@@ -67,7 +67,7 @@ def main(argv):
         result = {"error": f"缺少欄位 {e}"}
     except Exception as e:  # noqa: BLE001 — one line for the card, the traceback for the log
         traceback.print_exc(file=sys.stderr)
-        result = {"error": f"{type(e).__name__}: {e}"}
+        result = {"error": f"內部錯誤，請把這段訊息截圖給 RD：{type(e).__name__}: {e}"}
     finally:
         store.close()
     if argv[1] in RAW_ACTIONS:

@@ -25,9 +25,10 @@ class WorklogTests(unittest.TestCase):
         self.store.new_sprint("Sprint7", "", "2026-11-16", "2026-11-29")
         self.store.add_to_sprint("Sprint7", "PROJ-1")
         self.store.ticket("PROJ-1").update(summary="甲", estimate=1.0)
-        clock = mock.patch("worklog.time.time", return_value=NOW)
-        clock.start()
-        self.addCleanup(clock.stop)
+        for target in ("worklog.time.time", "panel.time.time"):
+            clock = mock.patch(target, return_value=NOW)
+            clock.start()
+            self.addCleanup(clock.stop)
 
     def tearDown(self):
         self.store.close()
@@ -53,6 +54,21 @@ class WorklogTests(unittest.TestCase):
         self.assertEqual(self.store.segments["manual"][-1]["end"], NOW)
         sprint.time_add(self.store, {"key": "PROJ-1", "minutes": 30, "start": "2026-11-17T09:00"})
         self.assertEqual(self.store.segments["manual"][-1]["start"], ts("2026-11-17T09:00"))
+
+    def test_an_added_stretch_says_which_sprint_holds_it(self):
+        self.store.new_sprint("Sprint6", "", "2026-11-02", "2026-11-15")
+        state = sprint.time_add(self.store, {"key": "PROJ-1", "minutes": 60})
+        self.assertEqual(state["added"], {"key": "PROJ-1", "start": NOW - 3600, "end": NOW, "sprint": "Sprint7", "inSprint": True})
+        state = sprint.time_add(self.store, {"key": "PROJ-1", "minutes": 30, "start": "2026-11-10T09:00"})
+        self.assertEqual((state["added"]["sprint"], state["added"]["inSprint"], state["added"]["end"] - state["added"]["start"]), ("Sprint6", False, 1800))
+        self.store.add_to_sprint("Sprint6", "PROJ-1")
+        state = sprint.time_add(self.store, {"key": "PROJ-1", "minutes": 30, "start": "2026-11-10T09:00"})
+        self.assertTrue(state["added"]["inSprint"])                              # in Sprint6's tickets now
+        state = sprint.time_add(self.store, {"key": "PROJ-1", "minutes": 30, "start": "2026-12-25T09:00"})
+        self.assertEqual((state["added"]["sprint"], state["added"]["inSprint"]), (None, False))   # no sprint holds it
+        state = sprint.time_add(self.store, {"key": "", "minutes": 30, "start": "2026-11-17T09:00", "note": "支援"})
+        self.assertEqual((state["added"]["key"], state["added"]["sprint"], state["added"]["inSprint"]), (None, "Sprint7", True))
+        self.assertEqual((state["nowSprint"], state["nowSprintKeys"]), ("Sprint7", ["PROJ-1"]))
 
     def test_F5_2_lengths_that_are_refused(self):
         for bad, why in ((0, "1 分鐘到 24 小時"), (-30, "1 分鐘到 24 小時"), (1441, "1 分鐘到 24 小時"), (0.5, "1 分鐘到 24 小時"),

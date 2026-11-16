@@ -1,5 +1,6 @@
 """The panel's state (what every panel action answers with) and its settings."""
 import os
+import time
 from datetime import date
 
 import autopush
@@ -24,7 +25,8 @@ def panel_state(store, p):
     state = {"config": {k: store.config.get(k) for k in CONFIG_KEYS}, "netrcFound": os.path.exists(os.path.expanduser(store.config["netrc"])),
              "sprints": [{"label": s["label"], "name": s.get("name"), "start": s.get("start"), "end": s.get("end"), "waiting": bool(s.get("waiting"))}
                          for s in sorted(store.sprints["sprints"].values(), key=lambda s: (s.get("start") or "", s["label"]))],
-             "current": store.sprints.get("current"), "session": binding, "history": review.history(store),
+             "current": store.sprints.get("current"), "nowSprint": (now := store.sprint_of({"start": time.time()})),
+             "nowSprintKeys": (store.sprint(now) or {}).get("keys", []) if now else [], "session": binding, "history": review.history(store),
              "today": date.today().isoformat(), "site": store.config["site"], "warnings": list(store.warnings),
              "bindings": bindings_overview(store, sprint, session),
              "timers": [{"sid": sid, "name": store.bindings.get(sid, {}).get("name", sid[:8]), "start": t["start"],

@@ -19,7 +19,7 @@ def time_add(store, p):
     else:
         start = parse_start(p.get("start"))
     if p.get("key"):
-        store.add_manual(p["key"], start, p.get("minutes"), p.get("kind", "開發"), p.get("note", ""), p.get("calendar", False))
+        entry = store.add_manual(p["key"], start, p.get("minutes"), p.get("kind", "開發"), p.get("note", ""), p.get("calendar", False))
         autopush.queue(store, [p["key"]])
     else:
         s = sprint_at(store, start) or store.current_sprint()
@@ -27,9 +27,17 @@ def time_add(store, p):
             raise ValueError("先建一個 sprint")
         if not (p.get("note") or "").strip():
             raise ValueError("沒有單號的工作要寫說明")
-        store.add_manual(None, start, p.get("minutes"), p.get("kind", "會議"), p["note"].strip(), p.get("calendar", False),
-                         sprint=s["label"], counted=p.get("counted", True) is not False)
-    return panel_state(store, p)
+        entry = store.add_manual(None, start, p.get("minutes"), p.get("kind", "會議"), p["note"].strip(), p.get("calendar", False),
+                                 sprint=s["label"], counted=p.get("counted", True) is not False)
+    state = panel_state(store, p)
+    # What was written and the sprint whose days hold it: the panel says so when that is not the
+    # sprint on screen (its hours there do not move).
+    label = store.sprint_of(entry)
+    held = store.sprint(label) if label else None
+    # Work with no ticket counts in its sprint as it is; a ticket only where it is one of the sprint's.
+    state["added"] = {"key": entry["key"], "start": entry["start"], "end": entry["end"], "sprint": label,
+                      "inSprint": bool(held) and (entry["key"] is None or entry["key"] in held.get("keys", []))}
+    return state
 
 
 def parse_start(text):

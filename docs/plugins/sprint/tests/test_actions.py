@@ -14,8 +14,8 @@ from store import Store
 
 SESSION = {"id": "s1", "name": "PROJ-1", "cwd": None, "segments": []}
 NO_JIRA = "讀不到"
-# How main() words an exception no handler expected.
-UNHANDLED = re.compile(r"^[A-Za-z]+(Error|Exception): ")
+# How main() words an exception no handler expected (in Chinese since batch 24, the type kept).
+UNHANDLED = re.compile(r"^內部錯誤，請把這段訊息截圖給 RD：[A-Za-z]+(Error|Exception): ")
 
 # action → (payload, what the output must hold, the error it must carry or None)
 CASES = {
@@ -98,6 +98,19 @@ class ActionTests(unittest.TestCase):
         finally:
             sys.stdin = real
         return code, out.getvalue()
+
+    def test_an_exception_no_handler_expected_is_said_in_chinese_with_its_type(self):
+        def broken(store, p):
+            raise TypeError("unsupported operand")
+        real = sprint.ACTIONS["panel.state"]
+        sprint.ACTIONS["panel.state"] = broken
+        try:
+            code, text = self.run_main("panel.state", "{}")
+        finally:
+            sprint.ACTIONS["panel.state"] = real
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(text)["error"], "內部錯誤，請把這段訊息截圖給 RD：TypeError: unsupported operand")
+        self.assertRegex(json.loads(text)["error"], UNHANDLED)                 # what the other tests look for
 
     def test_the_table_the_dispatcher_and_the_manifest_list_the_same_actions(self):
         with open(os.path.join(os.path.dirname(os.path.abspath(sprint.__file__)), "manifest.json"), encoding="utf-8") as f:

@@ -815,7 +815,9 @@ function bindOverview(el) {
     e.currentTarget.disabled = true;
     const keys = (state.sprint?.reassigned || []).map(a => a.key);
     confirmReassign = false;
-    if (await refresh("tickets.remove", { keys }) && !state.notices?.length) status(`已把 ${keys.length} 張移出這一期`);
+    if (await refresh("tickets.remove", { keys })) { if (!state.notices?.length) status(`已把 ${keys.length} 張移出這一期`); return; }
+    // Failed: the error stays on screen and the question comes back with a live 移出 to try again.
+    confirmReassign = true; render(true);
   });
   el.querySelectorAll("[data-remove-ticket]").forEach(b => b.addEventListener("click", () => { confirmRemove = confirmRemove === b.dataset.removeTicket ? null : b.dataset.removeTicket; render(); }));
   el.querySelectorAll("[data-remove-yes]").forEach(b => b.addEventListener("click", async () => { confirmRemove = null; if (await refresh("ticket.remove", { key: b.dataset.removeYes }) && !state.notices?.length) status(`${b.dataset.removeYes} 已移出這一期`); }));

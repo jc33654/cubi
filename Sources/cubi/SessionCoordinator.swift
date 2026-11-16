@@ -73,8 +73,9 @@ final class SessionCoordinator {
         sync()
     }
 
-    /// Which event a robot click arrived with: two log lines with the same event number are one
-    /// click handled twice. eventNumber and clickCount exist on mouse events only and raise on any
+    /// Which event a robot click arrived with. The two clicks of a double click can share an event
+    /// number (clicks=1, then clicks=2); two lines alike in both number and clicks are one click
+    /// handled twice. eventNumber and clickCount exist on mouse events only and raise on any
     /// other (a key press on the 跳到終端 button, VoiceOver), so those get their type alone.
     static func clickTrace(_ event: NSEvent?) -> String {
         guard let event else { return "event=none" }

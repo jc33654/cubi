@@ -65,6 +65,12 @@
   .dir-row .dir-key { width: 56px; font-weight: 600; flex: none; }
   .dir-row input { flex: 1 1 auto; min-width: 0; }
   .ai-pick { margin: 0; vertical-align: middle; width: 16px; height: 16px; }   /* in the star's column while choosing */
+  .ai-pick:disabled { opacity: .3; cursor: not-allowed; }
+  /* A narrow panel: the side menu keeps only its icons (names on hover), the room goes to the page. */
+  .cubi-app.nav-mini { grid-template-columns: 60px 1fr; }
+  .nav-mini .cubi-nav { padding: 18px 8px; }
+  .nav-mini .cubi-brand, .nav-mini .cubi-nav-item { justify-content: center; padding-left: 0; padding-right: 0; }
+  .nav-mini .nav-t { display: none; }
   .ai-pickbar { margin: 4px 0 8px; }
   .outside-tag { display: block; margin: 2px 0 0 auto; padding: 0; border: 0; background: none; font: inherit; font-size: 11px; color: var(--cubi-ink3); cursor: pointer; text-decoration: underline dotted; }
   .outside-tag.on, .outside-tag:hover { color: var(--cubi-accent); }
@@ -229,6 +235,14 @@ document.addEventListener("focusout", e => {
 // than a narrow panel and scrolls sideways). Measured here, not a CSS container query: a
 // `container-type` on the scroller made the page jump to the top on every redraw (batch 27).
 let compactTickets = false;
+// Below this the full side menu would push the tickets table into its compact layout; the menu goes
+// to icons instead. Measured like the table (no CSS container query: batch 27).
+const NAV_MINI_BELOW = 1140;
+function fitNav() {
+  const app = document.querySelector(".cubi-app");
+  app.classList.toggle("nav-mini", app.clientWidth < NAV_MINI_BELOW);
+}
+window.addEventListener("resize", fitNav);
 // The tickets table needs ~860px for all its columns; on a narrower panel it switches to the compact
 // layout. Measured after a redraw (not a CSS container query, which made the page jump: batch 27),
 // redrawn once more only when that changes.
@@ -260,6 +274,7 @@ function render(quiet = false) {
   const open = [...document.querySelectorAll("details[id][open]")].map(d => d.id);
   renderOverview(); renderReview(); renderSettings();
   for (const id of open) document.getElementById(id)?.setAttribute("open", "");
+  fitNav();
   fitForms();
   fitTickets();
   if (!quiet && state.warnings && state.warnings.length) status(state.warnings.join("；"), true);
@@ -1081,8 +1096,10 @@ function showTab(tab) {
   document.querySelectorAll(".cubi-nav-item").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
   for (const k of Object.keys(TABS)) $("#tab-" + k).hidden = k !== tab;
 }
-$("#brand").innerHTML = ic("target", 18) + "Sprint";
-document.querySelectorAll(".cubi-nav-item").forEach(b => { const [i, t] = TABS[b.dataset.tab]; b.innerHTML = ic(i) + t; b.addEventListener("click", () => showTab(b.dataset.tab)); });
+$("#brand").innerHTML = ic("target", 18) + `<span class="nav-t">Sprint</span>`;
+$("#brand").title = "Sprint";
+document.querySelectorAll(".cubi-nav-item").forEach(b => { const [i, t] = TABS[b.dataset.tab]; b.innerHTML = ic(i) + `<span class="nav-t">${t}</span>`; b.title = t; b.addEventListener("click", () => showTab(b.dataset.tab)); });
+fitNav();
 setInterval(() => state && state.timers.length && document.querySelectorAll(".timer[data-since]").forEach(t => { const secs = Date.now() / 1000 - Number(t.dataset.since); t.textContent = clock(secs); t.classList.toggle("long", secs > 8 * 3600); }), 1000);
 window.addEventListener("cubisession", () => { session = window.cubiSession || null; refresh(); });
 refresh();

@@ -518,21 +518,23 @@ function timeForm(key, title) {
   const kinds = `<select id="t-kind">${["開發", "會議", "討論", "其他"].map(k => `<option ${k === p.kind ? "selected" : ""}>${k}</option>`).join("")}</select>`;
   const cal = `<label class="cubi-row" style="gap:4px"><input id="t-cal" type="checkbox" ${p.calendar ? "checked" : ""}> 寫進行事曆</label>`;
   const buttons = `<span class="cubi-spacer"></span><button class="cubi-btn primary small" id="t-save">加</button><button class="cubi-btn small" id="t-cancel">取消</button>`;
+  const start = `<label class="cubi-row" style="gap:4px">開始 <input id="t-start" type="datetime-local" value="${esc(p.start)}"></label><button class="cubi-btn small" id="t-now" title="填回現在往前推所填時數">現在</button>`;
   if (!key) return `<div class="cubi-inline cubi-row" data-time-form=""><b>${esc(title)}</b>
-    <input id="t-start" type="datetime-local" value="${esc(p.start)}">
+    ${start}
     <input id="t-hours" type="number" min="0.02" max="24" step="0.25" value="${esc(p.hours)}" style="width:80px"> 小時
     ${kinds}
     <input id="t-note" placeholder="做了什麼（必填）" value="${esc(p.note)}" size="18">
     ${cal}
     <label class="cubi-row" style="gap:4px"><input id="t-counted" type="checkbox" ${p.counted ? "checked" : ""}> 計入工時</label>
     ${buttons}</div>`;
+  // Hours and kind always; 進階 holds the start (filled in, she changes the hour and minute), the
+  // note and the calendar. Without 進階 it ended just now.
   return `<div class="cubi-inline cubi-row" data-time-form="${esc(key)}"><b>${esc(title)}</b>
     <input id="t-hours" type="number" min="0.02" max="24" step="0.25" value="${esc(p.hours)}" style="width:80px"> 小時
-    <label class="cubi-row" style="gap:4px">開始 <input id="t-start" type="datetime-local" value="${esc(p.start)}" title="不填就是剛剛結束（現在往前推這段時數）"></label>
-    <span class="cubi-muted">${nowHint(key)}</span>
-    ${p.more ? `${kinds}<input id="t-note" placeholder="備註" value="${esc(p.note)}" size="18">${cal}`
-      : `<span class="cubi-muted">${esc(p.kind)}${p.calendar ? " · 寫進行事曆" : ""}</span>
-        <button class="cubi-btn small" id="t-more" title="種類、備註、要不要寫進行事曆">進階</button>`}
+    ${kinds}
+    ${p.more ? `${start}<input id="t-note" placeholder="備註" value="${esc(p.note)}" size="18">${cal}`
+      : `<span class="cubi-muted">${nowHint(key)}${p.calendar ? " · 寫進行事曆" : ""}</span>
+        <button class="cubi-btn small" id="t-more" title="開始時間、備註、要不要寫進行事曆">進階</button>`}
     ${buttons}</div>`;
 }
 function keepTimeForm() {
@@ -588,12 +590,13 @@ async function saveEditForm() {
 // The sprint the time falls in now, when it is not the one on screen: a stretch that "ended just
 // now" goes there, and the hours here stay as they were.
 // A date-and-time field filled only in part reads as empty: that would quietly be "ended just now".
+const START_EMPTY = "開始時間空白：按旁邊的「現在」填回剛剛結束的時間，或填一個時間";
 const START_HALF = "開始時間沒填完整：日期、時、分都要填（例如 2026/11/16 上午 10:30），或整個清空代表剛剛結束";
 function nowHint(key) {
   const now = state.nowSprint;
-  if (!now || now === state.sprint?.label) return "不填＝剛剛結束";
-  if (!(state.nowSprintKeys || []).includes(key)) return `不填＝剛剛結束，但 ${esc(key)} 不在 ${esc(now)} 的工單裡，那一期看不到`;
-  return `不填＝剛剛結束，會算在 ${esc(now)}`;
+  if (!now || now === state.sprint?.label) return "剛剛結束";
+  if (!(state.nowSprintKeys || []).includes(key)) return `剛剛結束，但 ${esc(key)} 不在 ${esc(now)} 的工單裡，那一期看不到`;
+  return `剛剛結束，會算在 ${esc(now)}`;
 }
 const hhmm = t => new Date(t * 1000).toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 function addedSaid(a) {
@@ -604,9 +607,10 @@ function addedSaid(a) {
   if (!a.inSprint) return `${what}，但這段時間在 ${a.sprint}，而 ${a.key} 不在 ${a.sprint} 的工單裡，哪一期都看不到；要算進去，請把它加進 ${a.sprint}`;
   return `${what}，但這段時間在 ${a.sprint}，不在目前看的 ${state.sprint?.label}，這裡的時數不會變；切到 ${a.sprint} 就看得到`;
 }
+// The start a form fills in: now, less the hours. It follows the hours until she types a start.
+const startFor = hours => localTime(Date.now() / 1000 - Number(hours) * 3600);
 function openTimeForm(key) {
-  const d = new Date(Date.now() - 3600 * 1000), local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-  pendingTime = pendingTime && pendingTime.key === key ? null : { key, start: key ? "" : local, hours: 1, more: false, kind: "會議", note: "", calendar: true, counted: true, focus: true };
+  pendingTime = pendingTime && pendingTime.key === key ? null : { key, start: startFor(1), startTouched: false, hours: 1, more: false, kind: "會議", note: "", calendar: true, counted: true, focus: true };
   render();
 }
 
@@ -622,15 +626,24 @@ function bindOverview(el) {
   $("#sp-save", el)?.addEventListener("click", () => refresh("sprint.update", { name: $("#sp-name").value, start: $("#sp-start").value, end: $("#sp-end").value, goal: $("#sp-goal").value }, el.querySelectorAll("[id^=sp-]")));
   $("#sp-resync", el)?.addEventListener("click", () => refresh("sprint.sync", { replace: true }));
   $("#t-save", el)?.addEventListener("click", async () => {
-    if ($("#t-start")?.validity.badInput) return status(START_HALF, true);
+    const startField = $("#t-start");
+    if (startField?.validity.badInput) return status(START_HALF, true);
+    if (startField && !startField.value) return status(START_EMPTY, true);
     keepTimeForm(); const p = pendingTime;
     if (!(Number(p.hours) > 0)) return status("時數要填大於 0 的數字（例如 1 或 0.5）", true);
     pendingTime = null;
-    const payload = p.key ? { key: p.key, minutes: Math.round(Number(p.hours) * 60), kind: p.kind, note: p.note, calendar: p.calendar, ...(p.start ? { start: p.start } : {}) }
+    const payload = p.key ? { key: p.key, minutes: Math.round(Number(p.hours) * 60), kind: p.kind, note: p.note, calendar: p.calendar, ...(p.more ? { start: p.start } : {}) }
       : { key: p.key, start: p.start, minutes: Math.round(Number(p.hours) * 60), kind: p.kind, note: p.note, calendar: p.calendar, counted: p.counted };
     if (!await refresh("time.add", payload)) { pendingTime = p; render(); return; }
     if (!(state.warnings || []).length) status(addedSaid(state.added), !!state.added && state.added.sprint !== state.sprint?.label); });
-  $("#t-more", el)?.addEventListener("click", () => { keepTimeForm(); pendingTime = { ...pendingTime, more: true }; render(); });
+  $("#t-more", el)?.addEventListener("click", () => { keepTimeForm(); const p = pendingTime;
+    pendingTime = { ...p, more: true, ...(p.startTouched || !(Number(p.hours) > 0) ? {} : { start: startFor(p.hours) }) }; render(); });
+  $("#t-hours", el)?.addEventListener("input", e => {
+    const f = $("#t-start"); if (f && pendingTime && !pendingTime.startTouched && Number(e.target.value) > 0) f.value = startFor(e.target.value); });
+  $("#t-start", el)?.addEventListener("input", () => { if (pendingTime) pendingTime.startTouched = true; });
+  $("#t-now", el)?.addEventListener("click", () => {
+    const h = $("#t-hours")?.value; if (!(Number(h) > 0)) return status("時數要填大於 0 的數字（例如 1 或 0.5）", true);
+    $("#t-start").value = startFor(h); if (pendingTime) pendingTime.startTouched = false; });
   el.querySelectorAll("[data-edit-time]").forEach(b => b.addEventListener("click", () => openEditForm(b.dataset.editTime, b.dataset.editWhere)));
   $("#e-save", el)?.addEventListener("click", saveEditForm);
   $("#e-cancel", el)?.addEventListener("click", () => { editTime = null; render(); });

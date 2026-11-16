@@ -70,6 +70,17 @@ class WorklogTests(unittest.TestCase):
         self.assertEqual((state["added"]["key"], state["added"]["sprint"], state["added"]["inSprint"]), (None, "Sprint7", True))
         self.assertEqual((state["nowSprint"], state["nowSprintKeys"]), ("Sprint7", ["PROJ-1"]))
 
+    def test_the_panel_says_which_sprint_holds_each_of_the_tickets_stretches(self):
+        # Sprint7 on screen; PROJ-1 is in it. Its stretches anywhere are listed, each with the sprint
+        # whose days hold it, so the panel can show the ones outside this sprint (and delete them).
+        self.store.new_sprint("Sprint6", "", "2026-11-02", "2026-11-13")
+        self.store.sprints["current"] = "Sprint7"
+        for start in ("2026-11-18T09:00", "2026-11-10T09:00", "2026-12-25T09:00"):
+            sprint.time_add(self.store, {"key": "PROJ-1", "minutes": 30, "start": start})
+        manual = sprint.panel_state(self.store, {})["sprint"]["manual"]
+        self.assertEqual([m["sprintOf"] for m in sorted(manual, key=lambda m: m["start"])], ["Sprint6", "Sprint7", None])
+        self.assertNotIn("sprintOf", self.store.segments["manual"][0])            # said to the panel, not stored
+
     def test_F5_2_lengths_that_are_refused(self):
         for bad, why in ((0, "1 分鐘到 24 小時"), (-30, "1 分鐘到 24 小時"), (1441, "1 分鐘到 24 小時"), (0.5, "1 分鐘到 24 小時"),
                          (float("nan"), "1 分鐘到 24 小時"), (True, "要是數字"), ("abc", "要是數字"), (None, "要是數字"), ([60], "要是數字")):

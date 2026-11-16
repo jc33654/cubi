@@ -37,7 +37,10 @@ def panel_state(store, p):
                            "tickets": rows, "metrics": review.metrics(rows, other), "other": other, "burndown": review.burndown(sprint, rows),
                            "capacity": review.capacity(sprint, rows, store.hours_per_point()),
                            "categories": list(review.CATEGORIES),
-                           "manual": [m for m in store.segments["manual"] if set(m.get("shares") or [m["key"]]) & set(sprint["keys"])],
+                           # The sprint's tickets' stretches, wherever they fall; sprintOf says which sprint's days hold
+                           # each (the reading the hours are counted by), so the panel can say "not in this one".
+                           "manual": [{**m, "sprintOf": store.sprint_of(m)} for m in store.segments["manual"]
+                                      if set(m.get("shares") or [m["key"]]) & set(sprint["keys"])],
                            "reviewDay": iso(cadence.review_day(sprint)), "planningDay": iso(cadence.planning_day(sprint)),
                            "reviewDue": remind.is_due(sprint, cadence.today()), "reviewEvent": sprint.get("reviewEvent")}
     state.update(proposals(store, sprint), hints=hints(store), hoursPush=autopush.status(store))

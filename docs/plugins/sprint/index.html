@@ -64,6 +64,8 @@
   .cubi-field:has(> #c-estimateSessionDir) { grid-column: 1 / -1; }   /* as wide as the project rows below it */
   .dir-row .dir-key { width: 56px; font-weight: 600; flex: none; }
   .dir-row input { flex: 1 1 auto; min-width: 0; }
+  .ai-pick { margin: 0; vertical-align: middle; width: 16px; height: 16px; }   /* in the star's column while choosing */
+  .ai-pickbar { margin: 4px 0 8px; }
   .outside-tag { display: block; margin: 2px 0 0 auto; padding: 0; border: 0; background: none; font: inherit; font-size: 11px; color: var(--cubi-ink3); cursor: pointer; text-decoration: underline dotted; }
   .outside-tag.on, .outside-tag:hover { color: var(--cubi-accent); }
   /* The ＋時數, 沒有單號 and 修改 forms: one height for every control, kept in groups that wrap whole. */
@@ -137,6 +139,7 @@ const statusShows = msg => !$("#status").hidden && $("#status-text").textContent
 $("#status-close").innerHTML = ic("x", 14) || "✕";
 $("#status-close").addEventListener("click", () => {
   if (briefLateText && statusShows(briefLateText)) briefLateClosed = true;
+  if (aiLateText && statusShows(aiLateText)) aiLateClosed = true;
   status("");
 });
 const bridge = () => window.webkit.messageHandlers.cubi;
@@ -385,7 +388,9 @@ function renderOverview() {
       <div class="cubi-card"><div class="cubi-card-head"><h2 class="cubi-card-title">剩餘點數</h2><span class="cubi-spacer"></span><span class="cubi-muted">— 理想　● 實際</span></div><div class="chart">${burndownChart(s.burndown)}</div></div>
     </div>
     <div class="cubi-card" style="margin-top:16px"><div class="cubi-card-head"><h2 class="cubi-card-title">工單</h2><span class="cubi-muted">${m.tickets} 張</span><span class="cubi-spacer"></span>
+      <button class="cubi-btn small ${aiPicking ? "on" : ""}" id="ai-multi" title="勾幾張單一起開 AI 估點（一次最多 ${AI_MAX} 張，每張都會跳一次確認）">${ic("sparkles", 13)}多張 AI 估點</button>
       <input id="add-key" placeholder="加單號" size="12"><button class="cubi-btn small" id="add-btn">${ic("plus", 13)}加</button></div>
+    ${aiPicking ? aiPickBar() : ""}
     <div class="scroll-x"><table class="cubi-table fixed tickets${compactTickets ? " compact" : ""}" style="min-width:${compactTickets ? 480 : 720}px">
     <colgroup>${compactTickets ? `<col style="width:28px"><col><col style="width:0"><col style="width:70px"><col style="width:60px"><col style="width:70px"><col style="width:72px"><col style="width:110px">`
       : `<col style="width:36px"><col style="width:112px"><col><col style="width:104px"><col style="width:68px"><col style="width:150px"><col style="width:128px"><col style="width:${152 + (state.config.actualPointsField ? 34 : 0) + (state.config.actualHoursField ? 34 : 0)}px">`}</colgroup>
@@ -393,7 +398,7 @@ function renderOverview() {
   for (const t of sortedTickets(s.tickets)) {
     const rt = remainTone(t), budget = (t.estimate || 0) * hpp * 3600;
     const used = budget ? Math.min(100, Math.max(0, (budget - t.remaining) / budget * 100)) : 0;
-    html += `<tr><td><button class="star ${t.starred ? "on" : ""}" data-star="${esc(t.key)}" title="${t.starred ? "取消重點" : "標成重點"}">${t.starred ? "★" : "☆"}</button></td>
+    html += `<tr><td>${aiPicking ? aiPickBox(t) : `<button class="star ${t.starred ? "on" : ""}" data-star="${esc(t.key)}" title="${t.starred ? "取消重點" : "標成重點"}">${t.starred ? "★" : "☆"}</button>`}</td>
       <td class="clip"><span class="key"><span class="cubi-dot ${statusTone(t)}"></span>${link(t.key)}</span>${compactTickets ? `<div class="sum2" title="${esc(t.summary)}">${esc(t.summary)}</div>` : ""}</td>
       <td class="clip sum" title="${esc(t.summary)}${t.notes ? "\n" + esc(t.notes) : ""}">${esc(t.summary)}</td>
       <td title="${t.notFound ? "這張單在 Jira 被刪除，或你沒有查看權限。這裡是最後一次讀到的資料；不要它就按這列最右邊的 ✕ 移出這一期" : esc(t.status || "")}">${t.notFound
@@ -561,7 +566,7 @@ function manualCard(s) {
 // A ticket's code folder: its project's own, else the default (the plugin picks the same way).
 const projectOf = key => String(key).split("-")[0];   // the plugin reads it the same way
 const codeDirFor = key => { const d = state.config.estimateDirs; return (d && typeof d === "object" ? d : {})[projectOf(key)] || state.config.estimateSessionDir; };
-const aiEstimateOff = t => !codeDirFor(t.key) ? `${projectOf(t.key)} 還沒指定程式碼資料夾（設定分頁「AI 估點」）` : t.notFound ? "Jira 查不到這張單" : t.suggestWaiting ? "已在估，要重開請先按「不等了」" : "";
+const aiEstimateOff = t => !codeDirFor(t.key) ? `${projectOf(t.key)} 還沒指定程式碼資料夾（設定分頁「AI 估點」）` : t.notFound ? "Jira 查不到這張單" : t.suggestWaiting ? "已在估，要重開請先按「不等了」" : aiRoom() <= 0 ? `已經有 ${AI_MAX} 張在等 AI 估點，等它們回來或按「不等了」再開` : "";
 const CONFIDENCE_TONE = { "高": "good", "中": "warning", "低": "danger" };
 // Under a ticket: the AI estimate on its way, or back and waiting for a person. Only the number is
 // ever written to Jira (estimate.set); the reason stays here.
@@ -691,6 +696,12 @@ function openTimeForm(key) {
 
 function bindOverview(el) {
   bindHeader(el);
+  $("#ai-multi", el)?.addEventListener("click", () => { aiPicking = !aiPicking; aiPicked.clear(); render(); });
+  el.querySelectorAll("[data-ai-pick]").forEach(b => b.addEventListener("change", () => {
+    if (b.checked) aiPicked.add(b.dataset.aiPick); else aiPicked.delete(b.dataset.aiPick); render(); }));
+  $("#ai-pick-cancel", el)?.addEventListener("click", () => { aiPicking = false; aiPicked.clear(); render(); });
+  $("#ai-pick-go", el)?.addEventListener("click", () => {
+    const keys = [...aiPicked]; aiPicking = false; aiPicked.clear(); render(); startEstimates(keys); });
   $("#add-btn", el)?.addEventListener("click", () => refresh("ticket.add", { key: $("#add-key").value }, [$("#add-key")]));
   $("#bind-btn", el)?.addEventListener("click", () => refresh("session.bind", { key: $("#bind-key").value }, [$("#bind-key")]));
   $("#shares-btn", el)?.addEventListener("click", () => refresh("session.shares", { shares: currentShares(), applyToSprint: true }, el.querySelectorAll("[data-share]")));
@@ -841,7 +852,97 @@ const estimateLate = key => `還沒收到 ${key} 的 AI 估點，請到終端看
 const startBrief = () => openSession("review.brief", {}, () => JSON.stringify(state.sprint?.review), BRIEF_LATE, "Claude 寫回來了");
 // Waiting: [null, true]; back: [suggestion, false]; gone (taken, dismissed, given up on): "null".
 const aiSnapshot = key => { const t = state.sprint?.tickets.find(t => t.key === key); return JSON.stringify(t?.suggestion || t?.suggestPending ? [t.suggestion, t.suggestPending] : null); };
-const startEstimate = key => openSession("estimate.brief", { key }, () => aiSnapshot(key), estimateLate(key), `${key} 的 AI 估點回來了`, `${key} 的 AI 估點更新了`);
+// AI estimates waited for, by ticket: each keeps its own last snapshot; one look every 30 seconds
+// serves them all, and stops when none is left. A ticket leaves when its answer is gone (taken,
+// dismissed, given up on) or after an hour. ✨ on one ticket and a batch of several go the same way.
+const AI_MAX = 3;   // Jade: no more than three at once
+const aiWaits = new Map();
+let aiPoll = null, aiLateText = "", aiLateClosed = false;
+const aiLate = () => {
+  // Not one given up on since the last look (不等了): its answer is "null" before the look drops it.
+  const late = [...aiWaits].filter(([k, w]) => !w.got && Date.now() - w.started >= BRIEF_LATE_AFTER && aiSnapshot(k) !== "null").map(([k]) => k);
+  return late.length === 1 ? estimateLate(late[0]) : late.length ? `還沒收到 ${late.join("、")} 的 AI 估點，請到終端看那些 session；指令被拒絕時，請它照資料檔的寫法重寫` : "";
+};
+function sayAiLate() {
+  const text = aiLate();
+  if (text && !aiLateClosed) { aiLateText = text; status(text, true); }
+}
+// Opens one restricted session for `key` and starts waiting for it. False when it was not opened
+// (refused, cancelled): then nothing is left waiting for it.
+// Opened, or why not ("" when the user cancelled cubi's confirmation): a batch says it at the end.
+async function openEstimate(key) {
+  let b;
+  try { b = await call("estimate.brief", { key }); } catch (e) { return { ok: false, why: String(e.message || e) }; }
+  status(`${key}：正在開 Claude Code…`);
+  let r;
+  try { r = await bridge().postMessage({ action: "session.new", args: [JSON.stringify({ directory: b.directory, prompt: b.prompt, restricted: true, readDirs: b.readDirs, allowActions: b.allowActions })] }); }
+  catch (e) { r = { ok: false, err: String(e.message || e) }; }
+  if (!r.ok) {
+    // estimate.brief already marked it as asked: let it go, or ✨ would stay off for the hour.
+    await refresh("estimate.dismiss", { key }, [], true);
+    const why = r.cancelled ? "" : r.err || "開不了 session";
+    status(why && `${key}：${why}`, !!why);
+    return { ok: false, why };
+  }
+  await refresh("panel.state", {}, [], true);   // what the action itself changed is not the answer
+  if (aiSnapshot(key) === "null") { status(`${key} 已按「不等了」，這個 session 寫回來也不會收`); return { ok: true }; }
+  aiWaits.set(key, { before: aiSnapshot(key), got: false, started: Date.now() });
+  aiLateClosed = false;
+  // The session is never asked anything, so a write-back it got wrong is refused without a sign
+  // here. Past three minutes, say where to look; a later look says it again when nothing else is
+  // on screen, until the user closes it.
+  setTimeout(() => { if (aiWaits.has(key) && !aiWaits.get(key).got) sayAiLate(); }, BRIEF_LATE_AFTER);
+  if (!aiPoll) aiPoll = setInterval(lookForAi, 30000);
+  status(`已在 ${b.directory} 開 ${key} 的 session；每 30 秒看一次，寫好就出現（資料檔 ${b.file}）`);
+  return { ok: true };
+}
+async function lookForAi() {
+  if (!await refresh("panel.state", {}, [], true)) return;
+  const said = [];
+  for (const [key, w] of aiWaits) {
+    const now = aiSnapshot(key);
+    if (now === "null") { aiWaits.delete(key); continue; }                 // taken, dismissed: quietly
+    if (now !== w.before) { said.push(`${key} 的 AI 估點${w.got ? "更新了" : "回來了"}`); w.before = now; w.got = true; continue; }
+    if (Date.now() - w.started > 3600 * 1000) aiWaits.delete(key);
+  }
+  if (!aiWaits.size) { clearInterval(aiPoll); aiPoll = null; }
+  const waiting = [...aiWaits.values()].filter(w => !w.got).length;
+  if (said.length) status(said.join("；") + (waiting ? `（還在等 ${waiting} 張）` : ""));
+  else if ($("#status").hidden) sayAiLate();
+}
+const startEstimate = key => openEstimate(key);
+// Choosing tickets for several at once: a box before each key; one that cannot be estimated now
+// (no code folder, waiting already, not in Jira) cannot be ticked, and no more than AI_MAX may be
+// asked for at once, counting those still waiting.
+let aiPicking = false;
+const aiPicked = new Set();
+const aiRoom = () => AI_MAX - (state.sprint?.tickets || []).filter(t => t.suggestWaiting).length;
+function aiPickBox(t) {
+  const off = aiEstimateOff(t), full = !aiPicked.has(t.key) && aiPicked.size >= aiRoom();
+  return `<input type="checkbox" class="ai-pick" data-ai-pick="${esc(t.key)}" ${aiPicked.has(t.key) ? "checked" : ""} ${off || full ? "disabled" : ""}
+    title="${esc(off || (full ? `一次最多 ${AI_MAX} 張（包含還在等的）` : "勾起來一起估"))}">`;
+}
+function aiPickBar() {
+  const room = aiRoom();
+  return `<div class="cubi-row ai-suggest ai-pickbar">${ic("sparkles", 14)}<span class="ai-reason">${room > 0
+      ? `勾要一起 AI 估點的單，最多 ${room} 張${room < AI_MAX ? `（另有 ${AI_MAX - room} 張還在等）` : ""}。每張都會跳一次 Cubi 的確認，取消一張就停在那裡。`
+      : `已經有 ${AI_MAX} 張在等 AI 估點，等它們回來或按「不等了」再開新的。`}</span><span class="cubi-spacer"></span>
+    <button class="cubi-btn small primary" id="ai-pick-go" ${aiPicked.size ? "" : "disabled"}>開始估（${aiPicked.size} 張）</button><button class="cubi-btn small" id="ai-pick-cancel">取消</button></div>`;
+}
+// Several at once: one after another, each with cubi's own confirmation; a cancel or a failure
+// stops the rest, and the last word keeps why it failed.
+async function startEstimates(keys) {
+  let opened = 0, stop = null;
+  for (const key of keys) {
+    const r = await openEstimate(key);
+    if (!r.ok) { stop = { key, why: r.why }; break; }
+    opened++;
+  }
+  if (!stop) return;
+  if (!stop.why) { status(`開了 ${opened} 張的 AI 估點，其餘 ${keys.length - opened} 張沒有開`, opened === 0); return; }
+  const rest = keys.length - opened - 1;
+  status((opened ? `開了 ${opened} 張的 AI 估點；` : "") + `${stop.key} 沒開成：${stop.why}` + (rest ? `；其餘 ${rest} 張沒有開` : ""), true);
+}
 // A restricted Claude Code session that hands its answer back to the panel: `action` writes its data
 // file, cubi opens it, then the panel looks every 30 seconds until `snapshot` changes. With `again`,
 // it keeps looking for a resend until the answer is gone (taken or dismissed: snapshot "null") or

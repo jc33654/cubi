@@ -28,6 +28,14 @@ enum IconRenderer {
         writePNG(ImageRenderer(content: IconView()), scale: 1, to: path)
     }
 
+    private static func renderedMiss(_ mode: String) -> TerminalFocus.Miss {
+        switch mode {
+        case "focus-miss-named": return .named
+        case "focus-miss-untitled": return .untitled
+        default: return .unnamed
+        }
+    }
+
     /// The island as the panel would show it, over a mid-grey background, at 2× for inspection.
     @MainActor
     static func renderIsland(mode: String, botState: String, to path: String) -> Bool {
@@ -66,7 +74,7 @@ enum IconRenderer {
             state.usage = StatuslineInfo(fiveHour: UsageWindow(usedPercent: 42, resetsAt: Date().timeIntervalSince1970 + 5400),
                                          sevenDay: UsageWindow(usedPercent: 81, resetsAt: Date().timeIntervalSince1970 + 200_000),
                                          costUSD: 1.45)
-        case "focus-miss", "focus-miss-named", "focus-miss-detail":
+        case "focus-miss", "focus-miss-named", "focus-miss-untitled", "focus-miss-detail":
             // A robot click that found no window of its own: the wing's two lines; the ticker in the detail.
             state.mode = mode == "focus-miss-detail" ? .expanded : .compact
             if mode == "focus-miss-detail" { state.selectedSession = "alpha" }
@@ -74,7 +82,7 @@ enum IconRenderer {
                                          sevenDay: UsageWindow(usedPercent: 81, resetsAt: Date().timeIntervalSince1970 + 200_000),
                                          costUSD: 1.45)
             state.focusMissShown = true
-            state.focusMissLines = (mode == "focus-miss-named" ? TerminalFocus.Miss.named : .unnamed).wing
+            state.focusMissLines = renderedMiss(mode).wing
         case "diff":
             state.mode = .expanded
             state.showingDiffFor = "alpha"
@@ -119,7 +127,7 @@ enum IconRenderer {
                 ], truncated: false)
             }
             if bs == .tired { bot.model.contextPercent = 92 }
-            if i == 0, mode.hasPrefix("focus-miss") { bot.ticker = (mode == "focus-miss-named" ? TerminalFocus.Miss.named : .unnamed).ticker }
+            if i == 0, mode.hasPrefix("focus-miss") { bot.ticker = renderedMiss(mode).ticker }
             if i == 0 {
                 bot.cwd = "/Users/me/Documents/cubi"
                 bot.client = HookClient(termProgram: "ghostty", bundleID: "com.mitchellh.ghostty", termSessionID: nil, tty: "/dev/ttys014")

@@ -39,6 +39,14 @@ enum TerminalFocus {
                                   ticker: "沒跳過去：同資料夾有好幾個 Claude 分不出來，到那個視窗打 /rename 取名字就點得到")
         static let named = Miss(wing: ["找不到它的視窗", "同名的分頁太多"],
                                 ticker: "沒跳過去：有好幾個分頁符合這個名字，請關掉不用的或換個名字")
+        /// Named, yet no tab's title ends with the name (t=0): the title has not caught up with it.
+        static let untitled = Miss(wing: ["找不到它的視窗", "標題對不上"], ticker: "標題對不上，請再打一次 /rename")
+
+        /// The wording for a "none:…" answer (see ghosttyScript) about a session with or without a name.
+        static func of(answer: String, named: Bool) -> Miss {
+            guard named else { return .unnamed }
+            return answer.hasPrefix("none:t=0,") ? .untitled : .named
+        }
     }
 
     /// `onMiss` runs (on the main actor) when Ghostty answered but no single tab was the session's
@@ -63,7 +71,7 @@ enum TerminalFocus {
         case .ghostty:
             let named = name
             Task { missed(await run(ghosttyScript(name: named, cwd: cwd), label: "Ghostty \(info.name) \(info.id.prefix(8)) \(named.isEmpty ? "unnamed" : "named")", fallbackBundle: ghosttyBundle),
-                          named.isEmpty ? .unnamed : .named, onMiss) }
+                          !named.isEmpty, onMiss) }
         case nil where bundle == desktopBundle:
             focusDesktop(info)
         case nil where !bundle.isEmpty:
@@ -75,8 +83,8 @@ enum TerminalFocus {
     }
 
     /// The script ran and said "none": no window of its own was found (an error is not a miss).
-    private static func missed(_ result: (ok: Bool, error: String), _ miss: Miss, _ onMiss: (@MainActor (Miss) -> Void)?) {
-        if !result.ok, result.error.hasPrefix("none"), let onMiss { onMiss(miss) }
+    private static func missed(_ result: (ok: Bool, error: String), _ named: Bool, _ onMiss: (@MainActor (Miss) -> Void)?) {
+        if !result.ok, result.error.hasPrefix("none"), let onMiss { onMiss(.of(answer: result.error, named: named)) }
     }
 
     /// Without an identity, ask each scriptable terminal that is running; stop at the first match.
@@ -199,31 +207,35 @@ enum TerminalFocus {
     /// no jump beats a wrong one; a lone "Claude Code" title is not a match either (that is just
     /// whichever tab was last cleared). Prints "ok:title" or "ok:cwd", else "none:" with how many
     /// terminals each step found (t: title, n: title and cwd, c: cwd), for the log.
-    static func ghosttyScript(name: String, cwd: String) -> String {
+    /// A variable named like a scripting term is that term: assigning to `titled` compiles and then
+    /// fails at run time (-10006), even outside any `tell`, which broke every robot click in build
+    /// 165. The script's own names are made-up words (hitsTitle, matchedBy…); a test runs each one.
+    /// `focus: false` runs the same matching and only says what it found (`--probe-ghostty`).
+    static func ghosttyScript(name: String, cwd: String, focus: Bool = true) -> String {
         """
         tell application "Ghostty"
           set target to missing value
-          set via to ""
-          set titled to -1
-          set narrowedCount to -1
-          set inCwd to -1
+          set matchedBy to ""
+          set hitsTitle to -1
+          set hitsNarrow to -1
+          set hitsCwd to -1
           if \(quote(name)) is not "" then
             set hits to {}
             repeat with t in terminals
               if (name of t) ends with (" " & \(quote(name))) then set end of hits to t
             end repeat
-            set titled to count of hits
+            set hitsTitle to count of hits
             if (count of hits) > 1 and \(quote(cwd)) is not "" then
               set narrowed to {}
               repeat with t in hits
                 if (working directory of t) is \(quote(cwd)) then set end of narrowed to t
               end repeat
               set hits to narrowed
-              set narrowedCount to count of hits
+              set hitsNarrow to count of hits
             end if
             if (count of hits) is 1 then
               set target to item 1 of hits
-              set via to "title"
+              set matchedBy to "title"
             end if
           end if
           if target is missing value and \(quote(cwd)) is not "" then
@@ -231,15 +243,15 @@ enum TerminalFocus {
             repeat with t in terminals
               if (working directory of t) is \(quote(cwd)) then set end of hits to t
             end repeat
-            set inCwd to count of hits
+            set hitsCwd to count of hits
             if (count of hits) is 1 then
               set target to item 1 of hits
-              set via to "cwd"
+              set matchedBy to "cwd"
             end if
           end if
-          if target is missing value then return "none:t=" & titled & ",n=" & narrowedCount & ",c=" & inCwd
-          focus target
-          return "ok:" & via
+          if target is missing value then return "none:t=" & hitsTitle & ",n=" & hitsNarrow & ",c=" & hitsCwd
+          \(focus ? "focus target" : "")
+          return "ok:" & matchedBy
         end tell
         """
     }

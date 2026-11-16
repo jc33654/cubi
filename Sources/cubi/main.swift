@@ -20,8 +20,21 @@ if let i = arguments.firstIndex(of: "--render-icon"), i + 1 < arguments.count {
     exit(ok ? 0 : 1)
 }
 
+// Ask the running Ghostty which tab a session's name and directory match, without switching to it
+// (the very script a robot click runs, `focus target` left out). Prints ok:title, ok:cwd or none:…:
+//   --probe-ghostty <name, or "" for none> <cwd>
+if let i = arguments.firstIndex(of: "--probe-ghostty"), i + 2 < arguments.count {
+    let script = MainActor.assumeIsolated { TerminalFocus.ghosttyScript(name: arguments[i + 1], cwd: arguments[i + 2], focus: false) }
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+    process.arguments = ["-e", script]
+    try? process.run()
+    process.waitUntilExit()
+    exit(process.terminationStatus)
+}
+
 // Offline preview of the island for layout work:
-//   --render-island <hidden|compact|expanded|detail|approval|question|usage|usage-compact|focus-miss|focus-miss-named|focus-miss-detail|diff|floating|floating-approval> <botState> <out.png>
+//   --render-island <hidden|compact|expanded|detail|approval|question|usage|usage-compact|focus-miss|focus-miss-named|focus-miss-untitled|focus-miss-detail|diff|floating|floating-approval> <botState> <out.png>
 if let i = arguments.firstIndex(of: "--render-island"), i + 3 < arguments.count {
     let ok = IconRenderer.renderIsland(mode: arguments[i + 1], botState: arguments[i + 2], to: arguments[i + 3])
     exit(ok ? 0 : 1)

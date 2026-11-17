@@ -19,6 +19,7 @@ def time_add(store, p):
         start = time.time() - check_minutes(p.get("minutes")) * 60
     else:
         start = parse_start(p.get("start"))
+    before = session_hours(store)
     if p.get("key"):
         entry = store.add_manual(p["key"], start, p.get("minutes"), p.get("kind", "開發"), p.get("note", ""), p.get("calendar", False))
     else:
@@ -37,8 +38,30 @@ def time_add(store, p):
     held = store.sprint(label) if label else None
     # Work with no ticket counts in its sprint as it is; a ticket only where it is one of the sprint's.
     state["added"] = {"key": entry["key"], "start": entry["start"], "end": entry["end"], "sprint": label,
-                      "inSprint": bool(held) and (entry["key"] is None or entry["key"] in held.get("keys", []))}
+                      "inSprint": bool(held) and (entry["key"] is None or entry["key"] in held.get("keys", [])),
+                      "cut": cut_by(before, session_hours(store)), "autoPush": bool(autopush.field(store))}
     return state
+
+
+def session_hours(store):
+    """Each ticket's seconds, all time, and each work item's automatic seconds over every sprint:
+    what a manual record can take minutes from."""
+    out = {(k, None): b["total"] for k, b in store.hours_by_key().items()}
+    for s in store.sprints["sprints"].values():
+        for w in store.item_work(s):
+            out[(None, w["item"])] = out.get((None, w["item"]), 0.0) + w["seconds"]
+    return out
+
+
+def cut_by(before, after):
+    """What a manual record took minutes from, a minute or more: {key, seconds} for a ticket (its
+    total went down: the record's own ticket never does), {item, seconds} for a work item."""
+    out = []
+    for (key, item), secs in sorted(before.items(), key=lambda x: (x[0][0] or "", x[0][1] or "")):
+        gone = secs - after.get((key, item), 0.0)
+        if gone >= 60:
+            out.append({"key": key, "seconds": gone} if key else {"item": item, "seconds": gone})
+    return out
 
 
 def parse_start(text):
@@ -134,6 +157,8 @@ def session_bind(store, p):
         bound = store.bound_keys(rec) if rec else []
         if bound:
             raise ValueError(f"這個 session 已綁 {'、'.join(bound)}。單號和工作項目只能二選一：先解除單號再綁「{name}」")
+        if rec.get("item") and rec["item"] != name:
+            raise ValueError(f"已綁「{rec['item']}」。一個 session 只能一個工作項目：先解除再綁「{name}」")
         store.bind_item(s["id"], name)
     return panel_state(store, p) if "session" in p else session_info(store, s)
 
@@ -160,11 +185,17 @@ def session_unbind(store, p):
 
 
 def item_update(store, p):
-    """From the panel: whether work item `name` counts in the sprint's hours, from now on."""
+    """From the panel: whether work item `name` counts in the sprint's hours, for the whole sprint of
+    now (earlier ones stay) and what comes after."""
     if not isinstance(p.get("counted"), bool):
         raise ValueError("「算進 sprint 投入」要是開或關")
-    store.set_item_counted(str(p.get("name") or ""), p["counted"])
-    return panel_state(store, p)
+    name = str(p.get("name") or "")
+    label = store.set_item_counted(name, p["counted"], p.get("now") or time.time())
+    state = panel_state(store, p)
+    held = store.sprint(label) if label else None
+    secs = next((it["seconds"] for it in store.items_overview(held) if it["name"] == name), 0.0) if held else 0.0
+    state["itemChanged"] = {"name": name, "counted": p["counted"], "sprint": label, "seconds": secs}
+    return state
 
 
 def session_shares(store, p):

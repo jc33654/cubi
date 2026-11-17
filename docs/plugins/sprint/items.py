@@ -2,8 +2,8 @@
 
 A session has tickets or one work item, never both. The item's time is work with no ticket: the
 session's own stretches and its timer, each stamped when it is written with whether the item
-counts in the sprint's hours (changing that later moves only what is still running). Kept on this
-machine only: never written to Jira, never put on the calendar."""
+counts in the sprint's hours (changing that later moves the whole sprint of now, never an earlier
+one). Kept on this machine only: never written to Jira, never put on the calendar."""
 import re
 
 from hours import SESSION_KIND
@@ -45,16 +45,25 @@ class ItemsMixin:
     def unbind_item(self, sid):
         self.bindings.get(sid, {}).pop("item", None)
 
-    def set_item_counted(self, name, counted):
-        """From now on; the stretch a session of the item is in the middle of follows too."""
+    def set_item_counted(self, name, counted, now):
+        """For the item's whole sprint that holds `now` (or the one on screen when none does): its
+        stretches and timed records starting in it follow, and so does what is written from now on;
+        earlier sprints keep what they had. Returns that sprint's label (None without any)."""
         items = self.sprints.get("items", {})
         if name not in items:
             raise ValueError(f"沒有「{name}」這個工作項目")
         items[name]["counted"] = counted
+        label = self.sprint_of({"start": now}) or self.sprints.get("current")
+        if not label:
+            return None
         for sess in self.segments["sessions"].values():
-            for seg in sess.values():
-                if seg.get("item") == name and seg.get("open"):
+            for start, seg in sess.items():
+                if seg.get("item") == name and self.sprint_of({"start": float(start)}) == label:
                     seg["counted"] = counted
+        for m in self.segments["manual"]:
+            if m.get("item") == name and self.sprint_of(m) == label:
+                m["counted"] = counted
+        return label
 
     def item_work(self, sprint):
         """The sprint's automatic time on work items, per item and counted-or-not, without the

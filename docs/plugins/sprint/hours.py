@@ -15,12 +15,21 @@ class HoursMixin:
     def record_segments(self, session, shares, item=None):
         """Upsert the stretches cubi reports; the shares (or the work item, `item` = {item,
         counted}) a stretch started with stay with it. A stretch first seen now is marked `added`
-        (see hours_by_key)."""
+        (see hours_by_key). A stretch marked running that this report does not have at all
+        ended while cubi was not looking (it quit or restarted, or the stretch was too short for cubi
+        to keep): it is marked ended, and `lost`: where it really ended is unknown, so it never goes
+        on the calendar (it never could while it was marked running)."""
         sess = self.segments["sessions"].setdefault(session["id"], {})
+        if "segments" in session:
+            seen = {str(int(seg["start"])) for seg in session["segments"] or []}
+            for start, entry in sess.items():
+                if entry.get("open") and start not in seen:
+                    entry.update(open=False, lost=True)
         for seg in session.get("segments") or []:
             entry = sess.setdefault(str(int(seg["start"])), {"shares": shares, "added": time.time(), **(item or {})})
             entry["end"] = seg["end"]
             entry["open"] = bool(seg.get("open"))
+            entry.pop("lost", None)
             entry["name"] = session.get("name", "")
             if not entry.get("shares") and not entry.get("item"):
                 entry["shares"] = shares
@@ -224,7 +233,7 @@ class HoursMixin:
             for start, seg in sess.items():
                 keys = list((seg.get("shares") or {}).keys())
                 length = seg["end"] - float(start)
-                if seg.get("open") or not keys or seg["end"] < now - window or not 60 <= length <= MAX_ENTRY:
+                if seg.get("open") or seg.get("lost") or not keys or seg["end"] < now - window or not 60 <= length <= MAX_ENTRY:
                     continue
                 # The session name often starts with the keys themselves; say each once.
                 name = " ".join(w for w in (seg.get("name") or "").split() if w.upper() not in keys)

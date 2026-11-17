@@ -58,7 +58,8 @@ class WorklogTests(unittest.TestCase):
     def test_an_added_stretch_says_which_sprint_holds_it(self):
         self.store.new_sprint("Sprint6", "", "2026-11-02", "2026-11-15")
         state = sprint.time_add(self.store, {"key": "PROJ-1", "minutes": 60})
-        self.assertEqual(state["added"], {"key": "PROJ-1", "start": NOW - 3600, "end": NOW, "sprint": "Sprint7", "inSprint": True})
+        self.assertEqual(state["added"], {"key": "PROJ-1", "start": NOW - 3600, "end": NOW, "sprint": "Sprint7", "inSprint": True,
+                                          "cut": [], "autoPush": False})
         state = sprint.time_add(self.store, {"key": "PROJ-1", "minutes": 30, "start": "2026-11-10T09:00"})
         self.assertEqual((state["added"]["sprint"], state["added"]["inSprint"], state["added"]["end"] - state["added"]["start"]), ("Sprint6", False, 1800))
         self.store.add_to_sprint("Sprint6", "PROJ-1")

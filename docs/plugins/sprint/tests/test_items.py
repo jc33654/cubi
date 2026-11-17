@@ -120,6 +120,17 @@ class ItemsTests(Base):
         with self.assertRaisesRegex(ValueError, "已綁 PROJ-2。單號和工作項目只能二選一"):
             self.bind("s2", "雜事")
 
+    def test_a_session_with_an_item_keeps_it_until_let_go(self):
+        self.bind("s1", "Cubiiii")
+        with self.assertRaisesRegex(ValueError, "已綁「Cubiiii」。一個 session 只能一個工作項目：先解除再綁「小工具開發」"):
+            self.bind("s1", "小工具開發")
+        self.bind("s1", "Cubiiii")                                                      # the same one: nothing to do
+        self.assertEqual(self.store.bindings["s1"]["item"], "Cubiiii")
+        self.assertEqual(self.store.sprints["items"], {"Cubiiii": {"counted": False}})
+        worklog.session_unbind(self.store, {**sess("s1", []), "input": "Cubiiii"})
+        self.bind("s1", "小工具開發")
+        self.assertEqual(self.store.bindings["s1"]["item"], "小工具開發")
+
     def test_a_name_that_looks_like_a_ticket_is_refused(self):
         for text in ("OTHER-12", "看 web-3 的問題", ""):
             with self.subTest(text=text), self.assertRaises(ValueError):
@@ -145,18 +156,36 @@ class ItemsTests(Base):
 
     # ---------- a work item's time ----------
 
-    def test_its_time_is_work_with_no_ticket_counted_as_it_said_then(self):
+    def test_switching_counted_moves_the_whole_sprint_of_now_and_no_earlier_one(self):
+        """Batch 39 (the owner's choice b): the switch is the item's, for all of this sprint."""
+        self.store.new_sprint("Sprint6", "", "2026-11-02", "2026-11-15")
+        self.store.sprints["current"] = "Sprint7"
+        earlier = datetime(2026, 11, 10, 9, 0).timestamp()
         self.bind("s1", "小工具開發")
-        self.report("s1", [(T0, T0 + H, False)])
-        worklog.item_update(self.store, {"name": "小工具開發", "counted": True})
-        self.report("s1", [(T0, T0 + H, False), (T0 + 2 * H, T0 + 3 * H, True)])
-        work = self.store.item_work(self.store.current_sprint())
-        self.assertEqual([(w["item"], w["counted"], w["seconds"]) for w in work], [("小工具開發", False, H), ("小工具開發", True, H)])
-        self.assertEqual(self.sprint_seconds(), 1.0)
-        # Switched off again: the stretch still running follows, the closed one stays as it was.
-        worklog.item_update(self.store, {"name": "小工具開發", "counted": False})
+        self.report("s1", [(earlier, earlier + H, False), (T0, T0 + H, False)])          # Sprint6, Sprint7
+        timed = self.store.add_manual(None, T0 + 2 * H, 30, "計時", "小工具開發", False, sprint="Sprint7",
+                                      counted=False, item="小工具開發")
+        old = self.store.add_manual(None, earlier + 2 * H, 30, "計時", "小工具開發", False, sprint="Sprint6",
+                                    counted=False, item="小工具開發")
+        self.assertEqual(self.sprint_seconds(), 0.0)
+        out = worklog.item_update(self.store, {"name": "小工具開發", "counted": True, "now": T0 + 4 * H})
+        self.assertEqual(out["itemChanged"], {"name": "小工具開發", "counted": True, "sprint": "Sprint7", "seconds": 1.5 * H})
+        self.assertEqual(self.sprint_seconds(), 1.5)                                    # closed stretch and timer both
+        self.assertTrue(timed["counted"])
+        self.assertEqual((old["counted"], self.store.segments["sessions"]["s1"][str(int(earlier))]["counted"]), (False, False))
+        self.report("s1", [(T0, T0 + H, False), (T0 + 5 * H, T0 + 6 * H, True)])          # written after: counted
+        self.assertEqual(self.sprint_seconds(), 2.5)
+        worklog.item_update(self.store, {"name": "小工具開發", "counted": False, "now": T0 + 6 * H})
         self.assertEqual(self.sprint_seconds(), 0.0)
         self.assertEqual(self.store.hours_by_key(), {})
+
+    def test_switching_with_no_sprint_holding_now_takes_the_one_on_screen(self):
+        self.bind("s1", "雜事")
+        self.report("s1", [(T0, T0 + H, False)])
+        later = datetime(2026, 12, 25, 9, 0).timestamp()                                 # no sprint holds it
+        out = worklog.item_update(self.store, {"name": "雜事", "counted": True, "now": later})
+        self.assertEqual((out["itemChanged"]["sprint"], out["itemChanged"]["seconds"]), ("Sprint7", H))
+        self.assertEqual(self.sprint_seconds(), 1.0)
 
     def test_its_timer_books_work_with_no_ticket_never_on_the_calendar_or_jira(self):
         self.store.config.update(autoPushHours=True, actualHoursField="customfield_1")
@@ -172,6 +201,26 @@ class ItemsTests(Base):
         self.assertEqual(self.sprint_seconds(), 2.0)                                   # 1 h automatic + 1 h timed, once
         self.assertEqual(self.store.calendar_entries(T0 + 3 * H), [])
         self.assertFalse(any(t.get("hoursPush") for t in self.store.tickets.values()))
+
+    def test_a_stretch_cubi_lost_while_running_is_no_longer_running(self):
+        """Cubi restarted while a stretch ran: the session's next report has a new one only."""
+        self.report("s1", [(T0, T0 + H, True)])
+        self.report("s1", [(T0 + 3 * H, T0 + 3.5 * H, True)])
+        sess = self.store.segments["sessions"]["s1"]
+        self.assertEqual({k: (v["open"], v.get("lost", False)) for k, v in sess.items()},
+                         {str(int(T0)): (False, True), str(int(T0 + 3 * H)): (True, False)})
+        self.report("s1", [(T0 + 3 * H, T0 + 3.5 * H, False)])                           # ended in sight: not lost
+        self.assertEqual((sess[str(int(T0 + 3 * H))]["open"], sess[str(int(T0 + 3 * H))].get("lost", False)), (False, False))
+        self.report("s1", [(T0, T0 + H, True)])                                          # seen again: not lost any more
+        self.report("s1", [(T0, T0 + H, False)])
+        self.assertEqual((sess[str(int(T0))]["open"], sess[str(int(T0))].get("lost", False)), (False, False))
+        self.report("s1", [(T0 + 4 * H, T0 + 4.5 * H, True)])
+        self.store.record_segments({"id": "s1", "name": "x"}, {})                         # no stretches said: left alone
+        self.assertTrue(sess[str(int(T0 + 4 * H))]["open"])
+        # The calendar keeps away from a lost one, as it did while it was marked running.
+        self.report("s5", [(T0, T0 + H, True)], {"PROJ-1": 100})
+        self.report("s5", [(T0 + 2 * H, T0 + 3 * H, False)], {"PROJ-1": 100})
+        self.assertEqual([e["start"] for e in self.store.calendar_entries(T0 + 4 * H)], [T0 + 2 * H])
 
     def test_letting_the_item_go_keeps_what_was_written(self):
         self.bind("s1", "小工具開發")
@@ -219,6 +268,25 @@ class JiraHoursTests(Base):
     def test_adding_work_with_no_ticket_over_a_session_queues_its_ticket(self):
         self.add("", T0 + H, 60)
         self.assertEqual(self.waiting(), ["PROJ-1"])
+
+    def test_adding_says_which_tickets_gave_way_and_whether_jira_follows(self):
+        self.report("s2", [(T0, T0 + 2 * H, False)], {"PROJ-1": 50, "PROJ-2": 50})
+        added = self.add("PROJ-2", T0 + H, 30)["added"]
+        # PROJ-1 (100% at most at once) lost 30m; PROJ-2 gained the record: not said to give way.
+        self.assertEqual(added["cut"], [{"key": "PROJ-1", "seconds": 0.5 * H}])
+        self.assertTrue(added["autoPush"])
+        self.assertEqual(self.add("", T0 + 5 * H, 60)["added"]["cut"], [])               # over no session
+        self.store.config["autoPushHours"] = False
+        self.assertFalse(self.add("", T0, 30)["added"]["autoPush"])
+
+    def test_a_record_over_its_own_tickets_session_is_not_said_to_cut_it(self):
+        self.assertEqual(self.add("PROJ-1", T0 + 1.5 * H, 30)["added"]["cut"], [])
+        self.assertAlmostEqual(self.hours("PROJ-1"), 2.0)
+
+    def test_adding_over_a_work_items_session_says_the_item_gave_way(self):
+        worklog.session_bind(self.store, {**sess("s7", []), "input": "小工具開發"})
+        self.report("s7", [(T0 + 4 * H, T0 + 6 * H, False)])
+        self.assertEqual(self.add("", T0 + 5 * H, 30)["added"]["cut"], [{"item": "小工具開發", "seconds": 0.5 * H}])
 
     def test_adding_another_tickets_entry_queues_both(self):
         self.add("PROJ-2", T0 + H, 60)

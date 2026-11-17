@@ -605,21 +605,27 @@ function otherCard(s, hpp) {
       <td class="num"><span class="cubi-row" style="justify-content:flex-end;flex-wrap:nowrap">${editButton(x, "other")}<button class="cubi-btn icon" data-remove-time="${esc(x.id)}" title="刪除">${ic("x", 14)}</button></span></td></tr>${editRow(x, 5, "other")}`).join("")
     + (s.itemWork || []).map(x => `<tr><td class="cubi-muted">本期自動記的</td><td class="num">${fmtH(x.seconds)}${asPts(x.seconds, hpp)}</td>
       <td class="clip" title="綁了工作項目「${esc(x.item)}」的 session 自己記的時間（扣掉補記與計時重疊的部分）"><span class="cubi-pill">自動</span> ${esc(x.item)}</td>
-      <td>${x.counted ? "" : `<span class="cubi-pill" title="記的時候這個工作項目設成不算進投入">不計入</span>`}</td><td></td></tr>`).join("");
+      <td>${x.counted ? "" : `<span class="cubi-pill" title="這個工作項目設成不算進投入（在下方「工作項目」改）">不計入</span>`}</td><td></td></tr>`).join("");
   return `<div class="cubi-card"><div class="cubi-card-head"><h2 class="cubi-card-title">沒有單號的工作</h2>${tip("會議、支援、面試…沒有 Jira 單但花了時間的事，以及綁了工作項目的 session 的時間。記在開始時間落在的那個 sprint（沒有就記在目前的）；勾「計入工時」的會算進上方投入，不算進任何一張單")}
       <span class="cubi-spacer"></span><button class="cubi-btn small" data-time="">${ic("plus", 13)}補記時間</button></div>
     ${form}${rows ? `<div class="scroll-x"><table class="cubi-table tight fixed" style="min-width:470px"><colgroup><col style="width:150px"><col style="width:120px"><col><col style="width:84px"><col style="width:84px"></colgroup><tbody>${rows}</tbody></table></div>`
       : form ? "" : `<div class="cubi-muted">還沒有。</div>`}${itemsList(hpp)}</div>`;
 }
 
+// What switching 算進 sprint 投入 did: the item's whole sprint of now follows, earlier ones stay.
+function itemChangedSaid(c) {
+  if (!c.sprint) return `「${c.name}」${c.counted ? "之後記的會算進投入" : "之後記的不算進投入"}（還沒有任何一期）`;
+  const what = c.seconds >= 60 ? `在 ${c.sprint} 的 ${fmtH(c.seconds)} ` : `（${c.sprint} 還沒記到時間）`;
+  return `「${c.name}」${what}${c.counted ? "改成算進投入" : "改成不算進投入"}，之後記的也是；之前各期不變`;
+}
 // Work items: names of her own a session is bound to instead of tickets. Only on this machine.
 function itemsList(hpp) {
   const items = state.items || [];
   if (!items.length) return "";
-  return `<div class="cubi-row" style="margin-top:12px"><b>工作項目</b>${tip("在 session 的綁定框填一個名字（不是單號）就會建立。那個 session 的時間與計時記成沒有單號的工作；只存在這台電腦，不寫 Jira、不寫行事曆。「算進 sprint 投入」改了只影響之後記的時間（正在跑的那段也跟著改），已經記下的不變")}</div>
+  return `<div class="cubi-row" style="margin-top:12px"><b>工作項目</b>${tip("在 session 的綁定框填一個名字（不是單號）就會建立。那個 session 的時間與計時記成沒有單號的工作；只存在這台電腦，不寫 Jira、不寫行事曆。「算進 sprint 投入」改了會套用到這個項目現在所在那一期（勾選下方寫的那一期，不一定是正在看的）的全部時間（自動記的與計時）和之後記的，之前各期不變")}</div>
     <table class="cubi-table tight" style="margin-top:6px"><tbody>${items.map(it => `<tr><td class="clip" title="${esc(it.name)}">${esc(it.name)}</td>
       <td class="cubi-muted">${it.sessions ? `${it.sessions} 個 session 綁著` : "沒有 session 綁著"}</td><td class="num">本期 ${fmtH(it.seconds)}${asPts(it.seconds, hpp)}</td>
-      <td class="num"><label class="cubi-row" style="justify-content:flex-end;gap:6px"><input type="checkbox" data-item-counted="${esc(it.name)}" ${it.counted ? "checked" : ""}> 算進 sprint 投入</label></td></tr>`).join("")}</tbody></table>`;
+      <td class="num"><label class="cubi-row" style="justify-content:flex-end;gap:6px"><input type="checkbox" data-item-counted="${esc(it.name)}" ${it.counted ? "checked" : ""}> 算進 sprint 投入</label><div class="cubi-muted" style="font-size:11px">套用到 ${esc(state.nowSprint || state.current || "目前這一期")} 全部；之前各期不變</div></td></tr>`).join("")}</tbody></table>`;
 }
 
 function manualCard(s) {
@@ -700,7 +706,7 @@ function timeForm(at) {
     ${buttons}${over}</div>`;
   // Hours and kind always; 進階 holds the start (filled in, she changes the hour and minute), the
   // note and the calendar. Without 進階 it ended just now.
-  const pick = `<select id="t-pick" aria-label="單號">${tickets.map(t => `<option ${t.key === p.pick ? "selected" : ""}>${esc(t.key)}</option>`).join("")}</select>`;
+  const pick = `<select id="t-pick" aria-label="單號">${byKey(tickets).map(t => `<option ${t.key === p.pick ? "selected" : ""}>${esc(t.key)}</option>`).join("")}</select>`;
   return `<div class="cubi-inline cubi-row" data-time-form="${esc(at)}"><b>補記時間</b>${mode}${pick}
     ${hours}${kinds}
     ${p.more ? `${start}<span class="brk"></span><input id="t-note" placeholder="備註" value="${esc(p.note)}" size="18">${cal}`
@@ -775,15 +781,19 @@ const hhmm = t => new Date(t * 1000).toLocaleString("zh-TW", { month: "numeric",
 function addedSaid(a) {
   if (!a) return "已記";
   const what = `已記 ${a.key || "沒有單號的工作"} ${fmtH(a.end - a.start)}（${hhmm(a.start)}–${hhmm(a.end)}）`;
-  if (a.sprint === state.sprint?.label) return what;
-  if (!a.sprint) return `${what}，但沒有任何一期涵蓋這段時間，所以不會算進哪一期的時數`;
-  if (!a.inSprint) return `${what}，但這段時間在 ${a.sprint}，而 ${a.key} 不在 ${a.sprint} 的工單裡，哪一期都看不到；要算進去，請把它加進 ${a.sprint}`;
-  return `${what}，但這段時間在 ${a.sprint}，不在目前看的 ${state.sprint?.label}，這裡的時數不會變；切到 ${a.sprint} 就看得到`;
+  const cut = (a.cut || []).length ? `；同一段時間 session 自動記的已扣掉：${a.cut.map(c => `${c.item ? `「${c.item}」` : c.key} ${fmtH(c.seconds)}`).join("、")}${a.autoPush && a.cut.some(c => !c.item) ? "，有單號的會重送 Jira 工時" : ""}` : "";
+  if (a.sprint === state.sprint?.label) return what + cut;
+  if (!a.sprint) return `${what}，但沒有任何一期涵蓋這段時間，所以不會算進哪一期的時數${cut}`;
+  if (!a.inSprint) return `${what}，但這段時間在 ${a.sprint}，而 ${a.key} 不在 ${a.sprint} 的工單裡，哪一期都看不到；要算進去，請把它加進 ${a.sprint}${cut}`;
+  return `${what}，但這段時間在 ${a.sprint}，不在目前看的 ${state.sprint?.label}，這裡的時數不會變；切到 ${a.sprint} 就看得到${cut}`;
 }
 // The start a form fills in: now, less the hours. It follows the hours until she types a start.
 const startFor = hours => localTime(Date.now() / 1000 - Number(hours) * 3600);
+// Tickets by project, then number, smallest first (PROJ-9 before PROJ-10).
+const keyParts = k => { const m = /^(.*)-(\d+)$/.exec(k); return m ? [m[1], Number(m[2])] : [k, 0]; };
+const byKey = tickets => [...tickets].sort((a, b) => { const [pa, na] = keyParts(a.key), [pb, nb] = keyParts(b.key); return pa < pb ? -1 : pa > pb ? 1 : na - nb; });
 function openTimeForm(key) {
-  pendingTime = pendingTime && pendingTime.key === key ? null : { key, noKey: !key, pick: key || state.sprint?.tickets[0]?.key || "", start: startFor(1), startTouched: false,
+  pendingTime = pendingTime && pendingTime.key === key ? null : { key, noKey: !key, pick: key || byKey(state.sprint?.tickets || [])[0]?.key || "", start: startFor(1), startTouched: false,
     hours: 1, more: false, kind: "會議", note: "", calendar: true, counted: true, focus: true };
   render();
 }
@@ -815,7 +825,7 @@ function bindOverview(el) {
     const payload = !p.noKey ? { key: p.pick, minutes: Math.round(Number(p.hours) * 60), kind: p.kind, note: p.note, calendar: p.calendar, ...(p.more ? { start: p.start } : {}) }
       : { key: "", start: p.start, minutes: Math.round(Number(p.hours) * 60), kind: p.kind, note: p.note, calendar: p.calendar, counted: p.counted };
     if (!await refresh("time.add", payload)) { pendingTime = p; render(); return; }
-    if (!(state.warnings || []).length) status(addedSaid(state.added), !!state.added && state.added.sprint !== state.sprint?.label); });
+    if (!(state.warnings || []).length) status(addedSaid(state.added), !!state.added && (state.added.sprint !== state.sprint?.label || !!(state.added.cut || []).length)); });
   $("#t-more", el)?.addEventListener("click", () => { keepTimeForm(); const p = pendingTime;
     pendingTime = { ...p, more: true, ...(p.startTouched || !(Number(p.hours) > 0) ? {} : { start: startFor(p.hours) }) }; render(); });
   $("#t-hours", el)?.addEventListener("input", e => {
@@ -830,7 +840,9 @@ function bindOverview(el) {
   $("#t-cancel", el)?.addEventListener("click", () => { pendingTime = null; render(); });
   el.querySelectorAll("[data-t-mode]").forEach(b => b.addEventListener("click", () => { keepTimeForm(); pendingTime = { ...pendingTime, noKey: b.dataset.tMode === "none" }; render(); }));
   $("#t-pick", el)?.addEventListener("change", () => { keepTimeForm(); render(); });
-  el.querySelectorAll("[data-item-counted]").forEach(c => c.addEventListener("change", () => refresh("item.update", { name: c.dataset.itemCounted, counted: c.checked }, [c])));
+  el.querySelectorAll("[data-item-counted]").forEach(c => c.addEventListener("change", async () => {
+    if (await refresh("item.update", { name: c.dataset.itemCounted, counted: c.checked }, [c]) && state.itemChanged) status(itemChangedSaid(state.itemChanged));
+  }));
   el.querySelectorAll("[data-share]").forEach(i => i.addEventListener("change", () => refresh("session.shares", { shares: currentShares() }, el.querySelectorAll("[data-share]"))));
   el.querySelectorAll("[data-unbind]").forEach(x => x.addEventListener("click", () => refresh("session.unbind", { key: x.dataset.unbind })));
   el.querySelectorAll("[data-unbind-sid]").forEach(x => x.addEventListener("click", () => refresh("session.unbind", { sid: x.dataset.unbindSid, key: x.dataset.unbindKey })));

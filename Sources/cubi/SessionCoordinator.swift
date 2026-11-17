@@ -100,16 +100,8 @@ final class SessionCoordinator {
         switch intent {
         case .dialog(let id):
             let info = id.flatMap { store.sessions[$0] }
-            newSessionWindow?.show(directory: info?.projectDirectory, terminal: info.flatMap(TerminalFocus.kind))
-        case .resume(let id):
-            guard let info = store.sessions[id], let directory = info.projectDirectory else {
-                CubiLog.write("launch: session \(id.prefix(8)) has no directory")
-                return
-            }
-            recentProjects.note(directory)
-            let request = LaunchRequest(directory: directory, prompt: nil, resume: .session(id),
-                                        terminal: TerminalFocus.kind(for: info) ?? .automatic)
-            Task { if let error = await SessionLauncher.launch(request) { SessionLauncher.alert(error) } }
+            let from = info.flatMap { i in i.projectDirectory.map { NewSessionWindow.From(id: i.id, name: i.name, directory: $0) } }
+            newSessionWindow?.show(directory: info?.projectDirectory, terminal: info.flatMap(TerminalFocus.kind), from: from)
         }
     }
 

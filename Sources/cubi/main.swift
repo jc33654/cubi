@@ -167,6 +167,10 @@ if arguments.contains("--new-session") {
         FileHandle.standardError.write(Data("cubi: not a directory: \(directory)\n".utf8))
         exit(2)
     }
+    if let refusal = DirectoryGuard.refusal(directory) {
+        FileHandle.standardError.write(Data("cubi: \(refusal.message)\n".utf8))
+        exit(2)
+    }
     let resume: SessionLaunch.Resume = value(after: "--resume").map { .session($0) } ?? (arguments.contains("--continue") ? .last : .none)
     let request = LaunchRequest(directory: directory, prompt: value(after: "--prompt"), resume: resume,
                                 terminal: terminal ?? MainActor.assumeIsolated { TerminalKind.automatic })

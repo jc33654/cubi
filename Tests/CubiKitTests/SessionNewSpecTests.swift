@@ -3,10 +3,11 @@ import Testing
 @testable import CubiKit
 
 /// The built-in `session.new` as a plugin's panel sends it (PRD F8). Directories exist by a
-/// fixed list here, so nothing depends on this machine's files.
+/// fixed list here, so nothing depends on this machine's files; the on-disk DirectoryGuard is
+/// left out (`refuses`), its own tests use real folders.
 private let existing: Set<String> = ["/proj", "/proj/回顧 資料", "/data 📁", "/a", "/b"]
 private func parse(_ json: String) throws -> SessionNewSpec {
-    try SessionNewSpec.parse(json, promptLimit: 20, home: "/Users/me") { existing.contains($0) || $0.hasPrefix("/Users/me") || $0 == "/" }
+    try SessionNewSpec.parse(json, promptLimit: 20, home: "/Users/me", refuses: { _ in false }) { existing.contains($0) || $0.hasPrefix("/Users/me") || $0 == "/" }
 }
 private func refusal(_ json: String) -> SessionNewSpec.ParseError? {
     do { _ = try parse(json); return nil } catch { return error as? SessionNewSpec.ParseError }
@@ -82,7 +83,7 @@ private func refusal(_ json: String) -> SessionNewSpec.ParseError? {
 
 @Test func sessionNewAllowsOnlyActionsTheManifestMarked() {   // F8-29, F8-35
     func parse(_ json: String) throws -> SessionNewSpec {
-        try SessionNewSpec.parse(json, promptLimit: 20, home: "/Users/me", actions: ["review.update", "notes.add"]) { existing.contains($0) }
+        try SessionNewSpec.parse(json, promptLimit: 20, home: "/Users/me", actions: ["review.update", "notes.add"], refuses: { _ in false }) { existing.contains($0) }
     }
     func refusal(_ json: String) -> SessionNewSpec.ParseError? {
         do { _ = try parse(json); return nil } catch { return error as? SessionNewSpec.ParseError }
@@ -103,7 +104,9 @@ private func refusal(_ json: String) -> SessionNewSpec.ParseError? {
     let five = Array(repeating: "\"review.update\"", count: 5).joined(separator: ",")
     #expect(refusal(#"{"directory":"/proj","restricted":true,"allowActions":["# + five + "]}") == .tooManyAllowActions)
     // A plugin that marked nothing can allow nothing.
-    #expect((try? SessionNewSpec.parse(#"{"directory":"/proj","restricted":true,"allowActions":["review.update"]}"#, promptLimit: 20) { _ in true }) == nil)
+    #expect(throws: SessionNewSpec.ParseError.unknownAction("review.update")) {
+        try SessionNewSpec.parse(#"{"directory":"/proj","restricted":true,"allowActions":["review.update"]}"#, promptLimit: 20, refuses: { _ in false }) { _ in true }
+    }
 }
 
 @Test func restrictedSettingsHoldOnlyCubisHooks() {   // F8-1: what --settings points at
@@ -194,8 +197,23 @@ private func refusal(_ json: String) -> SessionNewSpec.ParseError? {
     // Ordinary folders under home are fine, as is a name that only starts like a private one.
     #expect(try! parse(#"{"directory":"/proj","restricted":true,"readDirs":["/Users/me/Documents/回顧","/Users/me/.sshconfig-notes"]}"#).readDirs
             == ["/Users/me/Documents/回顧", "/Users/me/.sshconfig-notes"])
-    // The working directory itself is the user's choice (set in the plugin's settings): not this rule's business.
-    #expect(try! parse(#"{"directory":"/Users/me","restricted":true}"#).directory == "/Users/me")
+    // Batch 37: the working directory is held to the same rule (the session reads all of it).
+    for path in ["/", "/Users/me", "~", "/Users/me/.ssh", "/Users/me/.aws/x"] {
+        #expect(refusal(#"{"directory":""# + path + #""}"#) == .guardedDirectory((path as NSString).expandingTildeInPath == path ? path : "/Users/me"), "\(path)")
+    }
+    #expect(try! parse(#"{"directory":"/Users/me/Documents/proj"}"#).directory == "/Users/me/Documents/proj")
+}
+
+@Test func sessionNewAsksTheGuardAboutTheDirectoryAndEveryReadDir() {
+    var asked: [String] = []
+    func parse(_ json: String, refusing: String) throws -> SessionNewSpec {
+        try SessionNewSpec.parse(json, promptLimit: 20, home: "/Users/me", refuses: { asked.append($0); return $0 == refusing }) { existing.contains($0) }
+    }
+    _ = try? parse(#"{"directory":"/proj","restricted":true,"readDirs":["/a","/b"]}"#, refusing: "")
+    #expect(asked == ["/proj", "/a", "/b"])
+    #expect(throws: SessionNewSpec.ParseError.guardedDirectory("/proj")) { try parse(#"{"directory":"/proj"}"#, refusing: "/proj") }
+    #expect(throws: SessionNewSpec.ParseError.privateReadDir("/b")) { try parse(#"{"directory":"/proj","restricted":true,"readDirs":["/a","/b"]}"#, refusing: "/b") }
+    #expect(SessionNewSpec.ParseError.guardedDirectory("/x").message.hasPrefix("不能在 /x 開 session"))
 }
 
 @Test func denyRulesAnchoredToTheirFileAreRewrittenToMeanTheSameElsewhere() {   // F8-19

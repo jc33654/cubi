@@ -5,7 +5,7 @@ import Foundation
 /// single-quoted so the shell passes it through untouched, and the prompt comes after `--` so a
 /// first message that starts with `-` is not taken for an option.
 public enum SessionLaunch {
-    public enum Resume: Equatable, Sendable {
+    public enum Resume: Hashable, Sendable {
         case none
         /// `--continue`: the most recent conversation in that directory, whichever it is.
         case last

@@ -18,7 +18,7 @@ struct SessionDetailView: View {
                     }
                 StateChip(label: bot.stateLabel, resting: bot.resting)
                 Spacer()
-                IconButton(symbol: "plus.square.on.square", label: "在這個專案再開一個 session") { state.onNewSession(.dialog(fromSession: bot.id)) }
+                IconButton(symbol: "plus.square.on.square", label: "開新 session（這個專案）：新對話或接續這個 session") { state.onNewSession(.dialog(fromSession: bot.id)) }
                 IconButton(symbol: bot.resting ? "sun.max" : "moon", label: bot.resting ? "起床上班" : "去睡覺") { state.onSessionAction(bot.resting ? .wake : .rest, bot.id) }
                 IconButton(symbol: "eye.slash", label: "放生（從島上拿掉，要你的時候再回來）") { state.onSessionAction(.dismiss, bot.id) }
                 IconButton(symbol: "arrow.up.forward.app", label: "跳到終端", tint: StatusStyle.info) { state.onFocus(bot.id) }

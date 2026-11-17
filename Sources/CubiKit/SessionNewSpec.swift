@@ -27,6 +27,7 @@ public struct SessionNewSpec: Equatable, Sendable {
         case tooManyReadDirs
         case noReadDir(String)
         case privateReadDir(String)
+        case guardedDirectory(String)
         case allowActionsShape
         case allowActionsWithoutRestricted
         case tooManyAllowActions
@@ -43,6 +44,7 @@ public struct SessionNewSpec: Equatable, Sendable {
             case .tooManyReadDirs: return "session.new 的 readDirs 最多 \(maxReadDirs) 個"
             case .noReadDir(let path): return "找不到 readDirs 的目錄 \(path)"
             case .privateReadDir(let path): return "readDirs 不能是 \(path)（家目錄本身、根目錄，或放金鑰與憑證的目錄）"
+            case .guardedDirectory(let path): return DirectoryGuard.Refusal.guarded(path).message
             case .allowActionsShape: return "session.new 的 allowActions 要是動作名稱的陣列"
             case .allowActionsWithoutRestricted: return "session.new 的 allowActions 只能跟 restricted: true 一起用"
             case .tooManyAllowActions: return "session.new 的 allowActions 最多 \(maxAllowActions) 個"
@@ -58,7 +60,11 @@ public struct SessionNewSpec: Equatable, Sendable {
     ///
     /// `actions` are the commands the asking plugin's manifest marks `"sessionAllowed": true`:
     /// only those may be named in `allowActions` — a name, never a command line or a rule.
+    ///
+    /// `refuses` says whether a folder may not be used (the directory and every readDir): by
+    /// default DirectoryGuard, which looks at the folders themselves on disk.
     public static func parse(_ raw: String?, promptLimit: Int, home: String = NSHomeDirectory(), actions: Set<String> = [],
+                             refuses: (String) -> Bool = { DirectoryGuard.refusal($0) != nil },
                              isDirectory: (String) -> Bool) throws -> SessionNewSpec {
         guard let raw, let value = try? JSONDecoder().decode(JSONValue.self, from: Data(raw.utf8)), let object = value.object,
               let dir = object["directory"]?.string, !dir.isEmpty else { throw ParseError.shape }
@@ -66,6 +72,7 @@ public struct SessionNewSpec: Equatable, Sendable {
         let home = absolute(home, home: home)
         let directory = absolute(dir, home: home)
         guard directory.hasPrefix("/"), isDirectory(directory) else { throw ParseError.noDirectory(directory) }
+        guard !isPrivate(directory, home: home), !refuses(directory) else { throw ParseError.guardedDirectory(directory) }
         let prompt = object["prompt"]?.string.flatMap { $0.isEmpty ? nil : String($0.prefix(promptLimit)) }
 
         var restricted = false
@@ -86,7 +93,7 @@ public struct SessionNewSpec: Equatable, Sendable {
                 guard let text = item.string, !text.isEmpty else { throw ParseError.readDirsShape }
                 let path = absolute(text, home: home)
                 guard path.hasPrefix("/"), isDirectory(path) else { throw ParseError.noReadDir(path) }
-                guard !isPrivate(path, home: home) else { throw ParseError.privateReadDir(path) }
+                guard !isPrivate(path, home: home), !refuses(path) else { throw ParseError.privateReadDir(path) }
                 if !readDirs.contains(path) { readDirs.append(path) }
             }
         default: throw ParseError.readDirsShape

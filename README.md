@@ -57,7 +57,7 @@
 - 📊 **plan 用量** — 右翼顯示 5h / 7d 用掉的百分比，跨 session 合併，快到上限會變色。
 - 🪫 **context 快滿會露出疲憊表情** — 不用自己去看 status line。
 - 🧭 **點 Cubiii 跳到它的終端** — Terminal.app、Ghostty 都認得分頁；在 Claude app 裡開的 session 會切到那段對話。
-- ➕ **從瀏海開新 session** — 選專案、填第一句話、要不要接續上次，⌘↩ 就開在你的終端裡。
+- ➕ **從瀏海開新 session** — 選專案、填第一句話、新對話或接續，⌘↩ 就開在你的終端裡。
 - 🌙 **晚安區** — 放著不管的 session 自動進晚安區不佔位子；也可以手動「去睡覺」或「放生」。
 - 🎨 **換形狀、換顏色、拖著排順序** — 全部記得住，Cubi 重啟、session 回來都還在。
 - 🪟 **拖出來變浮動視窗** — 沒瀏海的螢幕、外接螢幕都能用，拖回頂端就回去。
@@ -144,8 +144,8 @@ open ~/Applications/Cubi.app
 | 把島拖離瀏海 | 變成浮動視窗，可以拖到任何螢幕（外接螢幕也行）；卡片會在浮動視窗裡展開，瀏海那邊不再顯示。拖回瀏海頂端放開就回去；右鍵選單「浮動視窗」也能切換 |
 | 右鍵機器人 → 去睡覺／起床上班／放生 | **工作中**的 session 在瀏海旁那排；**晚安**的不排，只留一個「💤 N」膠囊，展開清單才分區。沉睡 12 小時自動進晚安區（預設；設定頁可調 1–24 小時或從不。有動靜就回來）；手動「去睡覺」要等你再送訊息、或它要問你才回來。「放生」整個消失，同樣在你再送訊息、它要問你、或 session 重新開始時回來（自動壓縮觸發的重新開始不算）。兩者都記得住 Cubi 重啟 |
 | 右鍵 → 保持顯示 | 島不收回，休息時停在 compact；滑入就直接展開，設定頁可關掉（關了滑入只停在 compact，點一下才展開） |
-| 用量旁的 ＋（島一滑入就能按，不用展開）、右鍵 → 開新 session…（⌘N） | 對話框：選專案目錄（Cubi 開過的 + Claude Code 記錄過的 `~/.claude.json` projects，或「瀏覽…」）、選填第一句話（一開就送出）、「接續上次對話」（`claude --continue`）、終端（自動＝Ghostty 有裝就 Ghostty，否則 Terminal.app）。⌘↩ 開始。Ghostty 開在最前面視窗的新分頁、Terminal.app 開新視窗，指令當第一行輸入打進去，所以 PATH、shell 都是你自己的 |
-| 右鍵機器人 → 在這個專案再開一個…／在新分頁接續這個 session；資訊面板「再開一個」 | 用那個 session 的專案目錄與終端。「接續這個 session」不開對話框，直接 `claude --resume <這個 session 的 id>`（不是 `--continue`：同目錄有兩個 session 時才不會接錯）。終端開不了（Automation 沒允許、Ghostty 太舊）會跳一個警告；Ghostty 失敗會改試 Terminal.app |
+| 用量旁的 ＋（島一滑入就能按，不用展開）、右鍵 → 開新 session…（⌘N） | 對話框：選專案目錄（Cubi 開過的 + Claude Code 記錄過的 `~/.claude.json` projects，或「瀏覽…」）、選填第一句話（一開就送出）、「接續」（新對話／接續這個專案上次的對話 `claude --continue`；從某個 session 打開時多一個「接續這個 session」；預設一律是新對話）、終端（自動＝Ghostty 有裝就 Ghostty，否則 Terminal.app）。⌘↩ 開始。專案目錄不能是根目錄、家目錄（或它的上層，例如 `/Users`）、放金鑰與憑證的資料夾（`.ssh`、`.aws`、`.gnupg`、`.kube`、`.docker`、`.config/gcloud`、`.config/atlassian`、`Library/Keychains`）或它們的裡面與上層；比對的是資料夾本身，大小寫不同、符號連結、`/System/Volumes/Data/…` 的寫法都一樣擋。對話框、`cubi --new-session` 與插件的 `session.new` 用同一個檢查，不行時對話框直接說原因、不開。Ghostty 開在最前面視窗的新分頁、Terminal.app 開新視窗，指令當第一行輸入打進去，所以 PATH、shell 都是你自己的 |
+| 右鍵機器人 → 開新 session（這個專案）…；資訊面板的同一顆鈕 | 同一個對話框，預填那個 session 的專案目錄與終端，「接續」預設是新對話，可以選「接續這個 session」：`claude --resume <這個 session 的 id>`（不是 `--continue`：同目錄有兩個 session 時才不會接錯）；換到別的專案目錄時這一項就不能選。終端開不了（Automation 沒允許、Ghostty 太舊）會跳一個警告；Ghostty 失敗會改試 Terminal.app |
 
 音效用 macOS 內建系統音，設定頁可關。
 

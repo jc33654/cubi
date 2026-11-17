@@ -26,7 +26,7 @@ from reviews import review_brief, review_export, review_resend, review_update  #
 from sprints import sprint_at, sprint_new, sprint_select, sprint_sync, sprint_update  # noqa: E402,F401
 from store import Store  # noqa: E402
 from tickets import estimate_set, hours_push, points_push, ticket_add, ticket_keep, ticket_remove, ticket_transition, ticket_update, tickets_remove  # noqa: E402
-from worklog import session_bind, session_shares, session_unbind, time_add, time_remove, time_update, timer_stop  # noqa: E402
+from worklog import item_update, session_bind, session_shares, session_unbind, time_add, time_remove, time_update, timer_stop  # noqa: E402
 
 ACTIONS = {
     "session.info": session_info, "session.sync": lambda s, p: session_info(s, p, sync=True),
@@ -38,7 +38,7 @@ ACTIONS = {
     "estimate.brief": estimate_brief, "estimate.suggest": estimate_suggest, "estimate.dismiss": estimate_dismiss, "estimate.comment": estimate_comment,
     "time.add": time_add, "time.update": time_update, "time.remove": time_remove,
     "review.update": review_update, "review.export": review_export, "review.resend": review_resend,
-    "config.set": config_set, "hint.seen": hint_seen,
+    "config.set": config_set, "hint.seen": hint_seen, "item.update": item_update,
 }
 # Their stdout is a path for cubi's `reveal`, so an error must go to stderr with a non-zero exit.
 RAW_ACTIONS = {"review.export"}

@@ -41,6 +41,18 @@ def keys_of(entry):
     return list(entry.get("shares") or ([entry["key"]] if entry.get("key") else []))
 
 
+def touched(store, entry):
+    """The tickets whose hours a manual stretch moves: its own, and, when session stretches give
+    way to it (`overSession`), the tickets of every session stretch over its minutes."""
+    keys = keys_of(entry)
+    if entry.get("overSession"):
+        for sess in store.segments["sessions"].values():
+            for start, seg in sess.items():
+                if float(start) < entry["end"] and seg["end"] > entry["start"]:
+                    keys += [k for k in (seg.get("shares") or {}) if k not in keys]
+    return keys
+
+
 def waiting(store):
     return sorted((k for k, t in store.tickets.items() if (t.get("hoursPush") or {}).get("pending")),
                   key=lambda k: (store.tickets[k]["hoursPush"].get("since") or 0, k))

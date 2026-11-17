@@ -8,6 +8,7 @@ from card import session_info
 from common import session_of
 import autopush
 from hours import check_minutes
+from items import item_name
 from panel import panel_state
 from sprints import sprint_at
 
@@ -20,7 +21,6 @@ def time_add(store, p):
         start = parse_start(p.get("start"))
     if p.get("key"):
         entry = store.add_manual(p["key"], start, p.get("minutes"), p.get("kind", "開發"), p.get("note", ""), p.get("calendar", False))
-        autopush.queue(store, [p["key"]])
     else:
         s = sprint_at(store, start) or store.current_sprint()
         if not s:
@@ -29,6 +29,7 @@ def time_add(store, p):
             raise ValueError("沒有單號的工作要寫說明")
         entry = store.add_manual(None, start, p.get("minutes"), p.get("kind", "會議"), p["note"].strip(), p.get("calendar", False),
                                  sprint=s["label"], counted=p.get("counted", True) is not False)
+    autopush.queue(store, autopush.touched(store, entry))
     state = panel_state(store, p)
     # What was written and the sprint whose days hold it: the panel says so when that is not the
     # sprint on screen (its hours there do not move).
@@ -81,9 +82,10 @@ def time_update(store, p):
     changed = (start, end, kind, note) != (m["start"], m["end"], m.get("kind"), m.get("note", ""))
     only_longer = start == m["start"] and end >= m["end"] and (kind, note) == (m.get("kind"), m.get("note", "")) and end >= time.time() - CALENDAR_WINDOW
     stale = bool(m.get("calendar")) and changed and not only_longer
+    before = autopush.touched(store, m)
     m.update(start=start, end=end, kind=kind, note=note)
     if changed:
-        autopush.queue(store, autopush.keys_of(m))
+        autopush.queue(store, before + autopush.touched(store, m))
     state = panel_state(store, p)
     if stale:
         state["notices"] = [CALENDAR_STALE]
@@ -91,7 +93,7 @@ def time_update(store, p):
 
 
 def time_remove(store, p):
-    autopush.queue(store, [k for m in store.segments["manual"] if m["id"] == p["id"] for k in autopush.keys_of(m)])
+    autopush.queue(store, [k for m in store.segments["manual"] if m["id"] == p["id"] for k in autopush.touched(store, m)])
     store.remove_manual(p["id"])
     return panel_state(store, p)
 
@@ -102,7 +104,7 @@ def timer_stop(store, p):
     sid = p.get("sid") or session_of(p).get("id", "")
     entry, note = store.timer_stop(sid, time.time()) if sid else (None, "要停哪個計時？")
     if entry:
-        autopush.queue(store, autopush.keys_of(entry))
+        autopush.queue(store, autopush.touched(store, entry))
     if from_panel:
         state = panel_state(store, p)
         if note:
@@ -115,30 +117,54 @@ def timer_stop(store, p):
 
 
 def session_bind(store, p):
-    """From the panel: `key`; from the card's 綁單號… button: whatever the user typed in `input`."""
+    """From the panel: `key`; from the card's 綁單號… button: whatever the user typed in `input`.
+    Ticket keys bind those tickets; anything else is the name of a work item. A session has
+    tickets or one work item, never both."""
     s = session_of(p)
-    keys = store.extract_keys(p.get("key", ""), p.get("input", ""))
-    if not keys:
-        raise ValueError(f"沒看到 {'／'.join(store.project_keys())} 的單號")
-    for key in keys:
-        store.bind(s["id"], key)
+    text = " ".join(str(p.get(f) or "") for f in ("key", "input")).strip()
+    rec = store.bindings.get(s["id"], {})
+    keys = store.extract_keys(text)
+    if keys:
+        if rec.get("item"):
+            raise ValueError(f"這個 session 綁的是工作項目「{rec['item']}」。單號和工作項目只能二選一：先解除「{rec['item']}」再綁單號")
+        for key in keys:
+            store.bind(s["id"], key)
+    else:
+        name = item_name(text)
+        bound = store.bound_keys(rec) if rec else []
+        if bound:
+            raise ValueError(f"這個 session 已綁 {'、'.join(bound)}。單號和工作項目只能二選一：先解除單號再綁「{name}」")
+        store.bind_item(s["id"], name)
     return panel_state(store, p) if "session" in p else session_info(store, s)
 
 
 def session_unbind(store, p):
     """From the panel: `key` (and `sid` from the bindings overview, any session); from the card's
-    ✕ buttons: the key cubi passes back as `input`."""
-    keys = store.extract_keys(p.get("key", ""), p.get("input", ""))
-    if not keys:
-        raise ValueError("要解除哪張單？")
+    ✕ buttons: the key cubi passes back as `input`. A work item's name lets the item go."""
+    text = " ".join(str(p.get(f) or "") for f in ("key", "input")).strip()
+    keys = store.extract_keys(text)
     if p.get("sid"):
         if p["sid"] not in store.bindings:
             raise ValueError("找不到這個 session 的綁定")
-        store.unbind(p["sid"], keys[0])
-        return panel_state(store, p)
-    s = session_of(p)
-    store.unbind(s["id"], keys[0])
-    return panel_state(store, p) if "session" in p else session_info(store, s)
+        sid = p["sid"]
+    else:
+        sid = session_of(p)["id"]
+    item = store.bindings.get(sid, {}).get("item")
+    if item and not keys and " ".join(text.split()) == item:
+        store.unbind_item(sid)
+    elif keys:
+        store.unbind(sid, keys[0])
+    else:
+        raise ValueError("要解除哪張單或哪個工作項目？")
+    return panel_state(store, p) if "session" in p or p.get("sid") else session_info(store, session_of(p))
+
+
+def item_update(store, p):
+    """From the panel: whether work item `name` counts in the sprint's hours, from now on."""
+    if not isinstance(p.get("counted"), bool):
+        raise ValueError("「算進 sprint 投入」要是開或關")
+    store.set_item_counted(str(p.get("name") or ""), p["counted"])
+    return panel_state(store, p)
 
 
 def session_shares(store, p):

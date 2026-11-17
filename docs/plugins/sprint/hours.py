@@ -12,23 +12,30 @@ SESSION_KIND = "Session"   # what session stretches are called next to manual ki
 class HoursMixin:
     """Store methods for `segments["sessions"]` and `segments["manual"]`."""
 
-    def record_segments(self, session, shares):
-        """Upsert the stretches cubi reports; the shares a stretch started with stay with it. A
-        stretch first seen now is marked `added` (see hours_by_key)."""
+    def record_segments(self, session, shares, item=None):
+        """Upsert the stretches cubi reports; the shares (or the work item, `item` = {item,
+        counted}) a stretch started with stay with it. A stretch first seen now is marked `added`
+        (see hours_by_key)."""
         sess = self.segments["sessions"].setdefault(session["id"], {})
         for seg in session.get("segments") or []:
-            entry = sess.setdefault(str(int(seg["start"])), {"shares": shares, "added": time.time()})
+            entry = sess.setdefault(str(int(seg["start"])), {"shares": shares, "added": time.time(), **(item or {})})
             entry["end"] = seg["end"]
             entry["open"] = bool(seg.get("open"))
             entry["name"] = session.get("name", "")
-            if not entry.get("shares"):
+            if not entry.get("shares") and not entry.get("item"):
                 entry["shares"] = shares
+                if item and not shares:
+                    entry.update(item)
 
-    def add_manual(self, key, start, minutes, kind="開發", note="", calendar=False, sprint=None, counted=True):
+    def add_manual(self, key, start, minutes, kind="開發", note="", calendar=False, sprint=None, counted=True, item=None):
         """One stretch of work cubi did not see. A timer's entry also carries `shares` (split over
-        several tickets, `key` the first) and `session` (its own stretches over the same minutes
-        are not counted twice). Work with no ticket has `key` None and belongs to `sprint`;
-        `counted` says whether it adds to the sprint's hours."""
+        several tickets, `key` the first) and `session`. Work with no ticket has `key` None and
+        belongs to `sprint`; `counted` says whether it adds to the sprint's hours; a work item's
+        timer also names its `item`.
+
+        Marked `overSession`: its minutes are taken out of every session's own stretches (any
+        ticket, or none), so they count once, as this record. Records written before the mark
+        leave the stretches as they were."""
         try:
             start = float(start)
         except (TypeError, ValueError):
@@ -37,9 +44,11 @@ class HoursMixin:
         if start != start:
             raise ValueError("開始時間與長度要是數字")
         entry = {"id": uuid.uuid4().hex[:12], "key": key, "start": start, "end": start + minutes * 60,
-                 "kind": kind, "note": note, "calendar": bool(calendar), "added": time.time()}
+                 "kind": kind, "note": note, "calendar": bool(calendar), "added": time.time(), "overSession": True}
         if key is None:
             entry.update(sprint=sprint, counted=bool(counted))
+        if item:
+            entry["item"] = item
         self.segments["manual"].append(entry)
         return entry
 
@@ -48,9 +57,21 @@ class HoursMixin:
         self.segments["manual"] = [m for m in self.segments["manual"] if m["id"] != entry_id]
         return len(self.segments["manual"]) < before
 
+    def manual_cuts(self):
+        """The spans session stretches give way to (see add_manual)."""
+        return [(m["start"], m["end"]) for m in self.segments["manual"] if m.get("overSession")]
+
+    @staticmethod
+    def session_pieces(start, end, cuts):
+        """A session stretch without the minutes a manual record covers."""
+        return subtract((start, end), [c for c in cuts if c[1] > start and c[0] < end])
+
     def _timer_extra(self, m, since, until):
         """A booked timer's seconds in [since, until] that its own session's stretches do not
-        already cover (those minutes are counted as the stretches)."""
+        already cover (those minutes are counted as the stretches). One marked `overSession`
+        counts whole: the stretches give way to it."""
+        if m.get("overSession"):
+            return overlap(m["start"], m["end"], since, until)
         own = self.segments["sessions"].get(m.get("session") or "", {})
         secs = overlap(m["start"], m["end"], since, until)
         secs -= sum(overlap(max(m["start"], float(st)), min(m["end"], seg["end"]), since, until) for st, seg in own.items())
@@ -58,10 +79,12 @@ class HoursMixin:
 
     def _timer_pieces(self, m):
         """A manual entry's time as pieces; a booked timer's without its own session's stretches."""
+        if m.get("overSession"):
+            return [(m["start"], m["end"])]
         own = self.segments["sessions"].get(m.get("session") or "", {}) if m.get("session") else {}
         return subtract((m["start"], m["end"]), [(float(st), seg["end"]) for st, seg in own.items()])
 
-    def _add_fresh(self, fresh, since, until, bucket, add):
+    def _add_fresh(self, fresh, since, until, bucket, add, cuts):
         """hours_by_key's marked records: each adds, per ticket, only what the ticket's time does
         not already fill (see `take`), the unmarked records counted first."""
         cover = {}
@@ -69,7 +92,7 @@ class HoursMixin:
             for start, seg in sess.items():
                 if "added" not in seg:
                     for key, pct in (seg.get("shares") or {}).items():
-                        cover.setdefault(key, []).extend(clip([(float(start), seg["end"])], since, until, pct))
+                        cover.setdefault(key, []).extend(clip(self.session_pieces(float(start), seg["end"], cuts), since, until, pct))
         for m in self.segments["manual"]:
             if m.get("key") is not None and "added" not in m:
                 for key, pct in (m.get("shares") or {m["key"]: 100}).items():
@@ -97,8 +120,9 @@ class HoursMixin:
         minute once. With `key`, only that ticket's share of it."""
         def part(shares):
             return 1.0 if key is None else (shares or {}).get(key, 0) / 100
-        own = self.segments["sessions"].get(sid, {})
-        secs = sum(overlap(float(start), seg["end"], since, until) * part(seg.get("shares")) for start, seg in own.items())
+        own, cuts = self.segments["sessions"].get(sid, {}), self.manual_cuts()
+        secs = sum(overlap(lo, hi, since, until) * part(seg.get("shares"))
+                   for start, seg in own.items() for lo, hi in self.session_pieces(float(start), seg["end"], cuts))
         for m in self.segments["manual"]:
             if m.get("session") == sid:
                 secs += self._timer_extra(m, since, until) * part(m.get("shares") or {m["key"]: 100})
@@ -133,8 +157,9 @@ class HoursMixin:
         not already counted at: per ticket and moment, the shares of everything there add up to
         100% at most, records in the order they were added. Different tickets are never compared.
         Unmarked records count as they always did, in the same order, so old numbers stay exactly
-        as they were."""
-        out, fresh = {}, []
+        as they were. Session stretches leave out what a manual record marked `overSession` covers,
+        whatever its ticket (see add_manual)."""
+        out, fresh, cuts = {}, [], self.manual_cuts()
 
         def bucket(key):
             return out.setdefault(key, {"session": 0.0, "manual": 0.0, "meeting": 0.0, "kinds": {}, "entries": []})
@@ -144,10 +169,11 @@ class HoursMixin:
 
         for sid, sess in self.segments["sessions"].items():
             for start, seg in sess.items():
+                pieces = self.session_pieces(float(start), seg["end"], cuts)
                 if "added" in seg:
-                    fresh.append((seg["added"], sid, float(start), None, [(float(start), seg["end"])], seg.get("shares") or {}))
+                    fresh.append((seg["added"], sid, float(start), None, pieces, seg.get("shares") or {}))
                     continue
-                secs = overlap(float(start), seg["end"], since, until)
+                secs = sum(overlap(lo, hi, since, until) for lo, hi in pieces)
                 for key, pct in (seg.get("shares") or {}).items():
                     bucket(key)["session"] += secs * pct / 100
                     add(bucket(key), SESSION_KIND, secs * pct / 100)
@@ -170,7 +196,7 @@ class HoursMixin:
                 if m.get("kind") in MEETING_KINDS:
                     bucket(key)["meeting"] += part
         if fresh:
-            self._add_fresh(fresh, since, until, bucket, add)
+            self._add_fresh(fresh, since, until, bucket, add, cuts)
         for b in out.values():
             b["total"] = b["session"] + b["manual"]
         return out

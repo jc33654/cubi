@@ -59,7 +59,7 @@ def review_export(store, p):
     rows = rows_for(store, s)
     path = os.path.join(review_dir(store), f"{s['label']}.md")
     with open(path, "w", encoding="utf-8") as f:
-        f.write(review.markdown(s, rows, review.metrics(rows, store.other_work(s["label"]))))
+        f.write(review.markdown(s, rows, review.metrics(rows, store.no_ticket_work(s))))
     return {"_raw": path}
 
 
@@ -74,7 +74,7 @@ def review_brief(store, p):
     folder = brief_dir(store)
     data_path = os.path.join(folder, f"{s['label']}-data.md")
     with open(data_path, "w", encoding="utf-8") as f:
-        f.write(review.brief(s, rows, review.metrics(rows, store.other_work(s["label"])), cubi_binary()))
+        f.write(review.brief(s, rows, review.metrics(rows, store.no_ticket_work(s)), cubi_binary()))
     # The session is opened restricted (the data holds text other people wrote in Jira) and is
     # never asked anything: it may read `readDirs`, run the one action in `allowActions` to hand
     # the result back, and nothing else.

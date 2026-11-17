@@ -66,7 +66,9 @@ class StoreTests(unittest.TestCase):
         self.store.add_manual("PROJ-1", 50_000, 120, kind="會議", note="跨邊界")  # the window ends halfway
         self.store.add_manual("PROJ-1", 90_000, 60, kind="會議", note="窗外")
         h = self.store.hours_by_key(since=0, until=53_600)["PROJ-1"]
-        self.assertEqual([(e["kind"], e["note"], e["seconds"]) for e in h["entries"]], [("計時", "", 0.0), ("會議", "跨邊界", 3600.0)])
+        # Batch 36: the timer counts whole and its session's stretch gives way to it.
+        self.assertEqual([(e["kind"], e["note"], e["seconds"]) for e in h["entries"]], [("計時", "", 3600.0), ("會議", "跨邊界", 3600.0)])
+        self.assertEqual(h["session"], 0.0)
         self.assertEqual(sum(e["seconds"] for e in h["entries"]), h["manual"])
 
     def test_open_stretch_grows_and_keeps_its_first_shares(self):
@@ -188,7 +190,7 @@ class TimerTests(unittest.TestCase):
         self.assertEqual(entry["shares"], {"PROJ-2": 100.0})
         self.start("s1", {"PROJ-2": 100.0}, 9000)
         self.store.unbind("s1", "PROJ-2")
-        self.assertEqual(self.store.timer_stop("s1", 9000 + 3600), (None, "計時中的單都解除了，沒有記"))
+        self.assertEqual(self.store.timer_stop("s1", 9000 + 3600), (None, "單號和工作項目都解除了，沒有記"))
 
     def test_start_stop_books_a_manual_stretch_split_by_shares(self):
         from store import TIMER_KIND
@@ -217,10 +219,12 @@ class TimerTests(unittest.TestCase):
         self.start("s1", {"PROJ-1": 100.0}, 2000)
         self.store.timer_stop("s1", 5600)                               # 2000–5600, of which 2000–2800 the session saw
         h = self.store.hours_by_key()["PROJ-1"]
-        self.assertEqual((h["session"], h["manual"], h["total"]), (1800.0, 2800.0, 4600.0))   # 1000–5600 once
-        # Another session's stretch over the same minutes is a different piece of work: not subtracted.
+        # 1000–5600 once; batch 36: the timer whole, the session's stretch without its minutes.
+        self.assertEqual((h["session"], h["manual"], h["total"]), (1000.0, 3600.0, 4600.0))
+        # Another session's stretch over the same minutes gives way too; the timer is not cut.
         self.store.record_segments({"id": "s2", "segments": [{"start": 3000, "end": 4000, "open": False}]}, {"PROJ-1": 100.0})
-        self.assertEqual(self.store.hours_by_key()["PROJ-1"]["manual"], 2800.0)
+        h = self.store.hours_by_key()["PROJ-1"]
+        self.assertEqual((h["session"], h["manual"]), (1000.0, 3600.0))
 
     def test_orphan_timer_stops_at_the_sessions_last_activity(self):
         from store import ORPHAN_AFTER
@@ -240,8 +244,9 @@ class TimerTests(unittest.TestCase):
         self.store.record_segments({"id": "s2", "segments": [{"start": 0, "end": 5000, "open": False}]}, {"PROJ-1": 100.0})
         self.start("s1", {"PROJ-1": 100.0}, 500)
         self.store.timer_stop("s1", 2500)                                  # 500–2500, 500–1000 already s1's
-        self.store.add_manual("PROJ-1", 0, 30, "會議")                      # someone else's entry: not this session's
-        self.assertEqual(self.store.session_seconds("s1"), 2500.0)
+        self.store.add_manual("PROJ-1", 0, 30, "會議")                      # not this session's, but it covers 0–1800
+        # Batch 36: s1's own 0–1000 gives way to the meeting and its timer; the timer counts whole.
+        self.assertEqual(self.store.session_seconds("s1"), 2000.0)
         self.assertEqual(self.store.session_seconds("s1", since=2000), 500.0)
 
     def test_a_session_claude_code_still_lists_is_not_an_orphan(self):

@@ -10,22 +10,25 @@ ORPHAN_AFTER = 15 * 60
 
 class TimerMixin:
     """Store methods for `segments["timers"]` (session id → {start, seen}). A timer is split over
-    what its session is bound to when it stops: unbinding by mistake and binding again loses
-    nothing, and with nothing bound it books nothing."""
+    what its session is bound to when it stops (its tickets, or its work item): unbinding by
+    mistake and binding again loses nothing, and with nothing bound it books nothing."""
 
 
     def timer(self, sid):
         return self.segments["timers"].get(sid)
 
     def timer_start(self, sid, now):
-        if not self.timer_shares(sid):
-            raise ValueError("這個 session 還沒綁單，先綁單再計時")
+        if not self.timer_shares(sid) and not self.timer_item(sid):
+            raise ValueError("這個 session 還沒綁單號或工作項目，先綁再計時")
         if sid not in self.segments["timers"]:
             self.segments["timers"][sid] = {"start": float(now), "seen": float(now)}
         return self.segments["timers"][sid]
 
     def timer_shares(self, sid):
         return self.shares(self.bindings.get(sid, {}))
+
+    def timer_item(self, sid):
+        return self.bindings.get(sid, {}).get("item")
 
     @staticmethod
     def timer_end(t, now):
@@ -43,11 +46,17 @@ class TimerMixin:
         minutes = (end - t["start"]) / 60
         if minutes < 1:
             return None, "不到 1 分鐘，沒有記"
-        shares = self.timer_shares(sid)
-        if not shares:
-            return None, "計時中的單都解除了，沒有記"
-        entry = self.add_manual(next(iter(shares)), t["start"], minutes, TIMER_KIND, "", True)
-        entry.update(shares=shares, session=sid, reason=reason or note)
+        shares, item = self.timer_shares(sid), self.timer_item(sid)
+        if shares:
+            entry = self.add_manual(next(iter(shares)), t["start"], minutes, TIMER_KIND, "", True)
+            entry["shares"] = shares
+        elif item:
+            # Work with no ticket, in the sprint whose days hold it; never on the calendar.
+            label = self.sprint_of({"start": t["start"]}) or self.sprints.get("current")
+            entry = self.add_manual(None, t["start"], minutes, TIMER_KIND, item, False, sprint=label, counted=self.item_counted(item), item=item)
+        else:
+            return None, "單號和工作項目都解除了，沒有記"
+        entry.update(session=sid, reason=reason or note)
         return entry, note
 
     def stop_orphan_timers(self, live_ids, now, still_open=frozenset()):

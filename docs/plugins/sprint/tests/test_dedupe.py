@@ -42,7 +42,10 @@ class DedupeTests(unittest.TestCase):
         self.store.segments["sessions"].setdefault(sid, {})[str(int(start))] = {"shares": shares, "end": end, "open": False, "name": sid, "added": added}
 
     def manual(self, key, start, hours, added, **more):
+        """A record as written between batch 19 and batch 36: marked `added`, not yet `overSession`
+        (those are in the user's data and keep counting this way; test_items has the new ones)."""
         m = self.store.add_manual(key, start, hours * 60, **{k: v for k, v in more.items() if k in ("kind", "note")})
+        del m["overSession"]
         m.update(added=added, **{k: v for k, v in more.items() if k in ("session", "shares")})
         return m
 
@@ -113,6 +116,7 @@ class DedupeTests(unittest.TestCase):
         self.assertEqual(s2[str(int(T0 + 6 * H))]["end"], T0 + 9 * H)
         self.assertIn("added", s2[str(int(T0 + 10 * H))])
         self.assertIn("added", self.store.add_manual("PROJ-1", T0, 30))
+        self.assertIn("overSession", self.store.add_manual("PROJ-1", T0, 30))
 
 
 if __name__ == "__main__":

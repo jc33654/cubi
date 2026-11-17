@@ -116,18 +116,24 @@ def ticket_rows(sprint, tickets, hours, hours_per_point=8.0, totals=None):
     return rows
 
 
+def length(m):
+    """A record's seconds: a work item's automatic time says so, a stretch is its span."""
+    return m["seconds"] if "seconds" in m else m["end"] - m["start"]
+
+
 def metrics(rows, other=()):
-    """Totals over the tickets, plus the counted work with no ticket (`other`) in the hours,
-    meeting and kinds; actual points and the ratio stay the tickets' own."""
+    """Totals over the tickets, plus the counted work with no ticket (`other`: stretches, and the
+    work items' automatic time) in the hours, meeting and kinds; actual points and the ratio stay
+    the tickets' own."""
     estimate = round(sum(r["estimate"] or 0 for r in rows), 2)
     actual = round(sum(r["actual"] or 0 for r in rows), 2)
     ticket_seconds = sum(r["seconds"] for r in rows)
     counted = [m for m in other if m.get("counted", True)]
-    other_seconds = sum(m["end"] - m["start"] for m in counted)
+    other_seconds = sum(length(m) for m in counted)
     seconds = ticket_seconds + other_seconds
-    meeting = sum(r["meetingSeconds"] for r in rows) + sum(m["end"] - m["start"] for m in counted if m.get("kind") in MEETING_KINDS)
+    meeting = sum(r["meetingSeconds"] for r in rows) + sum(length(m) for m in counted if m.get("kind") in MEETING_KINDS)
     kinds = {}
-    for k, secs in [kv for r in rows for kv in r["kinds"].items()] + [(m.get("kind") or "其他", m["end"] - m["start"]) for m in counted]:
+    for k, secs in [kv for r in rows for kv in r["kinds"].items()] + [(m.get("kind") or "其他", length(m)) for m in counted]:
         kinds[k] = kinds.get(k, 0.0) + secs
     done_points = round(sum(r["estimate"] or 0 for r in rows if r["done"]), 2)
     points_for_hours = actual or estimate
@@ -199,7 +205,7 @@ def history(store, limit=4):
     out = []
     for s in sprints[-limit:]:
         since, until = sprint_range(s)
-        m = metrics(ticket_rows(s, store.tickets, store.hours_by_key(since, until), store.hours_per_point()), store.other_work(s["label"]))
+        m = metrics(ticket_rows(s, store.tickets, store.hours_by_key(since, until), store.hours_per_point()), store.no_ticket_work(s))
         out.append({"label": s["label"], "name": s.get("name") or s["label"], "donePoints": m["donePoints"],
                     "estimate": m["estimate"], "actual": m["actual"], "ratio": m["ratio"], "seconds": m["seconds"]})
     return out

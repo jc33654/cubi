@@ -71,10 +71,11 @@ class CardTests(unittest.TestCase):
         try:
             with self.assertRaises(ValueError):
                 sprint.points_push(self.store, {"key": "PROJ-1"})    # nothing worked yet
-            self.store.add_manual("PROJ-1", time.time() - 7200, 120)
+            ts = lambda d: datetime.fromisoformat(d).timestamp()   # noqa: E731
+            # A fixed day: "two hours ago" ran into the second entry whenever the tests ran on 11-17 around noon.
+            self.store.add_manual("PROJ-1", ts("2026-11-03T09:00"), 120)
             sprint.points_push(self.store, {"key": "PROJ-1"})
             # Worked over two sprints: the ticket's field gets all of it, not the current sprint's part.
-            ts = lambda d: datetime.fromisoformat(d).timestamp()   # noqa: E731
             self.store.new_sprint("Sprint8", "", "2026-11-16", "2026-11-27")
             self.store.add_to_sprint("Sprint8", "PROJ-1")
             self.store.add_manual("PROJ-1", ts("2026-11-17T09:00"), 240)
@@ -238,9 +239,9 @@ class CardTests(unittest.TestCase):
         self.store.timer("s1")["start"] -= 9 * 3600                         # and long forgotten
         out = sprint.session_info(self.store, self.session)
         timing = next(r for r in out["rows"] if isinstance(r, dict) and r["label"] == "計時中")
-        self.assertEqual((timing["value"], timing["tone"]), ("超過 8 小時，忘了停？；單都解除了，停下來不會記", "danger"))
+        self.assertEqual((timing["value"], timing["tone"]), ("超過 8 小時，忘了停？；單號和工作項目都解除了，停下來不會記", "danger"))
         stop = next(a for a in out["actions"] if a["action"] == "timer.stop")
-        self.assertEqual(stop["label"], "停止計時（沒綁單，不記）")
+        self.assertEqual(stop["label"], "停止計時（沒綁單號或工作項目，不記）")
         self.assertEqual(sprint.panel_state(self.store, {})["timers"][0]["keys"], [])
 
     def test_a_session_that_only_timed_shows_in_the_overview(self):

@@ -23,7 +23,8 @@ def panel_state(store, p):
     if session:
         rec = store.binding(session)
         binding = {"id": session["id"], "name": session.get("name", ""), "cwd": session.get("cwd"),
-                   "keys": store.bound_keys(rec), "auto": rec.get("auto", []), "shares": store.shares(rec)}
+                   "keys": store.bound_keys(rec), "auto": rec.get("auto", []), "shares": store.shares(rec),
+                   "item": rec.get("item"), "itemCounted": store.item_counted(rec["item"]) if rec.get("item") else None}
     state = {"config": {k: store.config.get(k) for k in CONFIG_KEYS}, "netrcFound": os.path.exists(os.path.expanduser(store.config["netrc"])),
              "sprints": [{"label": s["label"], "name": s.get("name"), "start": s.get("start"), "end": s.get("end"), "waiting": bool(s.get("waiting"))}
                          for s in sorted(store.sprints["sprints"].values(), key=lambda s: (s.get("start") or "", s["label"]))],
@@ -32,12 +33,14 @@ def panel_state(store, p):
              "today": date.today().isoformat(), "site": store.config["site"], "warnings": list(store.warnings),
              "bindings": bindings_overview(store, sprint, session),
              "timers": [{"sid": sid, "name": store.bindings.get(sid, {}).get("name", sid[:8]), "start": t["start"],
-                         "keys": list(store.timer_shares(sid))} for sid, t in store.segments["timers"].items()]}
+                         "keys": list(store.timer_shares(sid)), "item": store.timer_item(sid)} for sid, t in store.segments["timers"].items()],
+             "items": store.items_overview(sprint)}
     if sprint:
         rows, other = rows_for(store, sprint), store.other_work(sprint["label"])
+        item_work = store.item_work(sprint)
         ask = reassign.annotate(store, sprint, rows)
         state["sprint"] = {**{k: sprint.get(k) for k in ("label", "name", "start", "end", "goal")}, "review": {**empty_review(), **(sprint.get("review") or {})},
-                           "tickets": rows, "metrics": review.metrics(rows, other), "other": other, "burndown": review.burndown(sprint, rows),
+                           "tickets": rows, "metrics": review.metrics(rows, other + item_work), "other": other, "itemWork": item_work, "burndown": review.burndown(sprint, rows),
                            "capacity": review.capacity(sprint, rows, store.hours_per_point()),
                            "categories": list(review.CATEGORIES),
                            # Now someone else's and not yet answered: the panel asks whether to take them out.
@@ -99,13 +102,13 @@ def hint_seen(store, p):
 
 
 def bindings_overview(store, sprint, session):
-    """Bound sessions that worked in the sprint (any time, without sprint dates), are timing now,
+    """Bound sessions (tickets or a work item) that worked in the sprint (any time, without sprint dates), are timing now,
     or are the one the panel was opened from."""
     since, until = review.sprint_range(sprint) if sprint else (None, None)
     here = session["id"] if session else None
-    return sorted(({"sid": sid, "name": rec.get("name") or sid[:8], "keys": keys, "shares": store.shares(rec)}
+    return sorted(({"sid": sid, "name": rec.get("name") or sid[:8], "keys": keys, "shares": store.shares(rec), "item": rec.get("item")}
                    for sid, rec in store.bindings.items()
-                   if (keys := store.bound_keys(rec)) and (sid == here or store.active_in(sid, since, until))), key=lambda b: b["name"])
+                   if ((keys := store.bound_keys(rec)) or rec.get("item")) and (sid == here or store.active_in(sid, since, until))), key=lambda b: b["name"])
 
 
 PROJECT_RE = re.compile(r"[A-Z][A-Z0-9_]*")

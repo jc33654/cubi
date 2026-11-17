@@ -14,11 +14,11 @@ import time
 from pathlib import Path
 
 from hours import SESSION_KIND, HoursMixin, overlap, subtract  # noqa: F401  (re-exported)
+from items import KEY_RE, ItemsMixin  # noqa: F401  (re-exported)
 from review import MEETING_KINDS, remaining_seconds, tone_for  # noqa: F401  (re-exported)
 from timers import MAX_ENTRY, ORPHAN_AFTER, TIMER_KIND, TimerMixin  # noqa: F401
 
 DEFAULT_DIR = "~/Library/Application Support/cubi/sprint"
-KEY_RE = re.compile(r"[A-Z][A-Z0-9_]+-[0-9]+")
 LABEL_RE = re.compile(r"[A-Za-z0-9_-]{1,32}")
 FILES = ("config.json", "sprints.json", "tickets.json", "bindings.json", "segments.json")
 
@@ -61,7 +61,7 @@ DEFAULT_CONFIG = {
 }
 
 
-class Store(TimerMixin, HoursMixin):
+class Store(TimerMixin, HoursMixin, ItemsMixin):
     """Holds an exclusive lock on the data directory from load to save: tick, session.info and
     the panel are separate processes, and the slow one must not overwrite the others' changes."""
 
@@ -217,6 +217,10 @@ class Store(TimerMixin, HoursMixin):
         return rec
 
     def bound_keys(self, rec):
+        """Nothing while a work item is bound: tickets and an item never go together, and the keys
+        in the session's name or branch then wait until the item is let go."""
+        if rec.get("item"):
+            return []
         auto = [k for k in rec.get("auto", []) if k not in rec.get("removed", [])]
         return auto + [k for k in rec.get("keys", []) if k not in auto]
 

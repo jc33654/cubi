@@ -22,8 +22,8 @@ MAX_TICKET_ROWS = 8
 
 def session_info(store, p, sync=False):
     rec = store.binding(p)
-    shares = store.shares(rec)
-    store.record_segments(p, shares)
+    shares, item = store.shares(rec), rec.get("item")
+    store.record_segments(p, shares, store.item_stamp(rec))
     keys = store.bound_keys(rec)
     error = None
     missing = [k for k in keys if not store.tickets.get(k, {}).get("summary") and not store.tickets.get(k, {}).get("notFound")]
@@ -68,23 +68,26 @@ def session_info(store, p, sync=False):
         rows.append(row)
     if len(shown) < len(keys):
         rows.append({"label": "還有", "value": f"{len(keys) - len(shown)} 張沒列出：開面板看綁定總覽"})
-    if not keys:
-        rows.append(["工單", "未綁定；按 ＋ 綁單號"])
+    if item:
+        rows.append({"label": "工作項目", "value": f"{item} · {'算進' if store.item_counted(item) else '不算進'} sprint 投入",
+                     "action": {"label": f"解除 {item}", "action": "session.unbind", "arg": item, "icon": "xmark"}})
+    if not keys and not item:
+        rows.append(["工單", "未綁定；按 ＋ 綁單號或工作項目"])
     else:
         midnight = datetime.combine(date.today(), datetime.min.time()).timestamp()
         today_secs = store.session_seconds(p["id"], since=midnight)
         rows.append({"label": "今日", "value": review.fmt_hours(today_secs) + (f"（{len(keys)} 張單依比例分）" if len(keys) > 1 else "")})
     if timer:
         long_run = now - timer["start"] > LONG_TIMER
-        notes = (["超過 8 小時，忘了停？"] if long_run else []) + ([] if shares else ["單都解除了，停下來不會記"])
+        notes = (["超過 8 小時，忘了停？"] if long_run else []) + ([] if shares or item else ["單號和工作項目都解除了，停下來不會記"])
         rows.append({"label": "計時中", "value": "；".join(notes),
-                     "tone": "danger" if long_run else "warning" if not shares else "info",
+                     "tone": "danger" if long_run else "warning" if not (shares or item) else "info",
                      "clock": {"since": timer["start"], "offset": 0, "down": False}})
     sprint = store.current_sprint()
-    actions = [{"label": "綁單號", "action": "session.bind", "input": "要綁的單號（可多個，用空白隔開）", "icon": "link.badge.plus"}]
-    # ⏸ whenever a timer runs, bound tickets or not (unbinding the last one must not strand it).
-    if timer or keys:
-        actions.append({"label": ("停止計時並記下" if shares else "停止計時（沒綁單，不記）") if timer else "開始計時（會議、離開電腦的討論）",
+    actions = [{"label": "綁單號或工作項目", "action": "session.bind", "input": "單號（可多個，用空白隔開），或自己取的工作項目名稱", "icon": "link.badge.plus"}]
+    # ⏸ whenever a timer runs, bound or not (unbinding the last one must not strand it).
+    if timer or keys or item:
+        actions.append({"label": ("停止計時並記下" if shares or item else "停止計時（沒綁單號或工作項目，不記）") if timer else "開始計時（會議、離開電腦的討論）",
                         "action": "timer.stop" if timer else "timer.start", "icon": "pause.fill" if timer else "play.fill"})
     if keys:
         actions.append({"label": "同步 Jira", "action": "session.sync", "icon": "arrow.triangle.2.circlepath"})
@@ -107,10 +110,10 @@ def tick(store, p):
             store.sprints["current"] = s["label"]
     for session in p.get("sessions") or []:
         rec = store.binding(session)
-        store.record_segments(session, store.shares(rec))
+        store.record_segments(session, store.shares(rec), store.item_stamp(rec))
     for sid, entry in store.stop_orphan_timers({s["id"] for s in p.get("sessions") or []}, now, claude_session_ids()):
         if entry:
-            autopush.queue(store, autopush.keys_of(entry))
+            autopush.queue(store, autopush.touched(store, entry))
         print(f"timer of session {sid[:8]} stopped: session gone for {ORPHAN_AFTER // 60} min"
               + (f", booked {review.fmt_hours(entry['end'] - entry['start'])}" if entry else ", nothing booked (under a minute, or no ticket left)"), file=sys.stderr)
     running = store.sprint(store.sprint_of({"start": now}) or "")

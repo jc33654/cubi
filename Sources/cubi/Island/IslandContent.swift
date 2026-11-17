@@ -24,7 +24,7 @@ struct IslandContent: View {
                         .reportsExpandedHeight(to: state)
                 } else {
                     VStack(spacing: 6) {
-                        UsageStripView(usage: state.usage)
+                        UsageStripView(usage: state.usage, focus: state.focus)
                         HStack(alignment: .top, spacing: 8) {
                             SessionListView(state: state, maxHeight: state.maxExpandedSize.height - state.compactHeight - 60)
                                 .frame(width: state.selectedSession == nil ? nil : 300)
@@ -115,6 +115,8 @@ struct IslandContent: View {
                 }
                 .buttonStyle(.plain)
                 .help("開新 session")
+                // The "no window" hint says what to do next and is gone in seconds: it gets the room.
+                if let focus = state.focus, !state.focusMissShown { FocusBadge(day: focus) }
                 if state.focusMissShown {
                     // Short enough for the wing; the session's ticker says it in full.
                     VStack(alignment: .trailing, spacing: 1) {
@@ -156,4 +158,21 @@ private struct ReportsExpandedHeight: ViewModifier {
 
 extension View {
     func reportsExpandedHeight(to state: IslandState) -> some View { modifier(ReportsExpandedHeight(state: state)) }
+}
+
+/// Today's 專注零件 on the right wing: a gear and the count, kept narrow (the wing is 118 points
+/// and holds ＋ and the usage too). Hover says the busy time and what the next one needs.
+struct FocusBadge: View {
+    let day: FocusLog.Day
+
+    var body: some View {
+        HStack(spacing: 2) {
+            Image(systemName: "gearshape.fill").font(.system(size: 9, weight: .semibold))
+            Text("\(day.gears)").font(.system(size: 10, weight: .semibold, design: .monospaced))
+        }
+        .foregroundStyle(Color(red: 0.85, green: 0.75, blue: 0.45))
+        .lineLimit(1)
+        .fixedSize()
+        .help(day.summary)
+    }
 }

@@ -10,16 +10,18 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     private let notifier: Notifier
     private let ignored: IgnoredDirectories
     private let timing: SleepTiming
+    private let focus: FocusRecorder
     private let registry: PluginRegistry
     private let calendar: SystemCalendar
     private let openTool: (String) -> Void
 
-    init(island: IslandState, notifier: Notifier, ignored: IgnoredDirectories, timing: SleepTiming,
+    init(island: IslandState, notifier: Notifier, ignored: IgnoredDirectories, timing: SleepTiming, focus: FocusRecorder,
          registry: PluginRegistry, calendar: SystemCalendar, openTool: @escaping (String) -> Void) {
         self.island = island
         self.notifier = notifier
         self.ignored = ignored
         self.timing = timing
+        self.focus = focus
         self.registry = registry
         self.calendar = calendar
         self.openTool = openTool
@@ -35,7 +37,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         let view = SettingsView(hooks: model, island: island, registry: registry,
                                 notifications: Binding(get: { notifier.enabled }, set: { notifier.enabled = $0 }),
                                 notificationsDenied: { await notifier.isDenied() }, ignored: ignored, timing: timing,
-                                calendar: calendar, openTool: openTool)
+                                focus: focus, calendar: calendar, openTool: openTool)
         let w = NSWindow(contentRect: NSRect(origin: .zero, size: Self.size),
                          styleMask: [.titled, .closable, .miniaturizable, .resizable],
                          backing: .buffered, defer: false)
@@ -70,7 +72,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         let view = SettingsView(hooks: HookSetupModel(), island: island, registry: PluginRegistry(),
                                 notifications: .constant(UserDefaults.standard.bool(forKey: Notifier.enabledKey)),
                                 notificationsDenied: { false },
-                                ignored: IgnoredDirectories(), timing: SleepTiming(), calendar: SystemCalendar(),
+                                ignored: IgnoredDirectories(), timing: SleepTiming(), focus: FocusRecorder.preview(.sample()), calendar: SystemCalendar(),
                                 openTool: { _ in }, page: page)
         let w = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled], backing: .buffered, defer: false)
         w.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)

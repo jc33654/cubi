@@ -59,6 +59,8 @@ extension SessionCoordinator {
         if let shown = state.showingDiffFor, !bots.contains(where: { $0.id == shown }) { state.showingDiffFor = nil }
         if let sel = state.selectedSession, !bots.contains(where: { $0.id == sel }) { state.selectedSession = nil }
         if state.usage != lastUsage { state.usage = lastUsage }
+        let today = focus.today()
+        if state.focus != today { state.focus = today }
         persistSets()
 
         let cards = pending.map { card(for: $0) }

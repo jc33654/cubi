@@ -98,7 +98,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let ticker = PluginTicker(registry: coordinator.registry, calendar: calendar) { [weak coordinator] in coordinator?.tickInput() }
         self.ticker = ticker
         let settings = SettingsWindow(island: island.state, notifier: coordinator.notifier, ignored: coordinator.ignored,
-                                      timing: coordinator.timing, registry: coordinator.registry, calendar: calendar,
+                                      timing: coordinator.timing, focus: coordinator.focus, registry: coordinator.registry, calendar: calendar,
                                       openTool: { [toolPanels] in toolPanels.show($0) })
         self.settings = settings
         let newSession = NewSessionWindow(recent: coordinator.recentProjects)

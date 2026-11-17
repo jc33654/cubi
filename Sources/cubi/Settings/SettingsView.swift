@@ -4,13 +4,14 @@ import CubiKit
 /// The settings window: a sidebar of sections on the left, one section's cards on the right.
 struct SettingsView: View {
     enum Page: String, CaseIterable, Identifiable {
-        case claude, display, sleep, calendar, plugins, scope
+        case claude, display, sleep, focus, calendar, plugins, scope
         var id: String { rawValue }
         var title: String {
             switch self {
             case .claude: "Claude Code"
             case .display: "顯示"
             case .sleep: "睡眠"
+            case .focus: "零件"
             case .calendar: "行事曆"
             case .plugins: "插件"
             case .scope: "範圍"
@@ -21,6 +22,7 @@ struct SettingsView: View {
             case .claude: "terminal"
             case .display: "macwindow"
             case .sleep: "moon"
+            case .focus: "gearshape"
             case .calendar: "calendar"
             case .plugins: "puzzlepiece.extension"
             case .scope: "folder.badge.minus"
@@ -36,6 +38,7 @@ struct SettingsView: View {
     let notificationsDenied: () async -> Bool
     let ignored: IgnoredDirectories
     @Bindable var timing: SleepTiming
+    @Bindable var focus: FocusRecorder
     @Bindable var calendar: SystemCalendar
     let openTool: (String) -> Void
     @State var page: Page = .claude
@@ -129,6 +132,7 @@ struct SettingsView: View {
         case .claude: ClaudeSection(hooks: hooks)
         case .display: DisplaySection(island: island, notifications: notifications, notificationsDenied: notificationsDenied)
         case .sleep: SleepSection(timing: timing)
+        case .focus: FocusSection(focus: focus)
         case .calendar: CalendarSection(calendar: calendar)
         case .plugins: PluginsSection(registry: registry, hooks: hooks, openTool: openTool)
         case .scope: ScopeSection(ignored: ignored)

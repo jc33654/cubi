@@ -23,6 +23,8 @@ extension SessionCoordinator {
     func retireForPlugins(_ info: SessionInfo) {
         var s = info
         s.closeSegment(at: s.lastEventAt)
+        // Its last minutes, before the store forgets them.
+        focus.record([s])
         guard !s.segments.isEmpty else { return }
         retiredForPlugins.removeAll { $0.id == s.id }
         retiredForPlugins.append(Self.input(for: s))

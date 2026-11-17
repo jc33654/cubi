@@ -38,7 +38,10 @@ enum IconRenderer {
 
     /// The island as the panel would show it, over a mid-grey background, at 2× for inspection.
     @MainActor
-    static func renderIsland(mode: String, botState: String, to path: String) -> Bool {
+    static func renderIsland(mode asked: String, botState: String, to path: String) -> Bool {
+        // `<mode>-gear`: the same, with 12 專注零件 on the wing (what must give way to what).
+        let gear = asked.hasSuffix("-gear")
+        let mode = gear ? String(asked.dropLast(5)) : asked
         let geometry = NotchGeometry(screenFrame: CGRect(x: 0, y: 0, width: 1512, height: 982),
                                      hasNotch: true, notchWidth: 190, notchHeight: 32)
         let state = IslandState(geometry: geometry)
@@ -86,6 +89,15 @@ enum IconRenderer {
         case "diff":
             state.mode = .expanded
             state.showingDiffFor = "alpha"
+        case "focus", "focus-12", "focus-expanded", "focus-nousage":
+            // 專注零件 on the wing (one digit, two), in the usage row, and with no usage yet.
+            state.mode = mode == "focus-expanded" ? .expanded : .compact
+            if mode != "focus-nousage" {
+                state.usage = StatuslineInfo(fiveHour: UsageWindow(usedPercent: 100, resetsAt: Date().timeIntervalSince1970 + 5400),
+                                             sevenDay: UsageWindow(usedPercent: 81, resetsAt: Date().timeIntervalSince1970 + 200_000),
+                                             costUSD: 12.45)
+            }
+            state.focus = FocusLog.Day(date: "2026-11-17", seconds: (mode == "focus-12" ? 12 * 25 + 18 : 3 * 25 + 18) * 60)
         case "question":
             state.mode = .expanded
             let q = AskQuestion(question: "curl 已被拒絕兩次，接下來要怎麼處理？", header: "下一步", options: [
@@ -109,6 +121,7 @@ enum IconRenderer {
             FileHandle.standardError.write(Data("cubi: unknown mode \(mode)\n".utf8))
             return false
         }
+        if gear { state.focus = FocusLog.Day(date: "2026-11-17", seconds: (12 * 25 + 18) * 60) }
         guard let bs = BotState(rawValue: botState) else {
             FileHandle.standardError.write(Data("cubi: unknown bot state \(botState)\n".utf8))
             return false

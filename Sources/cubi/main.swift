@@ -34,7 +34,7 @@ if let i = arguments.firstIndex(of: "--probe-ghostty"), i + 2 < arguments.count 
 }
 
 // Offline preview of the island for layout work:
-//   --render-island <hidden|compact|expanded|detail|approval|question|question-long|usage|usage-compact|focus-miss|focus-miss-named|focus-miss-untitled|focus-miss-detail|diff|floating|floating-approval> <botState> <out.png>
+//   --render-island <hidden|compact|expanded|detail|approval|question|question-long|usage|usage-compact|focus-miss|focus-miss-named|focus-miss-untitled|focus-miss-detail|diff|focus|focus-12|focus-expanded|focus-nousage|floating|…-gear (any of them with 12 專注零件)|floating-approval> <botState> <out.png>
 if let i = arguments.firstIndex(of: "--render-island"), i + 3 < arguments.count {
     let ok = IconRenderer.renderIsland(mode: arguments[i + 1], botState: arguments[i + 2], to: arguments[i + 3])
     exit(ok ? 0 : 1)
@@ -85,7 +85,7 @@ if let i = arguments.firstIndex(of: "--render-widget"), i + 3 < arguments.count 
 }
 
 // Offline picture of one settings section, this machine's settings, window off screen:
-//   --render-settings <claude|display|sleep|calendar|plugins|scope> <out.png> [--dark]
+//   --render-settings <claude|display|sleep|focus|calendar|plugins|scope> <out.png> [--dark]   (focus: made-up days, nothing saved)
 if let i = arguments.firstIndex(of: "--render-settings"), i + 2 < arguments.count {
     guard let page = SettingsView.Page(rawValue: arguments[i + 1]) else {
         FileHandle.standardError.write(Data("cubi: pages are \(SettingsView.Page.allCases.map(\.rawValue).joined(separator: "|"))\n".utf8))

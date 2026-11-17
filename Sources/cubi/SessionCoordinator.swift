@@ -12,6 +12,7 @@ final class SessionCoordinator {
     let notifier = Notifier()
     let ignored = IgnoredDirectories()
     let timing = SleepTiming()
+    let focus = FocusRecorder()
     let registry = PluginRegistry()
     private var ignoredLogged: Set<String> = []
     private var server: HookServer?
@@ -60,6 +61,8 @@ final class SessionCoordinator {
         }
         // A shorter clock takes effect now, not at the next minute.
         timing.onChange = { [weak self] in self?.applyTiming(); self?.tick() }
+        // Switched on: counted from now, shown at once; off: gone from the island.
+        focus.onChange = { [weak self] in self?.tick() }
         notifier.onActivate = { [weak self] id in
             guard let info = self?.store.sessions[id] else { return }
             TerminalFocus.focus(info) { [weak self] miss in self?.focusMissed(id, miss) }
@@ -387,6 +390,7 @@ final class SessionCoordinator {
 
     private func tick() {
         store.tick(now: Date().timeIntervalSinceReferenceDate)
+        focus.record(Array(store.sessions.values))
         applyRegistryNames()
         sync()
     }

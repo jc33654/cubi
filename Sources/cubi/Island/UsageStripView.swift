@@ -4,6 +4,8 @@ import CubiKit
 /// Plan usage: two bars with reset times. Shown at the top of the expanded island.
 struct UsageStripView: View {
     let usage: StatuslineInfo?
+    /// Today's 專注零件, at the end of the row; nil while switched off.
+    var focus: FocusLog.Day? = nil
 
     var body: some View {
         if let usage, usage.fiveHour != nil || usage.sevenDay != nil {
@@ -15,15 +17,29 @@ struct UsageStripView: View {
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.5))
                 }
+                if let focus { focusLine(focus) }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 4)
         } else {
-            Text("還沒有用量資料（statusline 尚未串接）")
-                .font(.system(size: 10))
-                .foregroundStyle(.white.opacity(0.4))
-                .padding(.vertical, 4)
+            HStack(spacing: 14) {
+                Text("還沒有用量資料（statusline 尚未串接）")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.white.opacity(0.4))
+                if let focus { focusLine(focus) }
+            }
+            .padding(.vertical, 4)
         }
+    }
+
+    private func focusLine(_ day: FocusLog.Day) -> some View {
+        HStack(spacing: 4) {
+            FocusBadge(day: day)
+            Text("· \(day.busyText) · 再 \(FocusLog.Day.text(day.untilNext.rounded(.up)))")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.6))
+        }
+        .help(day.summary)
     }
 
     private func bar(title: String, window: UsageWindow) -> some View {

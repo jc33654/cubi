@@ -48,7 +48,9 @@ struct IslandContent: View {
                 ApprovalCardView(card: card, title: title, detail: detail, canAlways: canAlways,
                                  waitingCount: state.pendingCards.count - 1) { d in state.onDecision(card.id, d) }
             case .question(let questions):
-                QuestionCardView(card: card, questions: questions) { d in state.onDecision(card.id, d) }
+                // The island's room less its robot row and the card's own header, hint and buttons.
+                QuestionCardView(card: card, questions: questions,
+                                 maxBodyHeight: state.maxExpandedSize.height - state.compactHeight - 120) { d in state.onDecision(card.id, d) }
             }
         }
         .id(card.id)

@@ -15,8 +15,12 @@ public struct SessionStore: Sendable {
 
     public static let happyDuration = 1.5
     public static let endedLinger = 3.0
-    /// Silence this long sends a robot to sleep. A user setting: the app sets both clocks.
+    /// Silence this long sends a robot to sleep. A user setting: the app sets both clocks. It only
+    /// changes how the robot looks: the work stretches are cut by `workGap`.
     public var sleepAfter = 600.0
+    /// Silence this long ends a stretch of work (what plugins turn into hours). Fixed, whatever
+    /// the sleep setting; the default sleep clock, so hours stay as they were for most users.
+    public static let workGap = 600.0
     /// Sleeping this long moves a session to the 晚安 zone on its own (`.infinity`: never).
     public var restAfter = 12 * 3600.0
 
@@ -67,7 +71,7 @@ public struct SessionStore: Sendable {
         // The status line keeps running for a short while after SessionEnd; it must not resurrect,
         // and it is not activity either (neither for the sleep clock nor for the work stretches).
         if case .statusline = hook.event {} else {
-            s.noteActivity(now: now, gap: sleepAfter)
+            s.noteActivity(now: now, gap: Self.workGap)
             s.lastEventAt = now
             s.ended = false
             // Auto-rested: anything happening brings it back. Manually rested: only the user does.
@@ -250,7 +254,7 @@ public struct SessionStore: Sendable {
         for (id, var s) in sessions {
             // A stretch of work ends when the session falls silent, however the robot looks
             // (a pending question left overnight is not work either).
-            if s.segmentStart != nil, now - s.lastEventAt >= sleepAfter { s.closeSegment(at: s.lastEventAt) }
+            if s.segmentStart != nil, now - s.lastEventAt >= Self.workGap { s.closeSegment(at: s.lastEventAt) }
             s.segments.removeAll { $0.end < now - Self.segmentRetention }
             if !s.ended && s.pending == nil {
                 if now - s.lastEventAt >= sleepAfter, s.botState == .idle || s.botState == .tired { s.botState = .sleeping }

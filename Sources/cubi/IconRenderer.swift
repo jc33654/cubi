@@ -95,6 +95,16 @@ enum IconRenderer {
             ], multiSelect: false)
             state.pendingCards = [PendingCard(id: UUID(), sessionName: "alpha", color: SessionPalette.colors[0], content: .question([q]))]
             state.expandedHeight = min(360, state.compactHeight + 70 + 3 * 36)
+        case "question-long":
+            // A question longer than two lines, descriptions longer than one, more options than fit.
+            state.mode = .expanded
+            let long = "這個 session 綁的是工作項目，補記一筆有單號的會議時，同一段時間 session 自動記的時數會被扣掉，"
+                + "那張單寫回 Jira 的實際工時會變少；你要照這個規則補記，還是先把 session 改綁成那張單，再補記會議？"
+            let q = AskQuestion(question: long, header: "補記", options: (1...12).map {
+                .init(label: "選項 \($0)", description: "第 \($0) 個選項的說明很長，" + String(repeating: "超過一行會先只顯示一行，按右邊的箭頭才展開全部。", count: 2))
+            }, multiSelect: true)
+            state.pendingCards = [PendingCard(id: UUID(), sessionName: "alpha", color: SessionPalette.colors[0], content: .question([q, q]))]
+            state.expandedHeight = state.maxExpandedSize.height
         default:
             FileHandle.standardError.write(Data("cubi: unknown mode \(mode)\n".utf8))
             return false
@@ -146,8 +156,9 @@ enum IconRenderer {
                 IslandRootView(state: state, onTap: {})
             }
         }
-        .frame(width: IslandPanel.size.width, height: mode == "detail" || mode == "expanded" ? 420 : 220, alignment: .top)
+        .frame(width: IslandPanel.size.width, height: mode == "question-long" ? IslandPanel.size.height : mode == "detail" || mode == "expanded" ? 420 : 220, alignment: .top)
         .background(Color(white: 0.35))
+        .environment(\.drawsScrollContentFlat, true)
         return writePNG(ImageRenderer(content: view), scale: 2, to: path)
     }
 

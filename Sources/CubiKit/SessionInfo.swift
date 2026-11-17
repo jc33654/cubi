@@ -41,7 +41,7 @@ public struct SessionInfo: Sendable, Equatable, Identifiable {
 
     public enum Pending: Sendable, Equatable { case approval(tool: String), question }
 
-    /// Stretches of hook activity, closed when the session fell silent for `sleepAfter`; the
+    /// Stretches of hook activity, closed when the session fell silent for `SessionStore.workGap`; the
     /// stretch still running starts at `segmentStart` and reaches `lastEventAt`. What plugins
     /// turn into worked hours and calendar events.
     public var segments: [ActivitySegment] = []

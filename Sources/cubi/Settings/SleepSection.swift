@@ -7,7 +7,7 @@ struct SleepSection: View {
 
     var body: some View {
         DashCard(title: "睡眠", icon: "moon.zzz",
-                 help: "調短立刻生效；調長不會叫醒已經沉睡的，但自動進晚安區的會回來。手動「去睡覺」的不受影響；狀態列持續回報不算動靜。") {
+                 help: "只影響機器人的表情與晚安區，不影響工時：工時固定在相隔 10 分鐘沒動靜時切段，跟這裡設多久無關。調短立刻生效；調長不會叫醒已經沉睡的，但自動進晚安區的會回來。手動「去睡覺」的不受影響；狀態列持續回報不算動靜。") {
             SettingRow(title: "多久沒動靜進入沉睡") {
                 Picker("", selection: reporting($timing.sleepMinutes, settingChanged)) {
                     ForEach(SleepTiming.sleepChoices, id: \.self) { Text("\($0) 分鐘").tag($0) }

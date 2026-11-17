@@ -117,19 +117,37 @@ private func hook(_ id: String, _ event: CanonicalEvent, cwd: String? = "/Users/
     #expect(store.sessions["s"]?.segments.last == ActivitySegment(start: 6800, end: 6900) && store.sessions["s"]?.segmentStart == nil)
 }
 
-@Test func segmentsFollowTheSleepSettingAndAreForgottenAfterAWeek() {
+@Test func segmentsAreCutByAFixedGapWhateverTheSleepSetting() {
+    #expect(SessionStore.workGap == 600)
+    for sleep in [60.0, 1800.0, 3600.0] {   // the sleep setting moves the robot's face only
+        var store = SessionStore()
+        store.sleepAfter = sleep
+        _ = store.apply(hook("s", .sessionStart(source: nil)), now: 0)
+        _ = store.apply(hook("s", .prompt("x")), now: 599)            // under the gap: same stretch
+        _ = store.apply(hook("s", .prompt("y")), now: 599 + 600)      // the gap: a new one
+        #expect(store.sessions["s"]?.segments == [ActivitySegment(start: 0, end: 599)])
+        #expect(store.sessions["s"]?.segmentStart == 1199)
+        _ = store.apply(hook("s", .prompt("z")), now: 1300)
+        store.tick(now: 1300 + 599)
+        #expect(store.sessions["s"]?.segmentStart == 1199)            // silent, but not for long enough
+        store.tick(now: 1300 + 600)
+        #expect(store.sessions["s"]?.segments.last == ActivitySegment(start: 1199, end: 1300))
+        #expect(store.sessions["s"]?.segmentStart == nil)
+    }
+}
+
+@Test func segmentsCloseWhileWaitingAndAreForgottenAfterAWeek() {
     var store = SessionStore()
     store.sleepAfter = 1800
     _ = store.apply(hook("s", .sessionStart(source: nil)), now: 0)
-    _ = store.apply(hook("s", .prompt("x")), now: 1700)   // within the longer gap: same stretch
-    #expect(store.sessions["s"]?.openSegment == ActivitySegment(start: 0, end: 1700))
-    store.tick(now: 1700 + 1800)
-    #expect(store.sessions["s"]?.segments == [ActivitySegment(start: 0, end: 1700)])
+    _ = store.apply(hook("s", .prompt("x")), now: 500)
+    store.tick(now: 500 + 600)
+    #expect(store.sessions["s"]?.segments == [ActivitySegment(start: 0, end: 500)])
     // A waiting session (pending question) still has its stretch closed when it falls silent.
     _ = store.apply(hook("s", .question(.object([:]))), now: 4000)
-    store.tick(now: 4000 + 1800)
+    store.tick(now: 4000 + 600)
     #expect(store.sessions["s"]?.segmentStart == nil && store.sessions["s"]?.botState == .waiting)
-    store.tick(now: 1700 + SessionStore.segmentRetention + 1)
+    store.tick(now: 500 + SessionStore.segmentRetention + 1)
     #expect(store.sessions["s"]?.segments.isEmpty == true)
 }
 

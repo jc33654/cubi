@@ -260,7 +260,7 @@ class JiraHoursTests(Base):
 
     def add(self, key, start, minutes):
         payload = {"key": key, "start": datetime.fromtimestamp(start).isoformat(timespec="minutes"), "minutes": minutes}
-        return worklog.time_add(self.store, payload if key else {**payload, "note": "會議"})
+        return worklog.time_add(self.store, payload if key else {**payload, "note": "會議", "item": "雜事", "newItem": "雜事" not in self.store.sprints.get("items", {})})
 
     def entry(self):
         return self.store.segments["manual"][-1]

@@ -112,7 +112,7 @@ class AutoPushTests(unittest.TestCase):
         split = self.store.add_manual("PROJ-4", NOW - 3600, 30)
         split.update(session="s9", shares={"PROJ-4": 50.0, "PROJ-5": 50.0})
         sprint.time_update(self.store, {"id": split["id"], "minutes": 45})
-        sprint.time_add(self.store, {"start": "2026-11-18T10:00", "minutes": 30, "note": "面試"})
+        sprint.time_add(self.store, {"start": "2026-11-18T10:00", "minutes": 30, "note": "面試", "item": "招募", "newItem": True})
         self.assertEqual(self.waiting(), ["PROJ-3", "PROJ-4", "PROJ-5"])
 
     def test_F7_12_F7_16_switched_off_or_without_a_field_nothing_waits_and_tick_writes_nothing(self):

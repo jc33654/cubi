@@ -1,9 +1,11 @@
 """Work items: a name of the user's own (「小工具開發」) a session is bound to instead of tickets.
 
-A session has tickets or one work item, never both. The item's time is work with no ticket: the
-session's own stretches and its timer, each stamped when it is written with whether the item
-counts in the sprint's hours (changing that later moves the whole sprint of now, never an earlier
-one). Kept on this machine only: never written to Jira, never put on the calendar."""
+A session has tickets or one work item, never both. A work item is a ticket with no Jira key:
+every record with no ticket is under one (those written before that rule stay under none). Its
+time is the sessions' own stretches, its timers and its records, each stamped when it is written
+with whether the item counts in the sprint's hours (changing that later moves the whole sprint of
+now, never an earlier one). Kept on this machine only: never written to Jira; the sessions' own
+stretches never go on the calendar, a record does when it is ticked to."""
 import re
 
 from hours import SESSION_KIND
@@ -41,6 +43,10 @@ class ItemsMixin:
         rec = self.bindings.setdefault(sid, {"keys": [], "removed": [], "shares": {}})
         rec["item"] = name
         self.sprints.setdefault("items", {}).setdefault(name, {"counted": False})
+
+    def add_item(self, name, counted):
+        """A work item made from the panel's 新工作項目, with its first record."""
+        self.sprints.setdefault("items", {})[name] = {"counted": bool(counted)}
 
     def unbind_item(self, sid):
         self.bindings.get(sid, {}).pop("item", None)

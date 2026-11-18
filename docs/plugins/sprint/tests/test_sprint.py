@@ -49,9 +49,9 @@ class CardTests(unittest.TestCase):
             sprint.time_add(self.store, {"start": "2026-11-06T10:00", "minutes": 60, "note": "SOP 會議"})   # no sprint yet
         self.store.new_sprint("Sprint7")
         with self.assertRaises(ValueError):
-            sprint.time_add(self.store, {"start": "2026-11-06T10:00", "minutes": 60, "note": "  "})       # says what it was
-        sprint.time_add(self.store, {"start": "2026-11-06T10:00", "minutes": 60, "kind": "會議", "note": "SOP 會議"})
-        out = sprint.time_add(self.store, {"start": "2026-11-06T11:00", "minutes": 30, "kind": "其他", "note": "面試", "counted": False})
+            sprint.time_add(self.store, {"start": "2026-11-06T10:00", "minutes": 60, "note": "SOP 會議"})   # under no work item
+        sprint.time_add(self.store, {"start": "2026-11-06T10:00", "minutes": 60, "kind": "會議", "note": "SOP 會議", "item": "事故", "newItem": True, "itemCounted": True})
+        out = sprint.time_add(self.store, {"start": "2026-11-06T11:00", "minutes": 30, "kind": "其他", "note": "面試", "item": "招募", "newItem": True})
         s = out["sprint"]
         self.assertEqual([(m["note"], m["counted"]) for m in s["other"]], [("SOP 會議", True), ("面試", False)])
         self.assertEqual((s["metrics"]["seconds"], s["metrics"]["meetingSeconds"], s["metrics"]["otherSeconds"]), (3600, 3600, 3600))
@@ -87,8 +87,8 @@ class CardTests(unittest.TestCase):
     def test_work_without_a_ticket_goes_to_the_sprint_of_its_date(self):
         self.store.new_sprint("Sprint7", "", "2026-11-02", "2026-11-13")
         self.store.new_sprint("Sprint8", "", "2026-11-16", "2026-11-27")   # now current
-        sprint.time_add(self.store, {"start": "2026-11-13T17:00", "minutes": 30, "note": "上一期最後一天的會"})
-        sprint.time_add(self.store, {"start": "2026-12-20T10:00", "minutes": 30, "note": "不在任何一期"})
+        sprint.time_add(self.store, {"start": "2026-11-13T17:00", "minutes": 30, "note": "上一期最後一天的會", "item": "會議", "newItem": True})
+        sprint.time_add(self.store, {"start": "2026-12-20T10:00", "minutes": 30, "note": "不在任何一期", "item": "會議"})
         self.assertEqual([m["note"] for m in self.store.other_work("Sprint7")], ["上一期最後一天的會"])
         self.assertEqual([m["note"] for m in self.store.other_work("Sprint8")], ["不在任何一期"])
 

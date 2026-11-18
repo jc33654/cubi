@@ -58,7 +58,7 @@ class WorklogTests(unittest.TestCase):
     def test_an_added_stretch_says_which_sprint_holds_it(self):
         self.store.new_sprint("Sprint6", "", "2026-11-02", "2026-11-15")
         state = sprint.time_add(self.store, {"key": "PROJ-1", "minutes": 60})
-        self.assertEqual(state["added"], {"key": "PROJ-1", "start": NOW - 3600, "end": NOW, "sprint": "Sprint7", "inSprint": True,
+        self.assertEqual(state["added"], {"key": "PROJ-1", "item": None, "newItem": False, "start": NOW - 3600, "end": NOW, "sprint": "Sprint7", "inSprint": True,
                                           "cut": [], "autoPush": False})
         state = sprint.time_add(self.store, {"key": "PROJ-1", "minutes": 30, "start": "2026-11-10T09:00"})
         self.assertEqual((state["added"]["sprint"], state["added"]["inSprint"], state["added"]["end"] - state["added"]["start"]), ("Sprint6", False, 1800))
@@ -67,8 +67,8 @@ class WorklogTests(unittest.TestCase):
         self.assertTrue(state["added"]["inSprint"])                              # in Sprint6's tickets now
         state = sprint.time_add(self.store, {"key": "PROJ-1", "minutes": 30, "start": "2026-12-25T09:00"})
         self.assertEqual((state["added"]["sprint"], state["added"]["inSprint"]), (None, False))   # no sprint holds it
-        state = sprint.time_add(self.store, {"key": "", "minutes": 30, "start": "2026-11-17T09:00", "note": "支援"})
-        self.assertEqual((state["added"]["key"], state["added"]["sprint"], state["added"]["inSprint"]), (None, "Sprint7", True))
+        state = sprint.time_add(self.store, {"key": "", "minutes": 30, "start": "2026-11-17T09:00", "note": "支援", "item": "支援", "newItem": True})
+        self.assertEqual([state["added"][k] for k in ("key", "item", "newItem", "sprint", "inSprint")], [None, "支援", True, "Sprint7", True])
         self.assertEqual((state["nowSprint"], state["nowSprintKeys"]), ("Sprint7", ["PROJ-1"]))
 
     def test_the_panel_says_which_sprint_holds_each_of_the_tickets_stretches(self):
@@ -104,13 +104,11 @@ class WorklogTests(unittest.TestCase):
             since, until = review.sprint_range(self.store.sprint(label))
             self.assertEqual(self.store.hours_by_key(since, until)["PROJ-1"]["total"], 1800, label)
 
-    def test_F5_10_work_with_no_ticket_still_needs_its_start_and_its_note(self):
+    def test_F5_10_work_with_no_ticket_still_needs_its_start_and_now_its_work_item(self):
         with self.assertRaisesRegex(ValueError, "開始時間格式不對"):
-            sprint.time_add(self.store, {"minutes": 60, "note": "會"})
-        with self.assertRaisesRegex(ValueError, "沒有單號的工作要寫說明"):
-            sprint.time_add(self.store, {"start": "2026-11-18T10:00", "minutes": 60})
-        with self.assertRaisesRegex(ValueError, "沒有單號的工作要寫說明"):
-            sprint.time_add(self.store, {"start": "2026-11-18T10:00", "minutes": 60, "note": "   "})
+            sprint.time_add(self.store, {"minutes": 60, "note": "會", "item": "會議", "newItem": True})
+        with self.assertRaisesRegex(ValueError, "補記要掛在一個工作底下"):
+            sprint.time_add(self.store, {"start": "2026-11-18T10:00", "minutes": 60, "note": "會"})
         self.assertEqual(self.store.segments["manual"], [])
 
     # ---------- editing ----------
@@ -153,9 +151,8 @@ class WorklogTests(unittest.TestCase):
         sprint.time_update(self.store, {"id": m["id"], "start": "2026-11-18T14:00", "minutes": 90})
         self.assertEqual((m["start"], m["end"]), (NOW - 3600, NOW - 3600 + 5400))
 
-    def test_work_with_no_ticket_can_be_edited_and_keeps_needing_a_note(self):
-        sprint.time_add(self.store, {"start": "2026-11-18T10:00", "minutes": 60, "note": "面試", "kind": "其他"})
-        m = self.store.segments["manual"][-1]
+    def test_work_with_no_ticket_from_before_items_can_be_edited_and_keeps_needing_a_note(self):
+        m = self.store.add_manual(None, ts("2026-11-18T10:00"), 60, "其他", "面試", sprint="Sprint7", counted=True)
         state = sprint.time_update(self.store, {"id": m["id"], "minutes": 30, "note": "面試（半小時）"})
         self.assertEqual([(x["note"], x["end"] - x["start"]) for x in state["sprint"]["other"]], [("面試（半小時）", 1800)])
         with self.assertRaisesRegex(ValueError, "沒有單號的工作要寫說明"):

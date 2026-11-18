@@ -177,7 +177,7 @@ class CadenceActions(unittest.TestCase):
 
     def test_F1_7_work_with_no_ticket_follows_the_sprint_made_afterwards(self):
         self.on(2026, 11, 30)   # Monday; Sprint8 not made yet
-        state = sprint.time_add(self.store, {"start": "2026-11-30T10:00", "minutes": 60, "note": "補記的會", "kind": "會議"})
+        state = sprint.time_add(self.store, {"start": "2026-11-30T10:00", "minutes": 60, "note": "補記的會", "kind": "會議", "item": "會議", "newItem": True, "itemCounted": True})
         self.assertEqual([m["note"] for m in state["sprint"]["other"]], ["補記的會"])   # nowhere else to go yet
         state = sprint.sprint_new(self.store, {"label": "Sprint8", "start": "2026-11-30", "end": "2026-12-13"})
         self.assertEqual((state["current"], [m["note"] for m in state["sprint"]["other"]]), ("Sprint8", ["補記的會"]))

@@ -218,7 +218,8 @@ class HoursMixin:
             if m.get("calendar") and m["end"] >= now - window and 60 <= m["end"] - m["start"] <= MAX_ENTRY:
                 keys = list(m.get("shares") or ([m["key"]] if m.get("key") else []))
                 entries.append({
-                    "title": f"{' '.join(keys)} {m.get('note') or ''}（{m.get('kind', '')}）".replace("  ", " ").strip(),
+                    "title": (f"{' '.join(keys)} {m.get('note') or ''}（{m.get('kind', '')}）".replace("  ", " ").strip() if keys
+                              else f"{' '.join(dict.fromkeys(filter(None, (m.get('item'), m.get('note')))))}（{m.get('kind', '')}）"),
                     "start": m["start"], "end": m["end"],
                     "notes": "\n".join(([m["reason"]] if m.get("reason") else []) + [self.browse_url(k) for k in keys]),
                     "marker": f"sprint:manual:{m['id']}",

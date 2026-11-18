@@ -78,8 +78,9 @@
   .reassign-bar .who { display: inline-flex; align-items: center; gap: 6px; margin-right: 10px; white-space: nowrap; }
   .outside-tag { display: block; margin: 2px 0 0 auto; padding: 0; border: 0; background: none; font: inherit; font-size: 11px; color: var(--cubi-ink3); cursor: pointer; text-decoration: underline dotted; }
   .outside-tag.on, .outside-tag:hover { color: var(--cubi-accent); }
-  /* The ＋時數, 沒有單號 and 修改 forms: one height for every control, kept in groups that wrap whole. */
+  /* The 補記時間 (a ticket's, a work item's, 新工作項目) and 修改 forms: one height for every control, kept in groups that wrap whole. */
   [data-time-form] { gap: 8px 12px; align-items: center; }
+  [data-time-form] > b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   [data-time-form] input:not([type=checkbox]), [data-time-form] select, [data-time-form] .cubi-btn { height: 32px; box-sizing: border-box; font-size: 13px; line-height: 1; }
   [data-time-form] input:not([type=checkbox]), [data-time-form] select { padding: 0 8px; }
   [data-time-form] .cubi-btn { padding: 0 12px; justify-content: center; min-width: 56px; }
@@ -88,7 +89,6 @@
   [data-time-form] .grp.actions { margin-left: auto; }
   [data-time-form] #t-note, [data-time-form] #e-note { flex: 1 1 140px; min-width: 120px; }
   [data-time-form] .brk { flex-basis: 100%; height: 0; }   /* line 1: what and when; line 2: note, ticks, buttons */
-  [data-time-form] [data-t-mode].on { background: var(--cubi-accent-soft); border-color: var(--cubi-accent); color: var(--cubi-accent); font-weight: 600; }
   [data-time-form] .over-note { flex-basis: 100%; white-space: normal; font-size: 12px; display: flex; gap: 4px; align-items: center; }
   /* Inside the tickets table (wider than the card on a narrow panel, so it scrolls) a form keeps to
      the part that shows: as wide as the scroller, held at its left edge. */
@@ -477,7 +477,7 @@ function renderOverview() {
   html += `</tbody></table></div></div>` + otherCard(s, hpp) + bindingsCard() + sprintInfoCard(s) + manualCard(s);
   el.innerHTML = html;
   bindOverview(el);
-  const f = $("#t-hours", el); if (f && pendingTime && pendingTime.focus) { f.focus(); pendingTime.focus = false; }
+  const f = $(pendingTime?.fresh ? "#t-item" : "#t-hours", el); if (f && pendingTime && pendingTime.focus) { f.focus(); pendingTime.focus = false; }
 }
 
 // From the review day to the sprint's last day: write the review from here. The calendar event is
@@ -596,18 +596,22 @@ function entryTime(x, hpp) {
   return `<span class="cubi-muted">本 sprint 內不到 1 分鐘</span>`;
 }
 
+// What a record with no ticket is: its work item and what it says (a timer's says the item's name
+// again), or, for one written before every record had an item, that it is under none.
+const otherWhat = x => x.item ? `「${x.item}」${x.note && x.note !== x.item ? " " + x.note : ""}` : x.note;
+const UNSORTED = `<span class="cubi-pill warning" title="改版前記的補記，沒有掛在任何工作項目底下；時數、計不計入與行事曆照舊。不要它可以按 ✕ 刪除">未歸屬（改版前記的）</span><br>`;
 // Work with no ticket (a PM's incident meeting…): kept on the sprint; counted ones add to its hours.
 function otherCard(s, hpp) {
-  const form = pendingTime && pendingTime.key === "" ? `<div style="margin-top:10px">${timeForm("")}</div>` : "";
+  const form = pendingTime && pendingTime.fresh ? `<div style="margin-top:10px">${timeForm(pendingTime.key)}</div>` : "";
   const rows = s.other.map(x => `<tr><td>${new Date(x.start * 1000).toLocaleString("zh-TW", { dateStyle: "short", timeStyle: "short" })}</td><td class="num">${fmtH(x.end - x.start)}${asPts(x.end - x.start, hpp)}</td>
-      <td class="clip" title="${esc(x.note)}"><span class="cubi-pill">${esc(x.kind)}</span> ${esc(x.note)}</td>
+      <td class="clip" title="${esc(otherWhat(x))}"${x.item ? "" : ` style="white-space:normal"`}>${x.item ? "" : UNSORTED}<span class="cubi-pill">${esc(x.kind)}</span> ${esc(otherWhat(x))}</td>
       <td>${x.counted ? "" : `<span class="cubi-pill" title="不算進投入">不計入</span>`}${x.calendar ? ic("clock", 13) : ""}</td>
       <td class="num"><span class="cubi-row" style="justify-content:flex-end;flex-wrap:nowrap">${editButton(x, "other")}<button class="cubi-btn icon" data-remove-time="${esc(x.id)}" title="刪除">${ic("x", 14)}</button></span></td></tr>${editRow(x, 5, "other")}`).join("")
     + (s.itemWork || []).map(x => `<tr><td class="cubi-muted">本期自動記的</td><td class="num">${fmtH(x.seconds)}${asPts(x.seconds, hpp)}</td>
       <td class="clip" title="綁了工作項目「${esc(x.item)}」的 session 自己記的時間（扣掉補記與計時重疊的部分）"><span class="cubi-pill">自動</span> ${esc(x.item)}</td>
       <td>${x.counted ? "" : `<span class="cubi-pill" title="這個工作項目設成不算進投入（在下方「工作項目」改）">不計入</span>`}</td><td></td></tr>`).join("");
-  return `<div class="cubi-card"><div class="cubi-card-head"><h2 class="cubi-card-title">沒有單號的工作</h2>${tip("會議、支援、面試…沒有 Jira 單但花了時間的事，以及綁了工作項目的 session 的時間。記在開始時間落在的那個 sprint（沒有就記在目前的）；勾「計入工時」的會算進上方投入，不算進任何一張單")}
-      <span class="cubi-spacer"></span><button class="cubi-btn small" data-time="">${ic("plus", 13)}補記時間</button></div>
+  return `<div class="cubi-card"><div class="cubi-card-head"><h2 class="cubi-card-title">沒有單號的工作</h2>${tip("會議、支援、面試…沒有 Jira 單但花了時間的事，都掛在一個工作項目底下（像一張沒有單號的單）：綁了它的 session 自動記的時間，加上它底下的補記。記在開始時間落在的那個 sprint（沒有就記在目前的）；算不算進上方投入看工作項目的設定，不算進任何一張單。要補記到已有的項目，按下方那一列的＋")}
+      <span class="cubi-spacer"></span><button class="cubi-btn small" data-time="item:">${ic("plus", 13)}新工作項目</button></div>
     ${form}${rows ? `<div class="scroll-x"><table class="cubi-table tight fixed" style="min-width:470px"><colgroup><col style="width:150px"><col style="width:120px"><col><col style="width:84px"><col style="width:84px"></colgroup><tbody>${rows}</tbody></table></div>`
       : form ? "" : `<div class="cubi-muted">還沒有。</div>`}${itemsList(hpp)}</div>`;
 }
@@ -622,10 +626,12 @@ function itemChangedSaid(c) {
 function itemsList(hpp) {
   const items = state.items || [];
   if (!items.length) return "";
-  return `<div class="cubi-row" style="margin-top:12px"><b>工作項目</b>${tip("在 session 的綁定框填一個名字（不是單號）就會建立。那個 session 的時間與計時記成沒有單號的工作；只存在這台電腦，不寫 Jira、不寫行事曆。「算進 sprint 投入」改了會套用到這個項目現在所在那一期（勾選下方寫的那一期，不一定是正在看的）的全部時間（自動記的與計時）和之後記的，之前各期不變")}</div>
+  return `<div class="cubi-row" style="margin-top:12px"><b>工作項目</b>${tip("按上方「新工作項目」，或在 session 的綁定框填一個名字（不是單號）就會建立。它的時間＝綁了它的 session 自動記的＋它底下的補記與計時；只存在這台電腦，不寫 Jira。session 自動記的不寫行事曆，補記可以勾「寫進行事曆」。「算進 sprint 投入」改了會套用到這個項目現在所在那一期（勾選下方寫的那一期，不一定是正在看的）的全部時間（自動記的、補記與計時）和之後記的，之前各期不變")}</div>
     <table class="cubi-table tight" style="margin-top:6px"><tbody>${items.map(it => `<tr><td class="clip" title="${esc(it.name)}">${esc(it.name)}</td>
       <td class="cubi-muted">${it.sessions ? `${it.sessions} 個 session 綁著` : "沒有 session 綁著"}</td><td class="num">本期 ${fmtH(it.seconds)}${asPts(it.seconds, hpp)}</td>
-      <td class="num"><label class="cubi-row" style="justify-content:flex-end;gap:6px"><input type="checkbox" data-item-counted="${esc(it.name)}" ${it.counted ? "checked" : ""}> 算進 sprint 投入</label><div class="cubi-muted" style="font-size:11px">套用到 ${esc(state.nowSprint || state.current || "目前這一期")} 全部；之前各期不變</div></td></tr>`).join("")}</tbody></table>`;
+      <td class="num"><label class="cubi-row" style="justify-content:flex-end;gap:6px"><input type="checkbox" data-item-counted="${esc(it.name)}" ${it.counted ? "checked" : ""}> 算進 sprint 投入</label><div class="cubi-muted" style="font-size:11px">套用到 ${esc(state.nowSprint || state.current || "目前這一期")} 全部；之前各期不變</div></td>
+      <td class="num"><button class="cubi-btn icon" data-time="item:${esc(it.name)}" title="補記時間到「${esc(it.name)}」（會議、討論…）">${ic("plus", 15)}</button></td></tr>${pendingTime && pendingTime.item === it.name
+        ? `<tr><td colspan="5" style="white-space:normal;overflow:visible">${timeForm(pendingTime.key)}</td></tr>` : ""}`).join("")}</tbody></table>`;
 }
 
 function manualCard(s) {
@@ -684,41 +690,42 @@ const estimateSaid = key => state.sprint?.tickets.find(t => t.key === key)?.comm
 function timeFormRow(key) {
   return `<tr><td colspan="8" style="white-space:normal;overflow:visible">${timeForm(key)}</td></tr>`;
 }
-// One 補記時間 form, opened under a ticket's row (`at` its key) or in 沒有單號的工作 (`at` ""); a
-// switch picks 有單號 or 沒單號 there. Work with no ticket needs a start, a note, and can be left
-// out of the hours. For a ticket how long is enough (it ended just now, the usual kind, on the
-// calendar); the rest is 進階.
-const OVER_SESSION = "同一段時間有 session 在跑的話，以這筆為準：那個 session 綁的單會扣掉重疊的時間";
+// One 補記時間 form, always under one piece of work: a ticket's row (`at` its key), a work item's
+// row (`at` "item:" + its name), or 新工作項目 (`at` "item:", the name typed in it). A work item's
+// record needs a start; whether it counts is the item's. For a ticket how long is enough (it ended
+// just now, the usual kind, on the calendar); the rest is 進階.
+const OVER_SESSION = "同一段時間有 session 在跑的話，以這筆為準：那個 session 綁的單或工作項目會扣掉重疊的時間";
 function timeForm(at) {
-  const p = pendingTime, tickets = state.sprint?.tickets || [];
-  const mode = `<span class="grp" role="group" aria-label="有沒有單號"><button class="cubi-btn ${p.noKey ? "" : "on"}" data-t-mode="key" aria-pressed="${!p.noKey}" ${tickets.length ? "" : `disabled title="這一期還沒有單"`}>有單號</button>
-    <button class="cubi-btn ${p.noKey ? "on" : ""}" data-t-mode="none" aria-pressed="${p.noKey}">沒單號</button></span>`;
+  const p = pendingTime;
   const over = `<span class="cubi-muted over-note">${ic("info", 13)} ${OVER_SESSION}</span>`;
   const kinds = `<select id="t-kind">${["開發", "會議", "討論", "其他"].map(k => `<option ${k === p.kind ? "selected" : ""}>${k}</option>`).join("")}</select>`;
   const cal = `<label class="grp"><input id="t-cal" type="checkbox" ${p.calendar ? "checked" : ""}> 寫進行事曆</label>`;
   const buttons = `<span class="grp actions"><button class="cubi-btn primary" id="t-save">加</button><button class="cubi-btn" id="t-cancel">取消</button></span>`;
   const start = `<span class="grp"><label for="t-start">開始</label><input id="t-start" type="datetime-local" value="${esc(p.start)}"><button class="cubi-btn" id="t-now" title="填回現在往前推所填時數">現在</button></span>`;
   const hours = `<span class="grp"><input id="t-hours" type="number" min="0.02" max="24" step="0.25" value="${esc(p.hours)}" style="width:80px"> 小時</span>`;
-  if (p.noKey) return `<div class="cubi-inline cubi-row" data-time-form="${esc(at)}"><b>補記時間</b>${mode}
+  if (p.fresh || p.item) {
+    const head = p.fresh ? `<b>新工作項目</b><input id="t-item" placeholder="名稱（例如 小工具開發）" maxlength="24" value="${esc(p.itemName)}" size="22" aria-label="工作項目名稱">
+      <label class="grp" title="這個項目所有時間（session 自動記的、補記、計時）算不算進上方投入；之後在下方「工作項目」可以改"><input id="t-item-counted" type="checkbox" ${p.itemCounted ? "checked" : ""}> 算進 sprint 投入</label><span class="brk"></span>`
+      : `<b title="${esc(p.item)}">補記時間：「${esc(p.item)}」</b>`;
+    return `<div class="cubi-inline cubi-row" data-time-form="${esc(at)}">${head}
     ${start}${hours}${kinds}<span class="brk"></span>
-    <input id="t-note" placeholder="做了什麼（必填）" value="${esc(p.note)}" size="18">
-    ${cal}<label class="grp"><input id="t-counted" type="checkbox" ${p.counted ? "checked" : ""}> 計入工時</label>
-    ${buttons}${over}</div>`;
+    <input id="t-note" placeholder="說明（選填，例如 code review）" value="${esc(p.note)}" size="18">
+    ${cal}${buttons}${over}</div>`;
+  }
   // Hours and kind always; 進階 holds the start (filled in, she changes the hour and minute), the
   // note and the calendar. Without 進階 it ended just now.
-  const pick = `<select id="t-pick" aria-label="單號">${byKey(tickets).map(t => `<option ${t.key === p.pick ? "selected" : ""}>${esc(t.key)}</option>`).join("")}</select>`;
-  return `<div class="cubi-inline cubi-row" data-time-form="${esc(at)}"><b>補記時間</b>${mode}${pick}
+  return `<div class="cubi-inline cubi-row" data-time-form="${esc(at)}"><b>補記時間：${esc(p.key)}</b>
     ${hours}${kinds}
     ${p.more ? `${start}<span class="brk"></span><input id="t-note" placeholder="備註" value="${esc(p.note)}" size="18">${cal}`
-      : `<span class="grp"><span class="cubi-muted">${nowHint(p.pick)}${p.calendar ? " · 寫進行事曆" : ""}</span>
+      : `<span class="grp"><span class="cubi-muted">${nowHint(p.key)}${p.calendar ? " · 寫進行事曆" : ""}</span>
         <button class="cubi-btn" id="t-more" title="開始時間、備註、要不要寫進行事曆">進階</button></span>`}
     ${buttons}${over}</div>`;
 }
 function keepTimeForm() {
   if (!pendingTime || !$(`[data-time-form="${CSS.escape(pendingTime.key)}"]`)) return;
   const p = pendingTime, v = (id, was) => { const f = $(id); return f ? f.value : was; };
-  pendingTime = { ...p, start: v("#t-start", p.start), hours: v("#t-hours", p.hours), kind: v("#t-kind", p.kind), note: v("#t-note", p.note), pick: v("#t-pick", p.pick),
-    calendar: $("#t-cal")?.checked ?? p.calendar, counted: $("#t-counted")?.checked ?? p.counted };
+  pendingTime = { ...p, start: v("#t-start", p.start), hours: v("#t-hours", p.hours), kind: v("#t-kind", p.kind), note: v("#t-note", p.note),
+    itemName: v("#t-item", p.itemName), calendar: $("#t-cal")?.checked ?? p.calendar, itemCounted: $("#t-item-counted")?.checked ?? p.itemCounted };
 }
 
 // Changing a stretch that is already there: its form sits under its row. One a timer booked keeps
@@ -736,7 +743,7 @@ function editRow(x, columns, where) {
     <span class="grp"><input id="e-hours" type="number" min="0.02" max="24" step="0.25" value="${esc(e.hours)}" style="width:80px"> 小時</span>
     <span class="grp"><label for="e-start">開始</label><input id="e-start" type="datetime-local" value="${esc(e.start)}" ${off}></span>
     <select id="e-kind" ${off}>${[...new Set([x.kind, "開發", "會議", "討論", "其他"])].map(k => `<option ${k === e.kind ? "selected" : ""}>${esc(k)}</option>`).join("")}</select>
-    <input id="e-note" placeholder="${x.key ? "備註" : "做了什麼（必填）"}" value="${esc(e.note)}" size="18" ${off}>
+    <input id="e-note" placeholder="${x.key || x.item ? "備註" : "做了什麼（必填）"}" value="${esc(e.note)}" size="18" ${off}>
     ${e.timed ? `<span class="cubi-muted">計時記下的，只能改長度</span>` : ""}
     <span class="grp actions"><button class="cubi-btn primary" id="e-save">儲存</button><button class="cubi-btn" id="e-cancel">取消</button></span></div></td></tr>`;
 }
@@ -780,7 +787,7 @@ function nowHint(key) {
 const hhmm = t => new Date(t * 1000).toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 function addedSaid(a) {
   if (!a) return "已記";
-  const what = `已記 ${a.key || "沒有單號的工作"} ${fmtH(a.end - a.start)}（${hhmm(a.start)}–${hhmm(a.end)}）`;
+  const what = `${a.newItem ? `已建立工作項目「${a.item}」並記` : `已記 ${a.key || `「${a.item}」`}`} ${fmtH(a.end - a.start)}（${hhmm(a.start)}–${hhmm(a.end)}）`;
   const cut = (a.cut || []).length ? `；同一段時間 session 自動記的已扣掉：${a.cut.map(c => `${c.item ? `「${c.item}」` : c.key} ${fmtH(c.seconds)}`).join("、")}${a.autoPush && a.cut.some(c => !c.item) ? "，有單號的會重送 Jira 工時" : ""}` : "";
   if (a.sprint === state.sprint?.label) return what + cut;
   if (!a.sprint) return `${what}，但沒有任何一期涵蓋這段時間，所以不會算進哪一期的時數${cut}`;
@@ -789,12 +796,11 @@ function addedSaid(a) {
 }
 // The start a form fills in: now, less the hours. It follows the hours until she types a start.
 const startFor = hours => localTime(Date.now() / 1000 - Number(hours) * 3600);
-// Tickets by project, then number, smallest first (PROJ-9 before PROJ-10).
-const keyParts = k => { const m = /^(.*)-(\d+)$/.exec(k); return m ? [m[1], Number(m[2])] : [k, 0]; };
-const byKey = tickets => [...tickets].sort((a, b) => { const [pa, na] = keyParts(a.key), [pb, nb] = keyParts(b.key); return pa < pb ? -1 : pa > pb ? 1 : na - nb; });
+// `key` the form's place: a ticket's key, "item:" + a work item's name, or "item:" for 新工作項目.
 function openTimeForm(key) {
-  pendingTime = pendingTime && pendingTime.key === key ? null : { key, noKey: !key, pick: key || byKey(state.sprint?.tickets || [])[0]?.key || "", start: startFor(1), startTouched: false,
-    hours: 1, more: false, kind: "會議", note: "", calendar: true, counted: true, focus: true };
+  const item = key.startsWith("item:") ? key.slice(5) : null;
+  pendingTime = pendingTime && pendingTime.key === key ? null : { key, item, fresh: item === "", itemName: "", itemCounted: false, start: startFor(1), startTouched: false,
+    hours: 1, more: false, kind: "會議", note: "", calendar: true, focus: true };
   render();
 }
 
@@ -821,9 +827,11 @@ function bindOverview(el) {
     if (startField && !startField.value) return status(START_EMPTY, true);
     keepTimeForm(); const p = pendingTime;
     if (!(Number(p.hours) > 0)) return status("時數要填大於 0 的數字（例如 1 或 0.5）", true);
+    if (p.fresh && !p.itemName.trim()) return status("新工作項目要取一個名字（例如 小工具開發）", true);
     pendingTime = null;
-    const payload = !p.noKey ? { key: p.pick, minutes: Math.round(Number(p.hours) * 60), kind: p.kind, note: p.note, calendar: p.calendar, ...(p.more ? { start: p.start } : {}) }
-      : { key: "", start: p.start, minutes: Math.round(Number(p.hours) * 60), kind: p.kind, note: p.note, calendar: p.calendar, counted: p.counted };
+    const minutes = Math.round(Number(p.hours) * 60);
+    const payload = p.item === null ? { key: p.key, minutes, kind: p.kind, note: p.note, calendar: p.calendar, ...(p.more ? { start: p.start } : {}) }
+      : { key: "", item: p.fresh ? p.itemName : p.item, newItem: p.fresh, itemCounted: p.itemCounted, start: p.start, minutes, kind: p.kind, note: p.note, calendar: p.calendar };
     if (!await refresh("time.add", payload)) { pendingTime = p; render(); return; }
     if (!(state.warnings || []).length) status(addedSaid(state.added), !!state.added && (state.added.sprint !== state.sprint?.label || !!(state.added.cut || []).length)); });
   $("#t-more", el)?.addEventListener("click", () => { keepTimeForm(); const p = pendingTime;
@@ -838,8 +846,6 @@ function bindOverview(el) {
   $("#e-save", el)?.addEventListener("click", saveEditForm);
   $("#e-cancel", el)?.addEventListener("click", () => { editTime = null; render(); });
   $("#t-cancel", el)?.addEventListener("click", () => { pendingTime = null; render(); });
-  el.querySelectorAll("[data-t-mode]").forEach(b => b.addEventListener("click", () => { keepTimeForm(); pendingTime = { ...pendingTime, noKey: b.dataset.tMode === "none" }; render(); }));
-  $("#t-pick", el)?.addEventListener("change", () => { keepTimeForm(); render(); });
   el.querySelectorAll("[data-item-counted]").forEach(c => c.addEventListener("change", async () => {
     if (await refresh("item.update", { name: c.dataset.itemCounted, counted: c.checked }, [c]) && state.itemChanged) status(itemChangedSaid(state.itemChanged));
   }));

@@ -26,10 +26,12 @@ def time_add(store, p):
         s = sprint_at(store, start) or store.current_sprint()
         if not s:
             raise ValueError("先建一個 sprint")
-        if not (p.get("note") or "").strip():
-            raise ValueError("沒有單號的工作要寫說明")
-        entry = store.add_manual(None, start, p.get("minutes"), p.get("kind", "會議"), p["note"].strip(), p.get("calendar", False),
-                                 sprint=s["label"], counted=p.get("counted", True) is not False)
+        name, new = record_item(store, p)
+        counted = p.get("itemCounted") is True if new else store.item_counted(name)
+        entry = store.add_manual(None, start, p.get("minutes"), p.get("kind", "會議"), (p.get("note") or "").strip(), p.get("calendar", False),
+                                 sprint=s["label"], counted=counted, item=name)
+        if new:
+            store.add_item(name, counted)
     autopush.queue(store, autopush.touched(store, entry))
     state = panel_state(store, p)
     # What was written and the sprint whose days hold it: the panel says so when that is not the
@@ -37,19 +39,38 @@ def time_add(store, p):
     label = store.sprint_of(entry)
     held = store.sprint(label) if label else None
     # Work with no ticket counts in its sprint as it is; a ticket only where it is one of the sprint's.
-    state["added"] = {"key": entry["key"], "start": entry["start"], "end": entry["end"], "sprint": label,
+    state["added"] = {"key": entry["key"], "item": entry.get("item"), "newItem": bool(entry.get("item")) and p.get("newItem") is True,
+                      "start": entry["start"], "end": entry["end"], "sprint": label,
                       "inSprint": bool(held) and (entry["key"] is None or entry["key"] in held.get("keys", [])),
                       "cut": cut_by(before, session_hours(store)), "autoPush": bool(autopush.field(store))}
     return state
 
 
+def record_item(store, p):
+    """(name, new): the work item a record with no ticket goes under, one there is or (`newItem`)
+    one to make with its 算進 sprint 投入 (`itemCounted`) once the record is written. Every such
+    record is under a work item."""
+    if not str(p.get("item") or "").strip():
+        raise ValueError("補記要掛在一個工作底下：按工單那一列或工作項目那一列的＋，或「新工作項目」")
+    name, known, new = item_name(p["item"]), store.sprints.get("items", {}), p.get("newItem") is True
+    if new and name in known:
+        raise ValueError(f"已有「{name}」：要補記請按它那一列的＋")
+    if not new and name not in known:
+        raise ValueError(f"沒有「{name}」這個工作項目")
+    return name, new
+
+
 def session_hours(store):
-    """Each ticket's seconds, all time, and each work item's automatic seconds over every sprint:
-    what a manual record can take minutes from."""
+    """Each ticket's seconds, all time, and each work item's seconds (automatic, over every
+    sprint, and its records): what a manual record can take minutes from. A record under an item
+    adds to it what it takes from that item's own sessions, so that item is not said to give way."""
     out = {(k, None): b["total"] for k, b in store.hours_by_key().items()}
     for s in store.sprints["sprints"].values():
         for w in store.item_work(s):
             out[(None, w["item"])] = out.get((None, w["item"]), 0.0) + w["seconds"]
+    for m in store.segments["manual"]:
+        if m.get("item"):
+            out[(None, m["item"])] = out.get((None, m["item"]), 0.0) + m["end"] - m["start"]
     return out
 
 
@@ -99,7 +120,7 @@ def time_update(store, p):
     note = p["note"].strip() if p.get("note") is not None else m.get("note", "")
     if timed and (kind != m.get("kind") or note != m.get("note", "")):
         raise ValueError("計時產生的時段只能改長度或刪除")
-    if m.get("key") is None and not note:
+    if m.get("key") is None and not m.get("item") and not note:
         raise ValueError("沒有單號的工作要寫說明")
     end = start + length
     changed = (start, end, kind, note) != (m["start"], m["end"], m.get("kind"), m.get("note", ""))

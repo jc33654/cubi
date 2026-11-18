@@ -54,7 +54,41 @@ class RecordsUnderItemsTests(Base):
         self.assertEqual(added["cut"], [])
         self.bind("s2", "雜事")
         self.report("s2", [(T0 + 4 * H, T0 + 6 * H, False)], {})
-        self.assertEqual(self.add(T0 + 5 * H, 30, item="小工具開發")["added"]["cut"], [{"item": "雜事", "seconds": 0.5 * H}])
+        self.assertEqual(self.add(T0 + 5 * H, 30, item="小工具開發")["added"]["cut"], [{"item": "雜事", "seconds": 0.5 * H, "counted": False, "inSprint": False}])
+
+    def test_what_gave_way_says_whether_the_sprints_hours_went_down_with_it(self):
+        self.report("s2", [(T0, T0 + 2 * H, False)], {"PROJ-1": 50, "OPS-9": 50})          # OPS-9: not one of Sprint7's
+        self.bind("s3", "會議")
+        worklog.item_update(self.store, {"name": "會議", "counted": True, "now": T0})
+        self.report("s3", [(T0, T0 + 2 * H, False)], {})
+        self.bind("s4", "雜事")
+        self.report("s4", [(T0, T0 + 2 * H, False)], {})
+        self.store.add_item("支援", True)
+        added = self.add(T0 + H, 30, item="支援")["added"]
+        self.assertEqual(sorted(added["cut"], key=str), sorted([
+            {"key": "OPS-9", "seconds": 0.25 * H, "inSprint": False}, {"key": "PROJ-1", "seconds": 0.25 * H, "inSprint": True},
+            {"item": "會議", "seconds": 0.5 * H, "counted": True, "inSprint": True}, {"item": "雜事", "seconds": 0.5 * H, "counted": False, "inSprint": False}], key=str))
+        self.assertFalse(added["cutMinor"])
+        with_it = self.sprint_seconds()
+        worklog.time_remove(self.store, {"id": self.store.segments["manual"][-1]["id"]})
+        # Without it: back the minutes PROJ-1 and 會議 gave way, less the counted record itself.
+        self.assertAlmostEqual(self.sprint_seconds() - with_it, 0.25 + 0.5 - 0.5)
+
+    def test_minutes_taken_across_two_sprints_are_said_where_they_were(self):
+        self.store.new_sprint("Sprint8", "", "2026-11-28", "2026-12-11")
+        self.store.sprints["current"] = "Sprint7"
+        self.store.add_to_sprint("Sprint8", "PROJ-1")
+        late = datetime(2026, 11, 27, 23, 0).timestamp()
+        self.report("s1", [(late, late + 2 * H, False)], {"PROJ-1": 100})
+        added = worklog.time_add(self.store, {"key": "PROJ-2", "start": at(late + 0.5 * H), "minutes": 60})["added"]
+        self.assertEqual(sorted(added["cut"], key=str), sorted([{"key": "PROJ-1", "seconds": 0.5 * H, "inSprint": True},
+                                                                {"key": "PROJ-1", "seconds": 0.5 * H, "inSprint": False, "elsewhere": True}], key=str))
+
+    def test_under_a_minute_taken_is_not_listed_but_said(self):
+        self.report("s1", [(T0 - H, T0 + 40, False)], {"PROJ-1": 100})
+        added = self.add(T0, 30, item="面試", newItem=True)["added"]
+        self.assertEqual((added["cut"], added["cutMinor"]), ([], True))
+        self.assertFalse(self.add(T0 + 5 * H, 30, item="面試")["added"]["cutMinor"])            # over no session
 
     def test_a_record_written_before_stays_as_it_was(self):
         old = self.store.add_manual(None, T0, 180, "開發", "測試", calendar=True, sprint="Sprint7", counted=True)

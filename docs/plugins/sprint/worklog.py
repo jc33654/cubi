@@ -42,7 +42,8 @@ def time_add(store, p):
     state["added"] = {"key": entry["key"], "item": entry.get("item"), "newItem": bool(entry.get("item")) and p.get("newItem") is True,
                       "start": entry["start"], "end": entry["end"], "sprint": label,
                       "inSprint": bool(held) and (entry["key"] is None or entry["key"] in held.get("keys", [])),
-                      "cut": cut_by(before, session_hours(store)), "autoPush": bool(autopush.field(store))}
+                      "autoPush": bool(autopush.field(store))}
+    state["added"]["cut"], state["added"]["cutMinor"] = cut_by(before, session_hours(store), held)
     return state
 
 
@@ -61,28 +62,47 @@ def record_item(store, p):
 
 
 def session_hours(store):
-    """Each ticket's seconds, all time, and each work item's seconds (automatic, over every
-    sprint, and its records): what a manual record can take minutes from. A record under an item
-    adds to it what it takes from that item's own sessions, so that item is not said to give way."""
-    out = {(k, None): b["total"] for k, b in store.hours_by_key().items()}
+    """What a manual record can take minutes from, keyed (key, item, counted, sprint): each
+    ticket's seconds in each sprint's days (sprint None: in no sprint's), and each work item's
+    seconds counted in its sprint's hours and not (automatic, and its records). A record under an
+    item adds to it what it takes from that item's own sessions, so that item is not said to give way."""
+    out, rest = {}, {k: b["total"] for k, b in store.hours_by_key().items()}
+
+    def add(k, secs):
+        out[k] = out.get(k, 0.0) + secs
     for s in store.sprints["sprints"].values():
+        since, until = review.sprint_range(s)
+        if since is None or until is None:
+            continue
+        for k, b in store.hours_by_key(since, until).items():
+            add((k, None, None, s["label"]), b["total"])
+            rest[k] = rest.get(k, 0.0) - b["total"]
         for w in store.item_work(s):
-            out[(None, w["item"])] = out.get((None, w["item"]), 0.0) + w["seconds"]
+            add((None, w["item"], w["counted"], s["label"]), w["seconds"])
+    for k, secs in rest.items():
+        add((k, None, None, None), secs)
     for m in store.segments["manual"]:
         if m.get("item"):
-            out[(None, m["item"])] = out.get((None, m["item"]), 0.0) + m["end"] - m["start"]
+            add((None, m["item"], bool(m.get("counted")), store.sprint_of(m)), m["end"] - m["start"])
     return out
 
 
-def cut_by(before, after):
-    """What a manual record took minutes from, a minute or more: {key, seconds} for a ticket (its
-    total went down: the record's own ticket never does), {item, seconds} for a work item."""
-    out = []
-    for (key, item), secs in sorted(before.items(), key=lambda x: (x[0][0] or "", x[0][1] or "")):
-        gone = secs - after.get((key, item), 0.0)
+def cut_by(before, after, held):
+    """(what a manual record took minutes from, a minute or more; whether it took under a minute
+    from any). A ticket: {key, seconds, inSprint} (its time went down: the record's own ticket's
+    never does where the record is); an item: {item, seconds, counted, inSprint}. `inSprint`: those
+    minutes were in the hours of `held`, the sprint holding the record (one of its tickets, an item
+    counted, in its days); `elsewhere`: they were in another sprint's days, or in no sprint's."""
+    label, keys, out, minor = (held or {}).get("label"), set((held or {}).get("keys", [])), [], False
+    for (key, item, counted, sprint), secs in sorted(before.items(), key=lambda x: tuple(str(v) for v in x[0])):
+        gone = secs - after.get((key, item, counted, sprint), 0.0)
         if gone >= 60:
-            out.append({"key": key, "seconds": gone} if key else {"item": item, "seconds": gone})
-    return out
+            here = sprint is not None and sprint == label
+            e = {"key": key, "seconds": gone, "inSprint": here and key in keys} if key else {"item": item, "seconds": gone, "counted": counted, "inSprint": here and counted}
+            out.append(e if here else {**e, "elsewhere": True})
+        elif gone >= 1:
+            minor = True
+    return out, minor
 
 
 def parse_start(text):

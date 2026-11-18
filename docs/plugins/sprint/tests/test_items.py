@@ -273,7 +273,7 @@ class JiraHoursTests(Base):
         self.report("s2", [(T0, T0 + 2 * H, False)], {"PROJ-1": 50, "PROJ-2": 50})
         added = self.add("PROJ-2", T0 + H, 30)["added"]
         # PROJ-1 (100% at most at once) lost 30m; PROJ-2 gained the record: not said to give way.
-        self.assertEqual(added["cut"], [{"key": "PROJ-1", "seconds": 0.5 * H}])
+        self.assertEqual(added["cut"], [{"key": "PROJ-1", "seconds": 0.5 * H, "inSprint": True}])
         self.assertTrue(added["autoPush"])
         self.assertEqual(self.add("", T0 + 5 * H, 60)["added"]["cut"], [])               # over no session
         self.store.config["autoPushHours"] = False
@@ -286,7 +286,7 @@ class JiraHoursTests(Base):
     def test_adding_over_a_work_items_session_says_the_item_gave_way(self):
         worklog.session_bind(self.store, {**sess("s7", []), "input": "小工具開發"})
         self.report("s7", [(T0 + 4 * H, T0 + 6 * H, False)])
-        self.assertEqual(self.add("", T0 + 5 * H, 30)["added"]["cut"], [{"item": "小工具開發", "seconds": 0.5 * H}])
+        self.assertEqual(self.add("", T0 + 5 * H, 30)["added"]["cut"], [{"item": "小工具開發", "seconds": 0.5 * H, "counted": False, "inSprint": False}])
 
     def test_adding_another_tickets_entry_queues_both(self):
         self.add("PROJ-2", T0 + H, 60)

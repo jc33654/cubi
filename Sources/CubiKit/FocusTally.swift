@@ -1,7 +1,7 @@
 import Foundation
 
-/// 專注零件 (a pomodoro-like count, as gears): every 25 minutes the user's sessions were busy in
-/// a day gives one gear. Busy is a session's own stretches of activity (cut by
+/// 專注獎勵 (a pomodoro-like count): every 25 minutes the user's sessions were busy in
+/// a day gives one (`gears`, the name it had first). Busy is a session's own stretches of activity (cut by
 /// `SessionStore.workGap`), all sessions together counted once (their union), summed over the
 /// day: a pause does not start the count again. Days are cut at local midnight and nothing
 /// carries over. Sessions in Claude Code's restricted mode (the ones Cubi opens for an AI
@@ -32,7 +32,7 @@ public struct FocusLog: Codable, Equatable, Sendable {
         /// "1h18m", "7m": the busy time, whole minutes.
         public var busyText: String { Self.text(seconds) }
         /// What the island says on hover: the day's busy time and what the next gear still needs.
-        public var summary: String { "今天專注 \(busyText)，再 \(Self.text(untilNext.rounded(.up))) 下一個零件" }
+        public var summary: String { "今天專注 \(busyText)，再 \(Self.text(untilNext.rounded(.up))) 下一個" }
 
         public static func text(_ seconds: Double) -> String {
             let minutes = Int(seconds / 60)

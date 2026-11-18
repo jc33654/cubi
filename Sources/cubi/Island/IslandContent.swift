@@ -160,14 +160,14 @@ extension View {
     func reportsExpandedHeight(to state: IslandState) -> some View { modifier(ReportsExpandedHeight(state: state)) }
 }
 
-/// Today's 專注零件 on the right wing: a gear and the count, kept narrow (the wing is 118 points
+/// Today's 專注獎勵 on the right wing: its mark and the count, kept narrow (the wing is 118 points
 /// and holds ＋ and the usage too). Hover says the busy time and what the next one needs.
 struct FocusBadge: View {
     let day: FocusLog.Day
 
     var body: some View {
         HStack(spacing: 2) {
-            Image(systemName: "gearshape.fill").font(.system(size: 9, weight: .semibold))
+            Image(systemName: FocusMark.symbol).font(.system(size: 9, weight: .semibold))
             Text("\(day.gears)").font(.system(size: 10, weight: .semibold, design: .monospaced))
         }
         .foregroundStyle(Color(red: 0.85, green: 0.75, blue: 0.45))
@@ -175,4 +175,9 @@ struct FocusBadge: View {
         .fixedSize()
         .help(day.summary)
     }
+}
+
+/// What one 專注獎勵 looks like, on the wing and in settings: a star (it was a gear).
+enum FocusMark {
+    static let symbol = "star.fill"
 }

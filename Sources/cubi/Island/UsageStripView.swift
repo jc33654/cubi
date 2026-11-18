@@ -4,7 +4,7 @@ import CubiKit
 /// Plan usage: two bars with reset times. Shown at the top of the expanded island.
 struct UsageStripView: View {
     let usage: StatuslineInfo?
-    /// Today's 專注零件, at the end of the row; nil while switched off.
+    /// Today's 專注獎勵, at the end of the row; nil while switched off.
     var focus: FocusLog.Day? = nil
 
     var body: some View {

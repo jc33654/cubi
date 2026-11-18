@@ -2,7 +2,7 @@ import Foundation
 import Observation
 import CubiKit
 
-/// 專注零件 on this Mac: the switch (off until the user turns it on), when it was turned on (nothing
+/// 專注獎勵 on this Mac: the switch (off until the user turns it on), when it was turned on (nothing
 /// before that is counted, not even after a restart), and the busy spans per day (FocusLog), all in
 /// the app's defaults. Never sent anywhere; nothing to do with the sprint plugin's hours.
 @MainActor

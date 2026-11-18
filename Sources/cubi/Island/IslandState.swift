@@ -146,7 +146,7 @@ final class IslandState {
     var expandedHeight: CGFloat = 190
     /// Account-wide plan usage from the latest status line; nil until one arrives.
     var usage: StatuslineInfo?
-    /// Today's 專注零件; nil while counting is switched off.
+    /// Today's 專注獎勵; nil while counting is switched off.
     var focus: FocusLog.Day?
     /// A robot click found no single terminal window of its own, so nothing jumped: the right wing
     /// says so instead of the usage for a few seconds. Another miss meanwhile only keeps it longer.

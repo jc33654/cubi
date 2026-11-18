@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import CubiKit
 
-/// Batch 38: 專注零件. A fixed time zone, so midnight is where these tests say it is.
+/// Batch 38: 專注獎勵. A fixed time zone, so midnight is where these tests say it is.
 private let taipei: Calendar = {
     var c = Calendar(identifier: .gregorian)
     c.timeZone = TimeZone(identifier: "Asia/Taipei")!

@@ -39,7 +39,7 @@ enum IconRenderer {
     /// The island as the panel would show it, over a mid-grey background, at 2× for inspection.
     @MainActor
     static func renderIsland(mode asked: String, botState: String, to path: String) -> Bool {
-        // `<mode>-gear`: the same, with 12 專注零件 on the wing (what must give way to what).
+        // `<mode>-gear`: the same, with 12 專注獎勵 on the wing (what must give way to what).
         let gear = asked.hasSuffix("-gear")
         let mode = gear ? String(asked.dropLast(5)) : asked
         let geometry = NotchGeometry(screenFrame: CGRect(x: 0, y: 0, width: 1512, height: 982),
@@ -90,7 +90,7 @@ enum IconRenderer {
             state.mode = .expanded
             state.showingDiffFor = "alpha"
         case "focus", "focus-12", "focus-expanded", "focus-nousage":
-            // 專注零件 on the wing (one digit, two), in the usage row, and with no usage yet.
+            // 專注獎勵 on the wing (one digit, two), in the usage row, and with no usage yet.
             state.mode = mode == "focus-expanded" ? .expanded : .compact
             if mode != "focus-nousage" {
                 state.usage = StatuslineInfo(fiveHour: UsageWindow(usedPercent: 100, resetsAt: Date().timeIntervalSince1970 + 5400),

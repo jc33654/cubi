@@ -38,12 +38,15 @@ def time_add(store, p):
     # sprint on screen (its hours there do not move).
     label = store.sprint_of(entry)
     held = store.sprint(label) if label else None
-    # Work with no ticket counts in its sprint as it is; a ticket only where it is one of the sprint's.
+    # `inSprint`: the record itself is in that sprint's hours: a ticket that is one of the sprint's,
+    # work with no ticket that counts (its item's setting, stamped on it).
     state["added"] = {"key": entry["key"], "item": entry.get("item"), "newItem": bool(entry.get("item")) and p.get("newItem") is True,
                       "start": entry["start"], "end": entry["end"], "sprint": label,
-                      "inSprint": bool(held) and (entry["key"] is None or entry["key"] in held.get("keys", [])),
+                      "inSprint": bool(held) and (entry["key"] in held.get("keys", []) if entry["key"] else bool(entry.get("counted"))),
                       "autoPush": bool(autopush.field(store))}
-    state["added"]["cut"], state["added"]["cutMinor"] = cut_by(before, session_hours(store), held)
+    after = session_hours(store)
+    state["added"]["cut"], state["added"]["cutMinor"], state["added"]["cutMinorIn"] = cut_by(before, after, held)
+    state["added"]["own"] = overlapped(before, after, entry)
     return state
 
 
@@ -88,21 +91,35 @@ def session_hours(store):
 
 
 def cut_by(before, after, held):
-    """(what a manual record took minutes from, a minute or more; whether it took under a minute
-    from any). A ticket: {key, seconds, inSprint} (its time went down: the record's own ticket's
+    """(what a manual record took minutes from, a minute or more; the seconds it took from those
+    it took under a minute from, together, and of them what was in `held`'s hours). A ticket: {key, seconds, inSprint} (its time went down: the record's own ticket's
     never does where the record is); an item: {item, seconds, counted, inSprint}. `inSprint`: those
     minutes were in the hours of `held`, the sprint holding the record (one of its tickets, an item
     counted, in its days); `elsewhere`: they were in another sprint's days, or in no sprint's."""
-    label, keys, out, minor = (held or {}).get("label"), set((held or {}).get("keys", [])), [], False
+    label, keys, out, minor = (held or {}).get("label"), set((held or {}).get("keys", [])), [], 0.0
+    minor_in = 0.0
     for (key, item, counted, sprint), secs in sorted(before.items(), key=lambda x: tuple(str(v) for v in x[0])):
         gone = secs - after.get((key, item, counted, sprint), 0.0)
+        if gone < 1:
+            continue
+        here = sprint is not None and sprint == label
+        e = {"key": key, "seconds": gone, "inSprint": here and key in keys} if key else {"item": item, "seconds": gone, "counted": counted, "inSprint": here and counted}
         if gone >= 60:
-            here = sprint is not None and sprint == label
-            e = {"key": key, "seconds": gone, "inSprint": here and key in keys} if key else {"item": item, "seconds": gone, "counted": counted, "inSprint": here and counted}
             out.append(e if here else {**e, "elsewhere": True})
-        elif gone >= 1:
-            minor = True
-    return out, minor
+        else:
+            minor += gone
+            minor_in += gone if e["inSprint"] else 0.0
+    return out, round(minor), round(minor_in)
+
+
+def overlapped(before, after, entry):
+    """Seconds of a manual record its own ticket or item already had (a session's, or an earlier
+    record's; never said to give way): its length, less what that ticket or item gained by it, in
+    any sprint's days."""
+    def own(k):
+        return k[0] == entry["key"] if entry["key"] else k[0] is None and k[1] == entry.get("item")
+    gained = sum(after.get(k, 0.0) - before.get(k, 0.0) for k in set(before) | set(after) if own(k))
+    return round(max(0.0, entry["end"] - entry["start"] - gained))
 
 
 def parse_start(text):

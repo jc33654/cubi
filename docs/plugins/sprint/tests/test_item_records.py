@@ -56,6 +56,27 @@ class RecordsUnderItemsTests(Base):
         self.report("s2", [(T0 + 4 * H, T0 + 6 * H, False)], {})
         self.assertEqual(self.add(T0 + 5 * H, 30, item="小工具開發")["added"]["cut"], [{"item": "雜事", "seconds": 0.5 * H, "counted": False, "inSprint": False}])
 
+    def test_what_the_records_own_ticket_or_item_already_had_is_said(self):
+        # Batch 42 (F42-1): never listed as given way, so said apart: the hours grow by less than the record.
+        self.report("s1", [(T0, T0 + H, False)], {"PROJ-1": 100})
+        before = self.sprint_seconds()
+        added = worklog.time_add(self.store, {"key": "PROJ-1", "start": at(T0 + 0.5 * H), "minutes": 60})["added"]
+        self.assertEqual((added["cut"], added["own"]), ([], 0.5 * H))
+        self.assertAlmostEqual(self.sprint_seconds() - before, 0.5)
+        self.bind("s2", "會議")
+        worklog.item_update(self.store, {"name": "會議", "counted": True, "now": T0})
+        self.report("s2", [(T0 + 3 * H, T0 + 5 * H, False)], {})
+        before = self.sprint_seconds()
+        added = self.add(T0 + 4 * H, 30, item="會議")["added"]
+        self.assertEqual((added["cut"], added["own"]), ([], 0.5 * H))
+        self.assertAlmostEqual(self.sprint_seconds(), before)
+        self.assertEqual(self.add(T0 + 8 * H, 30, item="會議")["added"]["own"], 0)                # over no session
+        # Over an earlier record of the same ticket (F42-2): that one's, not a session's. (Records of
+        # an item are not one time counted once: each counts whole.)
+        worklog.time_add(self.store, {"key": "PROJ-1", "start": at(T0 + 10 * H), "minutes": 60})
+        self.assertEqual(worklog.time_add(self.store, {"key": "PROJ-1", "start": at(T0 + 10.5 * H), "minutes": 60})["added"]["own"], 0.5 * H)
+        self.assertEqual(self.add(T0 + 8 * H + 15 * 60, 30, item="會議")["added"]["own"], 0)
+
     def test_what_gave_way_says_whether_the_sprints_hours_went_down_with_it(self):
         self.report("s2", [(T0, T0 + 2 * H, False)], {"PROJ-1": 50, "OPS-9": 50})          # OPS-9: not one of Sprint7's
         self.bind("s3", "會議")
@@ -87,8 +108,11 @@ class RecordsUnderItemsTests(Base):
     def test_under_a_minute_taken_is_not_listed_but_said(self):
         self.report("s1", [(T0 - H, T0 + 40, False)], {"PROJ-1": 100})
         added = self.add(T0, 30, item="面試", newItem=True)["added"]
-        self.assertEqual((added["cut"], added["cutMinor"]), ([], True))
+        self.assertEqual((added["cut"], added["cutMinor"], added["cutMinorIn"]), ([], 40, 40))
         self.assertFalse(self.add(T0 + 5 * H, 30, item="面試")["added"]["cutMinor"])            # over no session
+        self.report("s2", [(T0 + 7 * H, T0 + 8 * H + 30, False)], {"OPS-9": 100})              # not one of Sprint7's
+        added = self.add(T0 + 8 * H, 30, item="面試")["added"]
+        self.assertEqual((added["cutMinor"], added["cutMinorIn"]), (30, 0))
 
     def test_a_record_written_before_stays_as_it_was(self):
         old = self.store.add_manual(None, T0, 180, "開發", "測試", calendar=True, sprint="Sprint7", counted=True)

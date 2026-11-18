@@ -59,7 +59,7 @@ class WorklogTests(unittest.TestCase):
         self.store.new_sprint("Sprint6", "", "2026-11-02", "2026-11-15")
         state = sprint.time_add(self.store, {"key": "PROJ-1", "minutes": 60})
         self.assertEqual(state["added"], {"key": "PROJ-1", "item": None, "newItem": False, "start": NOW - 3600, "end": NOW, "sprint": "Sprint7", "inSprint": True,
-                                          "cut": [], "cutMinor": False, "autoPush": False})
+                                          "cut": [], "cutMinor": 0, "cutMinorIn": 0, "own": 0, "autoPush": False})
         state = sprint.time_add(self.store, {"key": "PROJ-1", "minutes": 30, "start": "2026-11-10T09:00"})
         self.assertEqual((state["added"]["sprint"], state["added"]["inSprint"], state["added"]["end"] - state["added"]["start"]), ("Sprint6", False, 1800))
         self.store.add_to_sprint("Sprint6", "PROJ-1")
@@ -68,7 +68,9 @@ class WorklogTests(unittest.TestCase):
         state = sprint.time_add(self.store, {"key": "PROJ-1", "minutes": 30, "start": "2026-12-25T09:00"})
         self.assertEqual((state["added"]["sprint"], state["added"]["inSprint"]), (None, False))   # no sprint holds it
         state = sprint.time_add(self.store, {"key": "", "minutes": 30, "start": "2026-11-17T09:00", "note": "支援", "item": "支援", "newItem": True})
-        self.assertEqual([state["added"][k] for k in ("key", "item", "newItem", "sprint", "inSprint")], [None, "支援", True, "Sprint7", True])
+        self.assertEqual([state["added"][k] for k in ("key", "item", "newItem", "sprint", "inSprint")], [None, "支援", True, "Sprint7", False])   # not counted
+        state = sprint.time_add(self.store, {"key": "", "minutes": 30, "start": "2026-11-17T10:00", "item": "會議", "newItem": True, "itemCounted": True})
+        self.assertEqual([state["added"][k] for k in ("item", "sprint", "inSprint")], ["會議", "Sprint7", True])
         self.assertEqual((state["nowSprint"], state["nowSprintKeys"]), ("Sprint7", ["PROJ-1"]))
 
     def test_the_panel_says_which_sprint_holds_each_of_the_tickets_stretches(self):

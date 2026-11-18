@@ -96,6 +96,10 @@
   #c-estimateRules { min-height: 150px; }
   #status { display: flex; align-items: flex-start; gap: 10px; }
   #status[hidden] { display: none; }
+  #status-body { flex: 1; min-width: 0; }
+  #status-detail summary { cursor: pointer; margin-top: 4px; opacity: .85; }
+  #status-lines { margin-top: 2px; max-height: 40vh; overflow-y: auto; }
+  #status-lines > div { margin-top: 2px; }
   /* A 32×32 target around a small icon; the negative margins keep it from making the box taller. */
   #status-close { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; margin: -8px -10px -8px -6px;
     background: none; border: 0; border-radius: 8px; padding: 0; color: inherit; cursor: pointer; line-height: 0; opacity: .8; }
@@ -117,7 +121,7 @@
     <section id="tab-settings" hidden></section>
   </main>
 </div>
-<div class="cubi-status" id="status" hidden><span id="status-text"></span><button type="button" id="status-close" title="關閉" aria-label="關閉" hidden></button></div>
+<div class="cubi-status" id="status" hidden><div id="status-body"><span id="status-text"></span><details id="status-detail" hidden><summary>明細</summary><div id="status-lines"></div></details></div><button type="button" id="status-close" title="關閉" aria-label="關閉" hidden></button></div>
 <script>
 "use strict";
 const $ = (s, el = document) => el.querySelector(s);
@@ -135,17 +139,20 @@ const weekday = d => d ? "日一二三四五六"[new Date(d + "T00:00").getDay()
 let confirmRemove = null, confirmDelete = null, confirmReassign = false;   // 移出這一期 / deleting a shared stretch, waiting for a yes
 const openHours = new Set();   // tickets (and "*", the whole sprint) whose hours are shown by kind
 
-// One message at a time, bottom right; the next one replaces it. Errors stay until closed (✕) or
-// replaced; anything else goes after 4 seconds.
+// One message at a time, bottom right; the next one replaces it. Errors, and messages to `keep`,
+// stay until closed (✕) or replaced; anything else goes after 4 seconds. `detail`: lines under a
+// 明細 that opens by hand.
 let statusTimer = null;
-function status(msg, isError) {
-  const el = $("#status");
+function status(msg, isError, { detail = [], keep = false } = {}) {
+  const el = $("#status"), more = $("#status-detail");
   clearTimeout(statusTimer);
   $("#status-text").textContent = msg || "";
+  $("#status-lines").replaceChildren(...detail.map(t => Object.assign(document.createElement("div"), { textContent: t })));
+  more.hidden = !detail.length; more.open = false;
   el.hidden = !msg;
   el.classList.toggle("err", Boolean(isError));
-  $("#status-close").hidden = !isError;
-  if (msg && !isError) statusTimer = setTimeout(() => status(""), 4000);
+  $("#status-close").hidden = !isError && !keep;
+  if (msg && !isError && !keep) statusTimer = setTimeout(() => status(""), 4000);
 }
 const statusShows = msg => !$("#status").hidden && $("#status-text").textContent === msg;
 $("#status-close").innerHTML = ic("x", 14) || "✕";
@@ -787,32 +794,44 @@ function nowHint(key) {
 const hhmm = t => new Date(t * 1000).toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 // To the second, so the minutes taken add up with the hours' change she checks them against.
 const cutT = secs => { const s = Math.round(secs), r = s % 60; return (s >= 60 ? fmtH(s - r) : "") + (r ? `${r}s` : ""); };
-// What the record took from sessions, in three groups, an empty one left out: what the sprint's
-// hours lose with it (its tickets, items counted in it, in its days), other tickets, other items.
-// Minutes in another sprint's days (a record over the night two sprints meet) are said so.
-function cutSaid(a) {
+const signed = (d, f) => (d > 0 ? "+" : "−") + f(Math.abs(d));
+// The 明細 of a record: what it took from sessions, in three groups, an empty one left out: what
+// the sprint's hours lose with it (its tickets, items counted in it, in its days), other tickets,
+// other items. Minutes in another sprint's days (a record over the night two sprints meet) are said so.
+function cutLines(a) {
   const cut = a.cut || [], here = a.sprint === state.sprint?.label ? "本期" : a.sprint || "任何一期";
-  if (!cut.length) return "";
+  if (!cut.length) return [];
   const tickets = cut.filter(c => !c.item && !c.inSprint), items = cut.filter(c => c.item && !c.inSprint);
   const groups = [[cut.filter(c => c.inSprint), `算在${here}投入，投入跟著少`],
     [tickets, tickets.some(c => c.elsewhere) ? `不在${here}工單或不在${here}日期內，不影響投入` : `不在${here}工單，不影響投入`],
     [items, items.some(c => c.counted) ? `工作項目不算進投入或不在${here}日期內，不影響投入` : "工作項目不算進投入，不影響投入"]]
-    .filter(([xs]) => xs.length).map(([xs, why]) => `${xs.map(c => `${c.item ? `「${c.item}」` : c.key} ${cutT(c.seconds)}`).join("、")}（${why}）`);
-  return `；同一段時間 session 自動記的已扣掉：${groups.join("；")}${a.autoPush && cut.some(c => !c.item) ? "，有單號的會重送 Jira 工時" : ""}`;
+    .filter(([xs]) => xs.length).map(([xs, why]) => `・${why}：${xs.map(c => `${c.item ? `「${c.item}」` : c.key} ${cutT(c.seconds)}`).join("、")}`);
+  return ["同一段時間 session 自動記的已扣掉，不重複算：", ...groups, ...(a.autoPush && cut.some(c => !c.item) ? ["有單號的會重送 Jira 工時"] : [])];
 }
-// `was`: the sprint's hours on screen before the record. What lost under a minute is not listed,
-// but is in this change (said so when there was any).
+// After a record: one sentence (what was written, whether it is in the hours, how the hours on
+// screen moved, each side to the minute as the panel shows them) and the 明細, opened by hand.
+// `was`: the hours on screen before it.
 function addedSaid(a, was) {
-  if (!a) return "已記";
-  const what = `${a.newItem ? `已建立工作項目「${a.item}」並記` : `已記 ${a.key || `「${a.item}」`}`} ${fmtH(a.end - a.start)}（${hhmm(a.start)}–${hhmm(a.end)}）`;
-  const cut = cutSaid(a);
-  if (a.sprint === state.sprint?.label) {
-    const now = state.sprint.metrics.seconds, d = Math.round(now - (was ?? now));
-    return what + cut + (was == null ? "" : `；本期投入 ${fmtH(was)} → ${fmtH(now)}（${d ? (d > 0 ? "+" : "−") + cutT(Math.abs(d)) : "不變"}${a.cutMinor ? "；session 被扣不到 1 分鐘的沒列出，但已算進投入" : ""}）`);
+  if (!a) return { msg: "已記", detail: [] };
+  const label = state.sprint?.label, same = a.sprint === label;
+  let msg = `${a.newItem ? `已建立工作項目「${a.item}」並記` : `已記 ${a.key || `「${a.item}」`}`} ${fmtH(a.end - a.start)}（${hhmm(a.start)}–${hhmm(a.end)}）`;
+  const own = a.item ? `「${a.item}」沒勾「算進 sprint 投入」` : `${a.key} 不在${same ? "本期" : ` ${a.sprint} 的`}工單裡`;
+  if (!a.sprint) msg += "，但沒有任何一期涵蓋這段時間，不算進哪一期";
+  else if (same && !a.inSprint) msg += `；這筆不算進本期投入（${own}）`;
+  else if (!same && a.inSprint) msg += `，算在 ${a.sprint}（不是目前看的 ${label}，切過去就看得到）`;
+  else if (!same && a.item) msg += `，在 ${a.sprint}，不算進投入（${own}）`;
+  else if (!same) msg += `，在 ${a.sprint}，但 ${own}，哪一期都不算；要算進去，請把它加進 ${a.sprint}`;
+  const detail = cutLines(a);
+  if (was != null && label) {
+    const now = state.sprint.metrics.seconds, d = Math.round(now - was), dm = Math.floor(now / 60) - Math.floor(was / 60), cur = same ? "本期" : `${label} `;
+    msg += dm || d ? `；${cur}投入 ${fmtH(was)} → ${fmtH(now)}（${dm ? signed(dm * 60, fmtH) : signed(d, cutT)}）`
+      : `；${cur}投入不變（${fmtH(now)}${same && a.inSprint ? "，這段時間原本就算在投入裡" : ""}）`;
+    // What the record's own ticket or item already had of its minutes (never listed as taken).
+    if (a.own >= 60) detail.push(`其中 ${cutT(a.own)} 原本就算在 ${a.key || `「${a.item}」`} 裡（session 或之前的補記），同一段時間不重複算`);
+    if (detail.length || a.cutMinor) detail.push(`${cur}投入精確到秒：${d ? signed(d, cutT) : "不變"}`);
   }
-  if (!a.sprint) return `${what}，但沒有任何一期涵蓋這段時間，所以不會算進哪一期的時數${cut}`;
-  if (!a.inSprint) return `${what}，但這段時間在 ${a.sprint}，而 ${a.key} 不在 ${a.sprint} 的工單裡，哪一期都看不到；要算進去，請把它加進 ${a.sprint}${cut}`;
-  return `${what}，但這段時間在 ${a.sprint}，不在目前看的 ${state.sprint?.label}，這裡的時數不會變；切到 ${a.sprint} 就看得到${cut}`;
+  if (a.cutMinor) detail.push(`session 被扣不到 1 分鐘的沒列出：加起來 ${cutT(a.cutMinor)}，${a.cutMinorIn >= a.cutMinor ? "都已算進投入" : a.cutMinorIn ? `其中 ${cutT(a.cutMinorIn)} 算在投入、已算進上面的差，其他不影響投入` : "都不影響投入"}`);
+  return { msg, detail, keep: detail.length > 0 || !same || !a.inSprint };
 }
 // The start a form fills in: now, less the hours. It follows the hours until she types a start.
 const startFor = hours => localTime(Date.now() / 1000 - Number(hours) * 3600);
@@ -854,7 +873,7 @@ function bindOverview(el) {
       : { key: "", item: p.fresh ? p.itemName : p.item, newItem: p.fresh, itemCounted: p.itemCounted, start: p.start, minutes, kind: p.kind, note: p.note, calendar: p.calendar };
     const was = state.sprint?.metrics?.seconds;
     if (!await refresh("time.add", payload)) { pendingTime = p; render(); return; }
-    if (!(state.warnings || []).length) status(addedSaid(state.added, was), !!state.added && (state.added.sprint !== state.sprint?.label || !!(state.added.cut || []).length)); });
+    if (!(state.warnings || []).length) { const s = addedSaid(state.added, was); status(s.msg, false, s); } });
   $("#t-more", el)?.addEventListener("click", () => { keepTimeForm(); const p = pendingTime;
     pendingTime = { ...p, more: true, ...(p.startTouched || !(Number(p.hours) > 0) ? {} : { start: startFor(p.hours) }) }; render(); });
   $("#t-hours", el)?.addEventListener("input", e => {

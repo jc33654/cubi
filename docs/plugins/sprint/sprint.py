@@ -20,6 +20,7 @@ from card import claude_session_ids, session_info, tick, timer_start  # noqa: E4
 from common import check_payload, dry_run, jira  # noqa: E402,F401
 from estimate_comment import estimate_comment  # noqa: E402
 from estimates import estimate_brief, estimate_dismiss, estimate_suggest  # noqa: E402
+from item_actions import item_delete, item_rename  # noqa: E402
 from jira import JiraError  # noqa: E402
 from panel import CONFIG_KEYS, config_set, hint_seen, hours_retry, panel_state  # noqa: E402,F401
 from reviews import review_brief, review_export, review_resend, review_update  # noqa: E402
@@ -38,7 +39,7 @@ ACTIONS = {
     "estimate.brief": estimate_brief, "estimate.suggest": estimate_suggest, "estimate.dismiss": estimate_dismiss, "estimate.comment": estimate_comment,
     "time.add": time_add, "time.update": time_update, "time.remove": time_remove,
     "review.update": review_update, "review.export": review_export, "review.resend": review_resend,
-    "config.set": config_set, "hint.seen": hint_seen, "item.update": item_update,
+    "config.set": config_set, "hint.seen": hint_seen, "item.update": item_update, "item.delete": item_delete, "item.rename": item_rename,
 }
 # Their stdout is a path for cubi's `reveal`, so an error must go to stderr with a non-zero exit.
 RAW_ACTIONS = {"review.export"}

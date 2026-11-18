@@ -4,7 +4,7 @@ import time
 import uuid
 
 from review import MEETING_KINDS, sprint_range
-from timers import MAX_ENTRY
+from timers import MAX_ENTRY, manual_title
 
 SESSION_KIND = "Session"   # what session stretches are called next to manual kinds (a session may plan, then build)
 
@@ -31,7 +31,7 @@ class HoursMixin:
             entry["open"] = bool(seg.get("open"))
             entry.pop("lost", None)
             entry["name"] = session.get("name", "")
-            if not entry.get("shares") and not entry.get("item"):
+            if not entry.get("shares") and not entry.get("item") and not entry.get("itemDeleted"):
                 entry["shares"] = shares
                 if item and not shares:
                     entry.update(item)
@@ -218,8 +218,7 @@ class HoursMixin:
             if m.get("calendar") and m["end"] >= now - window and 60 <= m["end"] - m["start"] <= MAX_ENTRY:
                 keys = list(m.get("shares") or ([m["key"]] if m.get("key") else []))
                 entries.append({
-                    "title": (f"{' '.join(keys)} {m.get('note') or ''}（{m.get('kind', '')}）".replace("  ", " ").strip() if keys
-                              else f"{' '.join(dict.fromkeys(filter(None, (m.get('item'), m.get('note')))))}（{m.get('kind', '')}）"),
+                    "title": manual_title(m),
                     "start": m["start"], "end": m["end"],
                     "notes": "\n".join(([m["reason"]] if m.get("reason") else []) + [self.browse_url(k) for k in keys]),
                     "marker": f"sprint:manual:{m['id']}",

@@ -11,6 +11,7 @@ from hours import check_minutes
 from items import item_name
 from panel import panel_state
 from sprints import sprint_at
+from timers import manual_title
 
 
 def time_add(store, p):
@@ -56,12 +57,14 @@ def record_item(store, p):
     record is under a work item."""
     if not str(p.get("item") or "").strip():
         raise ValueError("補記要掛在一個工作底下：按工單那一列或工作項目那一列的＋，或「新工作項目」")
-    name, known, new = item_name(p["item"]), store.sprints.get("items", {}), p.get("newItem") is True
-    if new and name in known:
-        raise ValueError(f"已有「{name}」：要補記請按它那一列的＋")
-    if not new and name not in known:
+    # Names that differ only in case are one item, written the way the one there is.
+    name, new = item_name(p["item"]), p.get("newItem") is True
+    there = store.known_item(name)
+    if new and there:
+        raise ValueError(f"已有「{there}」{'' if there == name else '（大小寫不同也算同一個）'}：要補記請按它那一列的＋")
+    if not new and not there:
         raise ValueError(f"沒有「{name}」這個工作項目")
-    return name, new
+    return there or name, new
 
 
 def session_hours(store):
@@ -131,6 +134,13 @@ def parse_start(text):
 
 # What the panel says after an edit the calendar will not follow.
 CALENDAR_STALE = "行事曆上的舊事件不會自動更新，請手動調整或刪除"
+
+
+def calendar_left(records):
+    """What the panel says when records ticked for the calendar are deleted: cubi only ever writes
+    events, so theirs stay there for her to clear."""
+    said = [f"{datetime.fromtimestamp(m['start']):%m/%d %H:%M}–{datetime.fromtimestamp(m['end']):%H:%M}「{manual_title(m)}」" for m in records if m.get("calendar")]
+    return f"已寫進行事曆的事件不會跟著刪，要自己到行事曆清：{'、'.join(said)}" if said else None
 # cubi's calendar only ever grows an event it wrote (same start, later end), and the plugin only
 # sends stretches that ended in the last 48 hours (store.calendar_entries).
 CALENDAR_WINDOW = 48 * 3600
@@ -174,9 +184,13 @@ def time_update(store, p):
 
 
 def time_remove(store, p):
-    autopush.queue(store, [k for m in store.segments["manual"] if m["id"] == p["id"] for k in autopush.touched(store, m)])
+    gone = [m for m in store.segments["manual"] if m["id"] == p["id"]]
+    autopush.queue(store, [k for m in gone for k in autopush.touched(store, m)])
     store.remove_manual(p["id"])
-    return panel_state(store, p)
+    state = panel_state(store, p)
+    if left := calendar_left(gone):
+        state["calendarLeft"] = left
+    return state
 
 
 def timer_stop(store, p):
@@ -212,6 +226,7 @@ def session_bind(store, p):
             store.bind(s["id"], key)
     else:
         name = item_name(text)
+        name = store.known_item(name) or name                    # case aside, the one there is
         bound = store.bound_keys(rec) if rec else []
         if bound:
             raise ValueError(f"這個 session 已綁 {'、'.join(bound)}。單號和工作項目只能二選一：先解除單號再綁「{name}」")

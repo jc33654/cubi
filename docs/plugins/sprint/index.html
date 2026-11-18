@@ -637,8 +637,44 @@ function itemsList(hpp) {
     <table class="cubi-table tight" style="margin-top:6px"><tbody>${items.map(it => `<tr><td class="clip" title="${esc(it.name)}">${esc(it.name)}</td>
       <td class="cubi-muted">${it.sessions ? `${it.sessions} 個 session 綁著` : "沒有 session 綁著"}</td><td class="num">本期 ${fmtH(it.seconds)}${asPts(it.seconds, hpp)}</td>
       <td class="num"><label class="cubi-row" style="justify-content:flex-end;gap:6px"><input type="checkbox" data-item-counted="${esc(it.name)}" ${it.counted ? "checked" : ""}> 算進 sprint 投入</label><div class="cubi-muted" style="font-size:11px">套用到 ${esc(state.nowSprint || state.current || "目前這一期")} 全部；之前各期不變</div></td>
-      <td class="num"><button class="cubi-btn icon" data-time="item:${esc(it.name)}" title="補記時間到「${esc(it.name)}」（會議、討論…）">${ic("plus", 15)}</button></td></tr>${pendingTime && pendingTime.item === it.name
-        ? `<tr><td colspan="5" style="white-space:normal;overflow:visible">${timeForm(pendingTime.key)}</td></tr>` : ""}`).join("")}</tbody></table>`;
+      <td class="num"><span class="cubi-row" style="justify-content:flex-end;flex-wrap:nowrap"><button class="cubi-btn icon" data-time="item:${esc(it.name)}" title="補記時間到「${esc(it.name)}」（會議、討論…）">${ic("plus", 15)}</button><button class="cubi-btn icon" data-item-rename="${esc(it.name)}" title="改名（改成已有的名字就併在一起）" aria-label="改名">${PENCIL}</button><button class="cubi-btn icon" data-item-delete="${esc(it.name)}" title="刪除這個工作項目（會先說會一起刪掉什麼）" aria-label="刪除">${ic("x", 14)}</button></span></td></tr>${pendingTime && pendingTime.item === it.name
+        ? `<tr><td colspan="5" style="white-space:normal;overflow:visible">${timeForm(pendingTime.key)}</td></tr>` : ""}${itemEdit && itemEdit.name === it.name ? `<tr><td colspan="5" style="white-space:normal;overflow:visible">${itemEditRow(itemEdit)}</td></tr>` : ""}`).join("")}</tbody></table>`;
+}
+// Renaming or deleting a work item: the row under it asks first; what cannot be undone (deleting,
+// merging into another item) is said in full, and deleting takes a second press.
+let itemEdit = null;   // {name, mode: "rename" | "delete", said, armed, to}
+const hoursDiff = d => Math.abs(d) < 60 ? "不到 1 分鐘" : signed(d, fmtH);
+const hoursChanged = c => c.length ? c.map(x => `${x.sprint} 投入 ${fmtH(x.before)} → ${fmtH(x.after)}（${hoursDiff(x.after - x.before)}）`).join("、") : "各期投入不變";
+function itemDeleteLines(s) {
+  return [s.records ? `底下 ${s.records} 筆補記一起刪掉（${s.bySprint.map(b => `${b.sprint || "不在任何一期"} ${b.records} 筆`).join("、")}，共 ${fmtH(s.recordSeconds)}）` : "底下沒有補記",
+    s.autoSeconds > 0 ? `session 自動記到它的 ${s.autoSeconds >= 60 ? fmtH(s.autoSeconds) : "不到 1 分鐘"} 一起拿掉，不算進任何地方` : "",
+    s.sessions ? `${s.sessions} 個 session 綁著它，會一起解除` : "",
+    s.calendar ? `其中 ${s.calendar} 筆勾了寫進行事曆。${s.calendarLeft}` : "",
+    hoursChanged(s.changes), s.changes.some(c => c.after > c.before) ? "投入會變多：這些補記原本扣掉了同一段時間 session 自動記的時間，刪了就還回去" : "",
+    "刪之前會先備份資料檔；刪了在面板上復原不了"].filter(Boolean);
+}
+function itemEditRow(e) {
+  const box = (text, buttons) => `<div class="cubi-row ai-suggest" style="align-items:flex-start">${ic("info", 14)}<span class="ai-reason">${text}</span><span class="cubi-spacer"></span>${buttons}<button class="cubi-btn small" id="item-edit-cancel">取消</button></div>`;
+  if (e.mode === "delete")
+    return box(`${e.said.inUse.length ? `<b style="color:var(--cubi-danger)">注意：${e.said.inUse.map(n => `「${esc(n)}」`).join("、")}這 10 分鐘內還在用「${esc(e.name)}」。刪掉後它之後的時間不會算進任何地方，要等它停 10 分鐘以上才恢復（即使你馬上把它改綁到單上）</b><br>` : ""}刪除「${esc(e.name)}」？${itemDeleteLines(e.said).map(l => `<br>・${esc(l)}`).join("")}`,
+      `<button class="cubi-btn small primary" id="item-delete-yes">${e.armed ? "確定刪除？無法復原" : "刪除…"}</button>`);
+  if (e.said) {
+    const s = e.said;
+    return box(esc(`「${s.name}」會併進已有的「${s.to}」，之後分不開：${[s.records ? `它底下 ${s.records} 筆補記` : "", s.sessions ? `${s.sessions} 個 session 的綁定` : "", s.autoSeconds > 0 ? "session 自動記到它的時間" : ""].filter(Boolean).join("、")}都搬過去${s.sprint ? `；${s.sprint} 裡併進來的時間改用「${s.to}」的設定（${s.counted ? "算進" : "不算進"}投入），之前各期照舊` : ""}；${hoursChanged(s.changes)}。合併前會先備份資料檔。`),
+      `<button class="cubi-btn small primary" id="item-merge-yes">確定合併</button>`);
+  }
+  return `<div class="cubi-row"><input id="item-rename-to" maxlength="24" size="16" value="${esc(e.name)}" aria-label="新名字"><button class="cubi-btn small primary" id="item-rename-go">改名</button><button class="cubi-btn small" id="item-edit-cancel">取消</button>
+    <span class="cubi-muted" style="font-size:11px">改成已有的名字（大小寫不同也算）就併在一起</span></div>`;
+}
+async function renameItem(confirm) {
+  const f = $("#item-rename-to"), name = itemEdit.name, to = confirm ? itemEdit.to : f.value;
+  if (!await refresh("item.rename", { name, to, confirm }, f ? [f] : [])) return;
+  if (state.itemRename) { itemEdit = { ...itemEdit, said: state.itemRename, to }; render(); return; }
+  const s = state.itemRenamed;
+  itemEdit = null;
+  render();
+  if (s.merged) status(`「${s.name}」已併進「${s.to}」；${hoursChanged(s.changes)}`, false, { detail: [`合併前的資料備份在 ${s.backup}`], keep: true });
+  else status(`「${s.name}」改名為「${s.to}」${s.calendar ? "；行事曆上已寫的事件標題不會跟著改" : ""}`, false, { keep: !!s.calendar });
 }
 
 function manualCard(s) {
@@ -889,6 +925,29 @@ function bindOverview(el) {
   el.querySelectorAll("[data-item-counted]").forEach(c => c.addEventListener("change", async () => {
     if (await refresh("item.update", { name: c.dataset.itemCounted, counted: c.checked }, [c]) && state.itemChanged) status(itemChangedSaid(state.itemChanged));
   }));
+  el.querySelectorAll("[data-item-rename]").forEach(b => b.addEventListener("click", () => {
+    const name = b.dataset.itemRename;
+    itemEdit = itemEdit && itemEdit.name === name && itemEdit.mode === "rename" ? null : { name, mode: "rename" };
+    render();
+    $("#item-rename-to")?.focus();
+  }));
+  el.querySelectorAll("[data-item-delete]").forEach(b => b.addEventListener("click", async () => {
+    const name = b.dataset.itemDelete;
+    if (itemEdit && itemEdit.name === name && itemEdit.mode === "delete") { itemEdit = null; render(); return; }
+    if (await refresh("item.delete", { name }) && state.itemDelete) { itemEdit = { name, mode: "delete", said: state.itemDelete, armed: false }; render(); }
+  }));
+  $("#item-edit-cancel", el)?.addEventListener("click", () => { itemEdit = null; render(); });
+  $("#item-rename-go", el)?.addEventListener("click", () => renameItem(false));
+  $("#item-rename-to", el)?.addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing) renameItem(false); });
+  $("#item-merge-yes", el)?.addEventListener("click", () => renameItem(true));
+  $("#item-delete-yes", el)?.addEventListener("click", async () => {
+    if (!itemEdit.armed) { itemEdit.armed = true; render(); return; }
+    const name = itemEdit.name;
+    itemEdit = null;
+    if (!await refresh("item.delete", { name, confirm: true }) || !state.itemDeleted) return;
+    const s = state.itemDeleted;
+    status(`已刪除「${s.name}」${s.records ? `和底下 ${s.records} 筆補記` : ""}；${hoursChanged(s.changes)}`, false, { detail: [`刪之前的資料備份在 ${s.backup}`, s.calendarLeft].filter(Boolean), keep: true });
+  });
   el.querySelectorAll("[data-share]").forEach(i => i.addEventListener("change", () => refresh("session.shares", { shares: currentShares() }, el.querySelectorAll("[data-share]"))));
   el.querySelectorAll("[data-unbind]").forEach(x => x.addEventListener("click", () => refresh("session.unbind", { key: x.dataset.unbind })));
   el.querySelectorAll("[data-unbind-sid]").forEach(x => x.addEventListener("click", () => refresh("session.unbind", { sid: x.dataset.unbindSid, key: x.dataset.unbindKey })));
@@ -931,7 +990,10 @@ function bindOverview(el) {
     if (await refresh("estimate.set", { key: i.dataset.est, value: i.value }, [i])) { if (!(state.warnings || []).length) status(estimateSaid(i.dataset.est)); return; }
     drafts.delete(fieldSel(i)); render();
   }));
-  el.querySelectorAll("[data-remove-time]").forEach(b => b.addEventListener("click", () => { confirmDelete = null; refresh("time.remove", { id: b.dataset.removeTime }); }));
+  el.querySelectorAll("[data-remove-time]").forEach(b => b.addEventListener("click", async () => {
+    confirmDelete = null;
+    if (await refresh("time.remove", { id: b.dataset.removeTime }) && state.calendarLeft) status(`已刪除這筆。${state.calendarLeft}`, false, { keep: true });
+  }));
   // A stretch shared by several tickets goes whole, from all of them: asked first.
   el.querySelectorAll("[data-remove-shared]").forEach(b => b.addEventListener("click", () => { confirmDelete = confirmDelete === b.dataset.removeShared ? null : b.dataset.removeShared; render(); }));
   el.querySelectorAll("[data-remove-shared-no]").forEach(b => b.addEventListener("click", () => { confirmDelete = null; render(); }));

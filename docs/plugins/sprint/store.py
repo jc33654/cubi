@@ -255,6 +255,9 @@ class Store(TimerMixin, HoursMixin, ItemsMixin):
         rec["shares"] = {k: float(v) for k, v in shares.items()}
         if since is not None:
             for start, seg in self.segments["sessions"].get(sid, {}).items():
+                # A work item's stretch (or one whose item was deleted) stays what it was.
+                if seg.get("item") or seg.get("itemDeleted"):
+                    continue
                 if float(start) >= since and (until is None or float(start) <= until):
                     seg["shares"] = self.shares(rec)
 

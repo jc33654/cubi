@@ -56,6 +56,8 @@ CASES = {
     "config.set": ({"hoursPerPoint": "6"}, ("config",), None),
     "hint.seen": ({"id": "weekendGap:Sprint7"}, ("ok",), None),
     "item.update": ({"name": "小工具開發", "counted": True}, (), "沒有「小工具開發」這個工作項目"),
+    "item.delete": ({"name": "小工具開發"}, (), "沒有「小工具開發」這個工作項目"),
+    "item.rename": ({"name": "小工具開發", "to": "工具"}, (), "沒有「小工具開發」這個工作項目"),
 }
 
 

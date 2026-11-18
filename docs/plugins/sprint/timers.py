@@ -8,6 +8,14 @@ TIMER_KIND = "計時"
 ORPHAN_AFTER = 15 * 60
 
 
+def manual_title(m):
+    """A manual stretch's calendar event title (a timer's too): its tickets (or its item) and
+    note, then its kind."""
+    keys = list(m.get("shares") or ([m["key"]] if m.get("key") else []))
+    return (f"{' '.join(keys)} {m.get('note') or ''}（{m.get('kind', '')}）".replace("  ", " ").strip() if keys
+            else f"{' '.join(dict.fromkeys(filter(None, (m.get('item'), m.get('note')))))}（{m.get('kind', '')}）")
+
+
 class TimerMixin:
     """Store methods for `segments["timers"]` (session id → {start, seen}). A timer is split over
     what its session is bound to when it stops (its tickets, or its work item): unbinding by

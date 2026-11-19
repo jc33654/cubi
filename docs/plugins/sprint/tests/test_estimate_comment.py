@@ -151,9 +151,9 @@ class EstimateCommentTests(unittest.TestCase):
     def test_a_second_estimate_edits_cubis_own_comment_and_shows_what_it_says_now(self):
         self.act("estimate.set", value="1")
         self.act("estimate.comment", how="jira")
-        self.fake.comments["101"] = {"type": "doc", "version": 1, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "她手改過的字"}]}]}
+        self.fake.comments["101"] = {"type": "doc", "version": 1, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "使用者手改過的字"}]}]}
         ask = self.row(self.act("estimate.set", value="2"))["commentAsk"]
-        self.assertEqual((ask["edit"], ask["old"], ask["changed"], ask["lost"]), ("101", "她手改過的字", True, False))
+        self.assertEqual((ask["edit"], ask["old"], ask["changed"], ask["lost"]), ("101", "使用者手改過的字", True, False))
         self.act("estimate.comment", how="jira")
         self.assertEqual(self.fake.writes()[-1], ("edit", "PROJ-1", "101", comment_doc(2.0)))
         self.assertEqual(len([w for w in self.fake.writes() if w[0] == "add"]), 1)

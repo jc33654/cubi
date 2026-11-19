@@ -13,7 +13,7 @@ HOW = ("jira", "local", "cancel")
 
 
 def comment_text(value):
-    """The whole comment, in bold (Jade: the number alone, no sentence after it)."""
+    """The whole comment, in bold (decided: the number alone, no sentence after it)."""
     return f"【估點】本單 {pts(value)} 點（1 點＝1 人天）"
 
 

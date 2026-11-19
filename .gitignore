@@ -3,8 +3,8 @@ build/
 *.xcodeproj
 .DS_Store
 .swiftpm/
-# Per-machine Claude Code settings (capture hooks point at a local build path)
-.claude/settings.local.json
+# Per-machine Claude Code files (settings, capture hooks pointing at a local build path, backups)
+.claude/
 __pycache__/
 # Requirement drafts and acceptance checklists: kept on this machine only
 docs/prd/

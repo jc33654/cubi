@@ -2,7 +2,7 @@
 
 ## Context
 
-Jade 想要一個住在 MacBook 瀏海的 Claude Code 伴侶：每個 session 一隻小機器人，看得出狀態、能在瀏海上按 Allow / Deny、回答 AskUserQuestion、看 plan 用量、context 快滿時露出疲憊表情。原本評估 fork Coucou（louis-cfm/coucou），結論是：Coucou 核心 4009 行 `HookServer.swift`、上游每週大改、名稱與角色不可用、功能九成用不到，所以改成**自己做新的**，只借 Coucou 的做法與協定（MIT），不借程式碼本體與資產。
+作者想要一個住在 MacBook 瀏海的 Claude Code 伴侶：每個 session 一隻小機器人，看得出狀態、能在瀏海上按 Allow / Deny、回答 AskUserQuestion、看 plan 用量、context 快滿時露出疲憊表情。原本評估 fork Coucou（louis-cfm/coucou），結論是：Coucou 核心 4009 行 `HookServer.swift`、上游每週大改、名稱與角色不可用、功能九成用不到，所以改成**自己做新的**，只借 Coucou 的做法與協定（MIT），不借程式碼本體與資產。
 
 已定案的需求（2026-10-28 對話）：
 
@@ -102,7 +102,7 @@ Claude Code ──hook stdin──▶ cubi-hook (relay) ──unix socket──�
 | 多 session | compact 一排小機器人（每隻 ≤ 20pt，各自顏色）；expanded 左側清單、右側卡片；當前審批的那隻跳動 |
 | 聚焦 | 點機器人 → 依 `cubi_term`：Terminal.app 用 tty 找分頁（搬 `focus-terminal-tab.sh` 邏輯進 `NSAppleScript`）；Ghostty 用 AppleScript 找 `working directory == cwd` 的 terminal，`activate window` + `select tab`，找不到退回標題包含 session 名；VS Code 只 activate app；設定可加自訂 terminal（bundle id + 策略） |
 | 通知 | 保留你現有 Notification hook 不動；cubi 自己對 `permission_prompt`／`agent_needs_input` 也能發系統通知（`UNUserNotificationCenter`），設定可關其一 |
-| Menubar | `NSStatusItem` 保留但**不依賴**：實測（2026-10-28）Jade 的 menubar 已滿，macOS 把溢出項目藏在瀏海後面（新 item 被放在 x=664，瀏海 663–848，occlusion 不可見）。所以選單改成島上右鍵、再點 app 圖示會展開島；用量數字改顯示在島的 compact 右翼／expanded 卡片，不放 menubar |
+| Menubar | `NSStatusItem` 保留但**不依賴**：實測（2026-10-28）作者的 menubar 已滿，macOS 把溢出項目藏在瀏海後面（新 item 被放在 x=664，瀏海 663–848，occlusion 不可見）。所以選單改成島上右鍵、再點 app 圖示會展開島；用量數字改顯示在島的 compact 右翼／expanded 卡片，不放 menubar |
 | 省電 | `TimelineView(.animation(paused: hidden))`；收合時小機器人暫停；無 session 時輪詢降到 8Hz |
 
 ### 角色 Cubi 規格（程式碼畫，`Canvas` + `TimelineView`）
@@ -215,7 +215,7 @@ Manifest 草案（`plugins/<id>/manifest.json`，目錄 0700）：`id / name / c
 
 每個 Phase 結束：`swift test`、手動驗收、commit（訊息我擬、你核准）。Phase 1 完成即可先用。
 
-### Cubi 完成後要退役的舊工具（Jade 2026-10-29 指示）
+### Cubi 完成後要退役的舊工具（2026-10-29 決定）
 
 | 舊工具 | 由誰取代 | 退役時機 |
 |---|---|---|

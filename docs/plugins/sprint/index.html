@@ -1084,7 +1084,7 @@ const aiSnapshot = key => { const t = state.sprint?.tickets.find(t => t.key === 
 // AI estimates waited for, by ticket: each keeps its own last snapshot; one look every 30 seconds
 // serves them all, and stops when none is left. A ticket leaves when its answer is gone (taken,
 // dismissed, given up on) or after an hour. ✨ on one ticket and a batch of several go the same way.
-const AI_MAX = 3;   // Jade: no more than three at once
+const AI_MAX = 3;   // decided: no more than three at once
 const aiWaits = new Map();
 let aiPoll = null, aiLateText = "", aiLateClosed = false;
 const aiLate = () => {

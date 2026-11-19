@@ -2,8 +2,8 @@ import Foundation
 import Testing
 @testable import CubiKit
 
-/// The shape of Jade's real ~/.claude/settings.json (hooks of her own, a statusLine, permissions).
-private let jadeSettings: JSONValue = .object([
+/// The shape of the author's real ~/.claude/settings.json (hooks of their own, a statusLine, permissions).
+private let authorSettings: JSONValue = .object([
     "model": .string("fable"),
     "hooks": .object([
         "Notification": .array([.object(["matcher": .string(""), "hooks": .array([.object(["type": .string("command"), "command": .string("~/.claude/notify-hook.sh")])])])]),
@@ -14,7 +14,7 @@ private let jadeSettings: JSONValue = .object([
 ])
 
 @Test func installAddsEveryEventAndKeepsForeignHooks() {
-    let plan = ClaudeHookInstaller.installPlan(settings: jadeSettings)
+    let plan = ClaudeHookInstaller.installPlan(settings: authorSettings)
     #expect(plan.changed)
     let hooks = plan.after["hooks"]!.object!
     for (event, _) in ClaudeHookInstaller.events { #expect(hooks[event] != nil, Comment(rawValue: event)) }
@@ -23,21 +23,21 @@ private let jadeSettings: JSONValue = .object([
     #expect(hooks["PreToolUse"]?.array?.count == 2)            // plain + AskUserQuestion matcher
     #expect(hooks["PreToolUse"]?.array?[1]["matcher"]?.string == "AskUserQuestion")
     #expect(hooks["PermissionRequest"]?.array?[0]["hooks"]?.array?[0]["timeout"]?.double == 120)
-    #expect(plan.after["permissions"] == jadeSettings["permissions"])
+    #expect(plan.after["permissions"] == authorSettings["permissions"])
     #expect(plan.after["model"]?.string == "fable")
 }
 
 @Test func installChainsStatuslineAndRemembersPrevious() {
-    let plan = ClaudeHookInstaller.installPlan(settings: jadeSettings)
+    let plan = ClaudeHookInstaller.installPlan(settings: authorSettings)
     #expect(plan.after["statusLine"]?["command"]?.string == "$HOME/.cubi/bin/cubi-hook --agent claude-code statusline --then '~/.claude/statusline.sh'")
-    #expect(plan.previousStatusLine == jadeSettings["statusLine"])
+    #expect(plan.previousStatusLine == authorSettings["statusLine"])
     let status = ClaudeHookInstaller.status(plan.after)
     #expect(status.hooksInstalled && status.statuslineChained)
     #expect(status.legacyNotificationCommands == ["~/.claude/notify-hook.sh"])
 }
 
 @Test func installIsIdempotent() {
-    let once = ClaudeHookInstaller.installPlan(settings: jadeSettings).after
+    let once = ClaudeHookInstaller.installPlan(settings: authorSettings).after
     let twice = ClaudeHookInstaller.installPlan(settings: once)
     #expect(!twice.changed)
     #expect(twice.after == once)
@@ -45,14 +45,14 @@ private let jadeSettings: JSONValue = .object([
 }
 
 @Test func uninstallRestoresTheOriginalExactly() {
-    let plan = ClaudeHookInstaller.installPlan(settings: jadeSettings)
+    let plan = ClaudeHookInstaller.installPlan(settings: authorSettings)
     let back = ClaudeHookInstaller.uninstallPlan(settings: plan.after, previousStatusLine: plan.previousStatusLine)
-    #expect(back.after == jadeSettings)
+    #expect(back.after == authorSettings)
     #expect(!ClaudeHookInstaller.status(back.after).hooksInstalled)
 }
 
 @Test func uninstallWithoutRecordRecoversStatuslineFromThen() {
-    let installed = ClaudeHookInstaller.installPlan(settings: jadeSettings).after
+    let installed = ClaudeHookInstaller.installPlan(settings: authorSettings).after
     #expect(installed["statusLine"]?["command"]?.string == "$HOME/.cubi/bin/cubi-hook --agent claude-code statusline --then '~/.claude/statusline.sh'")
     let back = ClaudeHookInstaller.uninstallPlan(settings: installed, previousStatusLine: nil)
     #expect(back.after["statusLine"]?["command"]?.string == "~/.claude/statusline.sh")
@@ -70,7 +70,7 @@ private let jadeSettings: JSONValue = .object([
 
 @Test func uninstallKeepsOtherAgentsHooks() {
     let foreign: JSONValue = .object(["hooks": .array([.object(["type": .string("command"), "command": .string("$HOME/.cubi/bin/cubi-hook --agent other-agent --event SessionStart")])])])
-    var s = ClaudeHookInstaller.installPlan(settings: jadeSettings).after.object!
+    var s = ClaudeHookInstaller.installPlan(settings: authorSettings).after.object!
     var hooks = s["hooks"]!.object!
     hooks["SessionStart"] = .array((hooks["SessionStart"]!.array ?? []) + [foreign])
     s["hooks"] = .object(hooks)
@@ -79,7 +79,7 @@ private let jadeSettings: JSONValue = .object([
 }
 
 @Test func retiringLegacyNotificationHook() {
-    let plan = ClaudeHookInstaller.installPlan(settings: jadeSettings, retireCommandsContaining: ["notify-hook.sh"])
+    let plan = ClaudeHookInstaller.installPlan(settings: authorSettings, retireCommandsContaining: ["notify-hook.sh"])
     #expect(plan.after["hooks"]?["Notification"]?.array?.count == 1)
     #expect(plan.after["hooks"]?["Stop"]?.array?.count == 2)   // unrelated hooks untouched
 }
@@ -91,7 +91,7 @@ private let jadeSettings: JSONValue = .object([
 }
 
 @Test func diffShowsOnlyChangedRegions() {
-    let plan = ClaudeHookInstaller.installPlan(settings: jadeSettings)
+    let plan = ClaudeHookInstaller.installPlan(settings: authorSettings)
     #expect(plan.diff.contains("+"))
     #expect(plan.diff.contains("cubi-hook --agent claude-code --event PermissionRequest"))
     #expect(!plan.diff.contains("-    \"model\""))     // untouched key is not shown as removed

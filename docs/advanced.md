@@ -130,7 +130,7 @@ stdout：
   - `tone`：`good`／`warning`／`danger`／`info`／`neutral`，value 前面多一個色點、字也上色。
   - `progress`：0…1，value 底下畫一條細進度條。
   - `clock`：`{since, offset?, down?}`，cubi 每秒自己算 `offset ± (now − since)` 秒顯示（`down: true` 是倒數），不用插件一直重送。倒數低於零寫成「超 …」、最後一小時顯示到秒。`since` 是 **epoch 秒**、要在現在前後一年內，`offset` 預設 0。
-  - `action`：列尾一顆小按鈕（預設畫 ✕，`label` 是滑鼠提示），格式與檢查都跟下面的 `actions[]` 一樣：`action` 不是這個插件的 hook 命令就整份輸出拒收。一列最多一顆；適合「解除這張單」這種跟著某一列的動作。
+  - `action`：列尾一顆小按鈕（預設畫 ✕，`label` 是滑鼠提示；浮動模式目前不顯示滑鼠提示，見 status.md 已知限制），格式與檢查都跟下面的 `actions[]` 一樣：`action` 不是這個插件的 hook 命令就整份輸出拒收。一列最多一顆；適合「解除這張單」這種跟著某一列的動作。
   - `tone`／`progress`／`clock` 不合規**不報錯、直接略過**：`tone` 拼錯、`progress` 超出 0…1、`clock.since` 誤給毫秒，畫面上就是少了那個效果。沒出現時先檢查拼字與單位。
 - 離線渲染（`cubi --render-panel`／`--render-widget`）時，cubi 給插件的環境多一個 `CUBI_RENDER=1`：這是乾跑：插件不該寫使用者真的資料（寫測試資料可以），也不該碰外部服務（用使用者的帳密連線、改遠端資料）。sprint 的做法：有 `CUBI_RENDER` 又沒指定 `CUBI_SPRINT_DIR` 時不存檔、不連 Jira（會回「離線渲染不連 Jira」）、不寫回顧檔，畫面照算。
 - `actions[]`（最多 5 個）：按鈕；`action` 必須是同一個插件的 hook 命令，按了以同一份 stdin 執行，成功才重抓 `session.info`，失敗訊息留在區塊上。加 `"input": "提示文字"` 的按鈕會先跳系統對話框問一行字，cubi 把 tab／換行換成空白、洗掉控制字元、截到 512 字後放進 stdin JSON 的 `input` 欄；按取消就不執行。加 `"arg": "值"` 的按鈕不問人，直接把那個值當 `input` 送（例如「解除 PROJ-1」帶 `PROJ-1`）。加 `"icon": "SF Symbol 名"`（`[a-z0-9.]`，1–40 字，例如 `play.fill`）就畫成 icon 按鈕，`label` 變成滑鼠提示；名字不合規就照舊畫文字。

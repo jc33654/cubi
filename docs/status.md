@@ -104,6 +104,7 @@ commit 數與測試數以 `git log` 與 `make test` 為準，這裡不抄數字�
 - 離線渲染（`--render-island`）畫不出 `ScrollView` 內容，清單只能真機看。
 - 瀏海面板 1400 pt：翼上 15 隻（含晚安膠囊）起 compact 的島左緣出面板被切；860 寬的資訊面板從同樣隻數起被壓窄到 854，此時機器人那排又會掛出島左緣（渲染 13／14／15 隻驗證：13 隻左緣 45 pt，14 隻 3 pt，15 隻被切）。浮動視窗沒有偏移，不受影響。
 - 從瀏海拖出的瞬間島直接出現在滑鼠下方，沒有飛出動畫。
+- 島上的滑過提示（`.help`：＋、機器人名字、★ 等）只在瀏海模式有，Cubi 在背景時也會出現（`OverlayPanel` 開了 `allowsToolTipsWhenApplicationIsInactive`）。浮動模式目前不顯示：浮動窗系統提示不顯示，前景也一樣，在浮動狀態下重開 Cubi 也一樣，原因未查明（2026-11-20 真機）。
 - 沒有 Apple 公證：下載的 app 會被 Gatekeeper 擋，install.sh 驗過簽章後拿掉 quarantine；手動裝的人要右鍵開啟或「隱私與安全性 → 強制打開」。憑證 hash 寫死在 install.sh，換憑證要同步改。
 - 開 session：Ghostty 1.3.1 的 AppleScript `initial input` 會把非 ASCII 雙重編碼（繁中變成 `ç¥èåº«` 這種亂碼），所以指令改用 `input text` 打進新分頁（驗證過繁中原樣到達）；`input text` 靠 pty 緩衝，shell 啟動特別慢的機器理論上可能吃掉一截（沒遇過）。
 - 開 session：Ghostty 慢到被 5 秒 watchdog 殺掉但分頁其實有開時，退路會在 Terminal.app 再開一個（推論，沒觸發過）。

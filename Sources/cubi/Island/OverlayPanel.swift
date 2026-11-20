@@ -15,6 +15,9 @@ class OverlayPanel: NSPanel {
             : [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         isMovableByWindowBackground = false
         ignoresMouseEvents = true
+        // Clicking the island never makes Cubi the active app, and AppKit shows no tooltip (.help)
+        // for a background app's window unless asked to.
+        allowsToolTipsWhenApplicationIsInactive = true
         isReleasedWhenClosed = false
         animationBehavior = .none
     }

@@ -48,10 +48,17 @@ public enum SessionLaunch {
     /// a path, plugin id or action with anything but letters, digits, `/`, `.`, `_`, `-` in it
     /// (then the session is not opened at all, rather than opened with a rule that may not hold).
     public static func allowRule(cubi: String, tool: String, action: String) -> String? {
-        let plain = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/._-")
-        let isPlain = { (s: String) in !s.isEmpty && s.unicodeScalars.allSatisfy(plain.contains) }
-        guard cubi.hasPrefix("/"), isPlain(cubi), isPlain(tool), isPlain(action), !tool.contains("/"), !action.contains("/") else { return nil }
+        guard isPlainPath(cubi), isPlain(tool), isPlain(action), !tool.contains("/"), !action.contains("/") else { return nil }
         return "Bash(\(cubi) --tool-run \(tool) \(action):*)"
+    }
+
+    /// An absolute path an allow rule can name as is (see `allowRule`); false means the install
+    /// location, not the plugin, keeps a restricted session from running plugin actions.
+    public static func isPlainPath(_ path: String) -> Bool { path.hasPrefix("/") && isPlain(path) }
+
+    private static func isPlain(_ s: String) -> Bool {
+        let plain = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/._-")
+        return !s.isEmpty && s.unicodeScalars.allSatisfy(plain.contains)
     }
 
     public static func command(directory: String, prompt: String?, resume: Resume, restricted: Restricted? = nil) -> String {

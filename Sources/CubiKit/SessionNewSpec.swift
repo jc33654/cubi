@@ -36,7 +36,7 @@ public struct SessionNewSpec: Equatable, Sendable {
         public var message: String {
             switch self {
             case .shape: return "session.new 要 args[0] 是 {\"directory\", \"prompt\"} 的 JSON"
-            case .unknownField(let name): return "session.new 不認得欄位「\(name)」（只收 directory、prompt、restricted、readDirs）"
+            case .unknownField(let name): return "session.new 不認得欄位「\(name)」（只收 directory、prompt、restricted、readDirs、allowActions）"
             case .noDirectory(let path): return "找不到目錄 \(path)"
             case .restrictedNotBool: return "session.new 的 restricted 要是 true 或 false"
             case .readDirsShape: return "session.new 的 readDirs 要是目錄路徑的陣列"

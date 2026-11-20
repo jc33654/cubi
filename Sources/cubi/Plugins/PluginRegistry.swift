@@ -16,7 +16,10 @@ final class PluginRegistry {
 
     private(set) var plugins: [any AgentPlugin] = []
     private(set) var tools: [ToolPlugin] = []
+    /// Why a folder's manifest was refused, by folder name.
     private(set) var loadErrors: [String: String] = [:]
+    /// Keys no parser reads in a manifest that did load (likely typos), by folder name.
+    private(set) var loadWarnings: [String: [String]] = [:]
 
     init() { reload() }
 
@@ -24,32 +27,39 @@ final class PluginRegistry {
         var list: [any AgentPlugin] = [ClaudeCodePlugin()]
         var toolList: [ToolPlugin] = []
         var errors: [String: String] = [:]
+        var warnings: [String: [String]] = [:]
         let fm = FileManager.default
         try? fm.createDirectory(at: Self.pluginsDirectory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         let dirs = (try? fm.contentsOfDirectory(at: Self.pluginsDirectory, includingPropertiesForKeys: [.isDirectoryKey])) ?? []
         for dir in dirs.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
-            let manifest = dir.appendingPathComponent("manifest.json")
-            guard fm.fileExists(atPath: manifest.path) else { continue }
+            let folder = dir.lastPathComponent
+            guard fm.fileExists(atPath: dir.appendingPathComponent("manifest.json").path) else { continue }
             do {
-                let value = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: manifest))
-                // One namespace for both kinds: the id is also what the menu, the defaults and the relay key off.
-                func taken(_ id: String) -> Bool { list.contains { $0.id == id } || toolList.contains { $0.id == id } }
-                if value["kind"]?.string == "tool" {
-                    let tool = try ToolPlugin.parse(value, baseDirectory: dir.path, home: CubiPaths.home.path)
-                    if taken(tool.id) { errors[dir.lastPathComponent] = "id「\(tool.id)」已存在" } else { toolList.append(tool) }
-                } else {
-                    let agent = try ManifestPlugin.parse(value)
-                    if taken(agent.id) { errors[dir.lastPathComponent] = "id「\(agent.id)」已存在" } else { list.append(agent) }
+                let loaded = try PluginManifest.load(directory: dir, home: CubiPaths.home.path)
+                // One namespace for both kinds: the id is also what the menu, the defaults and the relay
+                // key off. Folder names are ids, so only a folder named after a built-in can clash.
+                let id = loaded.plugin.id
+                if list.contains(where: { $0.id == id }) || toolList.contains(where: { $0.id == id }) {
+                    errors[folder] = "id「\(id)」已存在"
+                    continue
                 }
+                switch loaded.plugin {
+                case .tool(let tool): toolList.append(tool)
+                case .agent(let agent): list.append(agent)
+                }
+                if !loaded.warnings.isEmpty { warnings[folder] = loaded.warnings }
             } catch {
-                errors[dir.lastPathComponent] = (error as? LocalizedError)?.errorDescription ?? "\(error)"
+                errors[folder] = (error as? LocalizedError)?.errorDescription ?? "\(error)"
             }
         }
         plugins = list
         tools = toolList
         loadErrors = errors
+        loadWarnings = warnings
         let names = list.map { "\($0.id)\(isEnabled($0.id) ? "" : "(off)")" } + toolList.map { "\($0.id)(tool\(isEnabled($0.id) ? "" : ", off"))" }
         CubiLog.write("plugins: \(names.joined(separator: ", "))")
+        for (folder, why) in errors.sorted(by: { $0.key < $1.key }) { CubiLog.write("plugin \(folder) rejected: \(why)") }
+        for (folder, list) in warnings.sorted(by: { $0.key < $1.key }) { CubiLog.write("plugin \(folder) warning: \(list.joined(separator: "；"))") }
     }
 
     func plugin(for agent: String) -> (any AgentPlugin)? {

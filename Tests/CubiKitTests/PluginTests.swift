@@ -93,7 +93,7 @@ private func exampleManifest() throws -> ManifestPlugin {
         "mode": .string("json-hooks"), "file": .string("~/x.json"),
         "entries": .array([.object(["event": .string("Start"), "command": .string("/usr/bin/true")])]),
     ])])
-    #expect(throws: ManifestPlugin.LoadError.badInstall) { try ManifestPlugin.parse(m) }
+    #expect(throws: ManifestPlugin.LoadError.badField("install.entries[0].command", "要含「cubi-hook --agent x-agent 」（尾端有空白），安裝狀態與解除靠它認出自己的條目")) { try ManifestPlugin.parse(m) }
 }
 
 @Test func manifestUninstallLeavesClaudeCodeHooksAlone() throws {

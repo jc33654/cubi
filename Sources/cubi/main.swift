@@ -5,9 +5,13 @@ import AppKit
 import CubiKit
 
 let arguments = CommandLine.arguments
+// The mode is argv[1] and nothing else (see CubiCommand): a flag later on is never a mode.
+let mode = CubiCommand.mode(arguments)
+/// 1 when `flag` is the mode, for the blocks below that read the words after it.
+func at(_ flag: String) -> Int? { mode == flag ? 1 : nil }
 signal(SIGPIPE, SIG_IGN)
 
-if arguments.contains("--version") {
+if mode == "--version" {
     // The bundle's Info.plist carries the released version (set from the git tag by scripts/bundle.sh);
     // `swift run` has no bundle and falls back to the constant.
     let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? CubiInfo.version
@@ -15,7 +19,23 @@ if arguments.contains("--version") {
     exit(0)
 }
 
-if let i = arguments.firstIndex(of: "--render-icon"), i + 1 < arguments.count {
+// Check a plugin folder the way the app loads it, plus what only the disk can tell (the panel file,
+// each command's executable). Reads that folder only: no app, no log, no plugins directory.
+//   --validate-plugin <folder>   exit 0 when it would load (warnings or not), 1 when not, 2 for usage
+if let i = at("--validate-plugin") {
+    guard i + 1 < arguments.count else {
+        FileHandle.standardError.write(Data("usage: cubi --validate-plugin <plugin folder>\n".utf8))
+        exit(2)
+    }
+    let folder = URL(fileURLWithPath: (arguments[i + 1] as NSString).expandingTildeInPath).standardizedFileURL
+    let report = PluginManifest.validate(directory: folder, home: CubiPaths.home.path)
+    for e in report.errors { print("錯誤：\(e)") }
+    for w in report.warnings { print("警告：\(w)") }
+    print(report.errors.isEmpty ? "可以載入（\(report.summary ?? folder.lastPathComponent)）" : "不能載入（\(folder.path)）")
+    exit(report.errors.isEmpty ? 0 : 1)
+}
+
+if let i = at("--render-icon"), i + 1 < arguments.count {
     let ok = IconRenderer.render(to: arguments[i + 1])
     exit(ok ? 0 : 1)
 }
@@ -23,7 +43,7 @@ if let i = arguments.firstIndex(of: "--render-icon"), i + 1 < arguments.count {
 // Ask the running Ghostty which tab a session's name and directory match, without switching to it
 // (the very script a robot click runs, `focus target` left out). Prints ok:title, ok:cwd or none:…:
 //   --probe-ghostty <name, or "" for none> <cwd>
-if let i = arguments.firstIndex(of: "--probe-ghostty"), i + 2 < arguments.count {
+if let i = at("--probe-ghostty"), i + 2 < arguments.count {
     let script = MainActor.assumeIsolated { TerminalFocus.ghosttyScript(name: arguments[i + 1], cwd: arguments[i + 2], focus: false) }
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
@@ -35,7 +55,7 @@ if let i = arguments.firstIndex(of: "--probe-ghostty"), i + 2 < arguments.count 
 
 // Offline preview of the island for layout work:
 //   --render-island <hidden|compact|expanded|detail|approval|question|question-long|usage|usage-compact|focus-miss|focus-miss-named|focus-miss-untitled|focus-miss-detail|diff|focus|focus-12|focus-expanded|focus-nousage|floating|…-gear (any of them with 12 專注獎勵)|floating-approval> <botState> <out.png>
-if let i = arguments.firstIndex(of: "--render-island"), i + 3 < arguments.count {
+if let i = at("--render-island"), i + 3 < arguments.count {
     let ok = IconRenderer.renderIsland(mode: arguments[i + 1], botState: arguments[i + 2], to: arguments[i + 3])
     exit(ok ? 0 : 1)
 }
@@ -44,9 +64,9 @@ if let i = arguments.firstIndex(of: "--render-island"), i + 3 < arguments.count 
 //   --render-panel <tool id> <out.png> [--dark] [--height N] [--eval JS]   (JS runs after load, the shot 2 s later; point the plugin at test data with its own env, e.g. CUBI_SPRINT_DIR)
 // Both renders are dry runs for the plugins they run: CUBI_RENDER tells a plugin not to write its
 // real data (a test-data override is fine). See docs/advanced.md.
-if arguments.contains("--render-panel") || arguments.contains("--render-widget") { setenv("CUBI_RENDER", "1", 1) }
+if mode == "--render-panel" || mode == "--render-widget" { setenv("CUBI_RENDER", "1", 1) }
 
-if let i = arguments.firstIndex(of: "--render-panel"), i + 2 < arguments.count {
+if let i = at("--render-panel"), i + 2 < arguments.count {
     let id = arguments[i + 1], out = URL(fileURLWithPath: arguments[i + 2]), dark = arguments.contains("--dark")
     let height = arguments.firstIndex(of: "--height").flatMap { $0 + 1 < arguments.count ? Double(arguments[$0 + 1]) : nil }
     let script = arguments.firstIndex(of: "--eval").flatMap { $0 + 1 < arguments.count ? arguments[$0 + 1] : nil }
@@ -70,7 +90,7 @@ if let i = arguments.firstIndex(of: "--render-panel"), i + 2 < arguments.count {
 
 // Offline picture of a tool plugin's rows in a session's detail card, for a made-up session:
 //   --render-widget <tool id> <session name> <out.png>   (point the plugin at test data, as above)
-if let i = arguments.firstIndex(of: "--render-widget"), i + 3 < arguments.count {
+if let i = at("--render-widget"), i + 3 < arguments.count {
     let id = arguments[i + 1], name = arguments[i + 2], out = URL(fileURLWithPath: arguments[i + 3])
     MainActor.assumeIsolated {
         NSApplication.shared.setActivationPolicy(.prohibited)
@@ -86,7 +106,7 @@ if let i = arguments.firstIndex(of: "--render-widget"), i + 3 < arguments.count 
 
 // Offline picture of one settings section, this machine's settings, window off screen:
 //   --render-settings <claude|display|sleep|focus|calendar|plugins|scope> <out.png> [--dark]   (focus: made-up days, nothing saved)
-if let i = arguments.firstIndex(of: "--render-settings"), i + 2 < arguments.count {
+if let i = at("--render-settings"), i + 2 < arguments.count {
     guard let page = SettingsView.Page(rawValue: arguments[i + 1]) else {
         FileHandle.standardError.write(Data("cubi: pages are \(SettingsView.Page.allCases.map(\.rawValue).joined(separator: "|"))\n".utf8))
         exit(2)
@@ -103,7 +123,8 @@ if let i = arguments.firstIndex(of: "--render-settings"), i + 2 < arguments.coun
 //   --hooks-plan [--retire-notify]   show the diff an install would make, write nothing
 //   --install-hooks [--retire-notify] install (backup + write), after showing the diff
 //   --uninstall-hooks          remove Cubi's entries and restore the previous statusLine
-if let i = arguments.firstIndex(where: { ["--hooks-status", "--hooks-plan", "--install-hooks", "--uninstall-hooks"].contains($0) }) {
+if let m = mode, ["--hooks-status", "--hooks-plan", "--install-hooks", "--uninstall-hooks"].contains(m) {
+    let i = 1
     let retire = arguments.contains("--retire-notify")
     let retireCommands = retire ? ["notify-hook.sh"] : []
     do {
@@ -146,7 +167,7 @@ if let i = arguments.firstIndex(where: { ["--hooks-status", "--hooks-plan", "--i
 
 // Start a Claude Code session from the terminal the way the island does (also how it is tested):
 //   --new-session <dir> [--continue | --resume <id>] [--prompt <text>] [--terminal ghostty|terminal]
-if arguments.contains("--new-session") {
+if mode == "--new-session" {
     func value(after flag: String) -> String? {
         arguments.firstIndex(of: flag).flatMap { $0 + 1 < arguments.count ? arguments[$0 + 1] : nil }
     }
@@ -187,17 +208,20 @@ if arguments.contains("--new-session") {
 // Run one of a tool plugin's commands the way its panel would (checks and all), for testing:
 //   --tool-run <plugin id> <action> [args…]   prints {ok, out, err}; exit 1 when rejected or failed
 //                                             an argument given as `-` is read from stdin (for text args)
-if let i = arguments.firstIndex(of: "--tool-run") {
-    guard i + 2 < arguments.count else {
+//                                             every word after the action is an argument, a flag too
+if mode == "--tool-run" {
+    guard let run = CubiCommand.toolRun(arguments) else {
         FileHandle.standardError.write(Data("usage: cubi --tool-run <plugin id> <action> [args…|-]\n".utf8))
         exit(2)
     }
-    let id = arguments[i + 1], action = arguments[i + 2]
-    let args = arguments[(i + 3)...].map { $0 == "-" ? String(decoding: FileHandle.standardInput.readDataToEndOfFile(), as: UTF8.self) : $0 }
+    let id = run.id, action = run.action
+    let args = run.args.map { $0 == "-" ? String(decoding: FileHandle.standardInput.readDataToEndOfFile(), as: UTF8.self) : $0 }
     let code: Int32 = MainActor.assumeIsolated {
         let registry = PluginRegistry()
         guard let tool = registry.tools.first(where: { $0.id == id }) else {
-            FileHandle.standardError.write(Data("cubi: no tool plugin「\(id)」(loaded: \(registry.tools.map(\.id).joined(separator: ", ")))\n".utf8))
+            // Folder names are ids, so a refused manifest's reason is under the same name.
+            let why = registry.loadErrors[id].map { "; refused: \($0)" } ?? ""
+            FileHandle.standardError.write(Data("cubi: no tool plugin「\(id)」\(why) (loaded: \(registry.tools.map(\.id).joined(separator: ", ")))\n".utf8))
             return 1
         }
         guard registry.isEnabled(id) else {

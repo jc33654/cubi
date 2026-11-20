@@ -39,7 +39,9 @@ public enum EditSummaryBuilder {
         var lines: [DiffLine] = []
         if let hunks = response["structuredPatch"]?.array, !hunks.isEmpty {
             for hunk in hunks {
-                let oldStart = Int(hunk["oldStart"]?.double ?? 0), newStart = Int(hunk["newStart"]?.double ?? 0)
+                // Never Int(Double): a 1e300 in the payload would trap. Not a whole number: 0.
+                func line(_ v: JSONValue?) -> Int { v?.double.flatMap { Int(exactly: $0) } ?? 0 }
+                let oldStart = line(hunk["oldStart"]), newStart = line(hunk["newStart"])
                 lines.append(DiffLine(kind: .hunk, text: "@@ -\(oldStart) +\(newStart) @@"))
                 for raw in hunk["lines"]?.array ?? [] {
                     guard let l = raw.string else { continue }

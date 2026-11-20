@@ -22,7 +22,8 @@ enum SessionDetail {
     }
 
     static func duration(_ seconds: TimeInterval) -> String {
-        let s = Int(seconds.rounded())
+        // Never Int(Double): the seconds come from the statusline, and 1e300 would trap.
+        guard let s = Int(exactly: seconds.rounded()) else { return "—" }
         let h = s / 3600, m = (s % 3600) / 60, sec = s % 60
         if h > 0 { return "\(h)h \(m)m" }
         if m > 0 { return "\(m)m \(sec)s" }

@@ -4,7 +4,15 @@ README 講怎麼用；這裡是插件規格、命令列、行事曆規則，給�
 
 ## 插件
 
-都放在 `~/Library/Application Support/cubi/plugins/<id>/manifest.json`。設定頁「插件」有「重新載入」與「開啟 plugins 目錄」。兩種：沒有 `kind`（或 `"kind": "agent"`）是 agent plugin，`"kind": "tool"` 是工具插件。兩種共用一個 id 命名空間，重複的那個目錄會被拒載，原因列在設定頁。
+都放在 `~/Library/Application Support/cubi/plugins/<id>/manifest.json`。設定頁「插件」有「重新載入」與「開啟 plugins 目錄」。兩種：沒有 `kind`（或 `"kind": "agent"`）是 agent plugin，`"kind": "tool"` 是工具插件；`kind` 寫其他值會被拒載。兩種共用一個 id 命名空間。
+
+載入規則（兩種都一樣）：
+
+- 資料夾名必須等於 manifest 的 `id`，不一樣就拒載。
+- `schema` 是 manifest 格式的版本，沒寫等於 `1`。這個 Cubi 認得到 `1`；寫更大的數字會被拒載並請你更新 Cubi，不是 1 以上的整數也拒載。
+- 不認得的欄位（多半是拼錯，例如 `sessionallowed`）不擋載入，但設定頁會用黃字列出、`~/Library/Logs/cubi.log` 也會寫一行 `plugin <資料夾> warning:`。自己要用的欄位請以 `x-` 開頭，Cubi 不讀也不警告。
+- 被拒載的原因列在設定頁（紅字），也寫進 log（`plugin <資料夾> rejected:`）。
+- 改完先跑 `cubi --validate-plugin <資料夾>` 檢查（見「命令列」），不用重新載入就知道載不載得進來。
 
 ### Agent plugin
 
@@ -12,17 +20,17 @@ README 講怎麼用；這裡是插件規格、命令列、行事曆規則，給�
 
 | 欄位 | 必填 | 說明 |
 |---|---|---|
-| `schema` | | 目前 `1` |
-| `id` | ✔ | `[a-z0-9-]`，最多 24 字元，同時是 relay 的 `--agent` 值與 socket 信封的 `agent` |
+| `schema` | | 目前 `1`（見上方載入規則） |
+| `id` | ✔ | `[a-z0-9-]`，最多 24 字元，同時是 relay 的 `--agent` 值與 socket 信封的 `agent`；要等於資料夾名 |
 | `name` | ✔ | 設定頁顯示名 |
 | `color` | | `#RRGGBB`，沒給用灰 |
 | `capabilities` | | 只有 `statusline` 有作用。`approvals`、`questions` 會被忽略：manifest 沒有回覆模板，這種 plugin 的審批與問題不會上島（見下方行為） |
 | `secrets[]` | | `{key, label, required}`；值存登入鑰匙圈，不進 manifest |
 | `install.mode` | | `json-hooks` 或 `manual`（預設）。`manual` 時 `install.instructions` 顯示給使用者自己貼 |
 | `install.file` | json-hooks 必填 | 要寫的 JSON 檔，可用 `~`。格式比照 Claude Code：`hooks.<event>[] = { hooks: [{type, command, timeout}] }` |
-| `install.entries[]` | json-hooks 必填 | `{event, command, timeout}`。**`command` 必須含 `cubi-hook --agent <id> `**（尾端空白），安裝狀態與解除都靠這個 tag 辨識自己的條目；沒有就拒載 |
+| `install.entries[]` | json-hooks 必填 | `{event, command, timeout}`。**`command` 必須含 `cubi-hook --agent <id> `**（尾端空白），安裝狀態與解除都靠這個 tag 辨識自己的條目；沒有就拒載。`timeout` 是 1–600 的整數秒，不寫是 10；小數、負數、超出範圍都拒載 |
 | `events.<native>` | | 原生事件名 → `{canonical, map}` |
-| `events.<native>.canonical` | ✔ | `sessionStart`、`prompt`、`toolStart`、`toolEnd`、`permissionRequest`、`question`、`notification`、`stop`、`sessionEnd` |
+| `events.<native>.canonical` | ✔ | `sessionStart`、`prompt`、`toolStart`、`toolEnd`、`permissionRequest`、`question`、`notification`、`stop`、`sessionEnd`；沒寫或寫別的就拒載 |
 | `events.<native>.map` | | canonical 欄位 → JSON path（只支援 `$.a.b` 物件走訪，沒有陣列索引）。沒對映的欄位用 Claude Code 的預設路徑 |
 
 `map` 可用的欄位（括號是預設路徑）：
@@ -52,18 +60,19 @@ README 講怎麼用；這裡是插件規格、命令列、行事曆規則，給�
 | 欄位 | 必填 | 說明 |
 |---|---|---|
 | `kind` | ✔ | `tool` |
-| `id`、`name` | ✔ | 同 agent：`[a-z0-9-]`，最多 24 字元；`name` 是視窗標題、選單文字、資訊窗區塊標題 |
-| `panel.file` | ✔ | HTML 檔：相對插件目錄，或 `~`／絕對路徑。每次開窗重讀。`baseURL` 為 nil：沒有 file:// 基底、origin 是 null；外部資源（script、img、fetch）**不擋**，面板 HTML 跟 manifest 一樣是使用者自己放的、一樣信任 |
+| `id`、`name` | ✔ | 同 agent：`[a-z0-9-]`，最多 24 字元，要等於資料夾名；`name` 是視窗標題、選單文字、資訊窗區塊標題 |
+| `panel.file` | ✔ | HTML 檔：相對插件目錄，或 `~`／絕對路徑。每次開窗重讀。`baseURL` 為 nil：沒有 file:// 基底、origin 是 null，所以**同資料夾的 js、css、圖片用相對路徑載不到，要全部寫在這一個 HTML 裡**；外部資源（script、img、fetch）**不擋**，面板 HTML 跟 manifest 一樣是使用者自己放的、一樣信任 |
 | `panel.width`、`panel.height` | | 視窗大小，預設 900×640 |
 | `panel.bridge` | | JS 用的 handler 名，預設 `cubi`；既有面板寫死別的名字就在這裡宣告，不用改面板 |
 | `panel.style` | | `"cubi"`：注入 cubi 的 dashboard 樣式包（見下方「樣式包」）。不寫或 `null` 就不注入，既有面板不受影響 |
-| `commands.<action>.run` | ✔ | argv，**不經 shell**。第一格是執行檔：絕對路徑、`~`、`$plugin/…` 或相對插件目錄的路徑（一定要含 `/`，只寫名字不會去 PATH 找）。任何一格可用 `$plugin` 代表插件目錄（只認整格 `$plugin` 或 `$plugin/…` 開頭）；`$1`…`$n` 代入呼叫端的第 n 個參數。命令的工作目錄就是插件目錄 |
+| `commands.<action>` | | 動作名稱只能有小寫英數與 `.`、`_`、`-`，第一個字要是英數，1–64 字（例如 `skill.on`），不合規就拒載 |
+| `commands.<action>.run` | ✔ | argv，**不經 shell**。第一格是執行檔：絕對路徑、`~`、`$plugin/…` 或相對插件目錄的路徑（一定要含 `/`，只寫名字不會去 PATH 找）。自己寫的腳本要有執行權限（`chmod +x`），或第一格寫直譯器、腳本放第二格，例如 `["/usr/bin/python3", "$plugin/main.py"]`。任何一格可用 `$plugin` 代表插件目錄（只認整格 `$plugin` 或 `$plugin/…` 開頭）；`$1`…`$n` 代入呼叫端的第 n 個參數。命令的工作目錄就是插件目錄 |
 | `commands.<action>.args[]` | | 每個參數的型別，數量必須跟呼叫端送的一樣：`"name"`（`[A-Za-z0-9._-]{1,64}`，不能是 `.`／`..`：檔名／資產名，走不出目錄）、`"value"`（可印字元 ≤512，不能以 `-` 開頭，所以變不成選項）、`{"enum": […]}`、`"text"`（≤256 KB，只能走 stdin） |
 | `commands.<action>.stdin` | | 1-based 整數：第 n 個參數餵 stdin 而不是 argv（長內容用） |
 | `commands.<action>.reveal` | | `true`：把 stdout（去頭尾空白）當路徑在 Finder 選取，回 `{ok, out: 路徑}` |
 | `commands.<action>.sessionAllowed` | | `true`：這個命令可以列在 `session.new` 的 `allowActions` 裡，讓受限 session 不經任何人核准就用 `cubi --tool-run` 呼叫它。預設 `false`，寫成 `true` 以外的任何值都算沒寫。只標「agent 把結果交回來」那種命令，不要標會寫外部系統或改設定的 |
 | `session.info` | | 命令名。資訊窗選到 session 時執行，之後每 `session.refresh` 秒（整數，≥10，預設 60）一次，島收起就停。見下方「session hook」 |
-| `tick.action` | | 命令名。每 `tick.every` 秒（整數，≥30，預設 60）執行一次，不管島開不開。見下方「tick hook」 |
+| `tick.action` | | 命令名。每 `tick.every` 秒（整數，≥30，預設 60）執行一次，不管島開不開。Cubi 每 30 秒檢查一次，所以實際間隔以 30 秒為單位往上湊（寫 45 約每 60 秒跑一次）。見下方「tick hook」 |
 
 被 `session.info`／`tick.action` 指到的命令（以及資訊窗按鈕要叫的命令）叫 **hook 命令**，形狀固定：`"args": ["text"], "stdin": 1`，不能 `reveal`。app 把自己組的 JSON 餵進 stdin，讀 stdout 的 JSON。不符就整個 manifest 拒載。hook 命令有 20 秒上限，到期 SIGKILL；**不要留背景子行程**（孫行程握著 stdout 會讓 app 一直等到它結束）。面板與 `--tool-run` 叫的命令沒有時間上限。
 
@@ -107,7 +116,7 @@ cubi 在頁面載入前塞一段 `<style>` 到最前面（所以面板自己的�
 
 #### session hook
 
-stdin（一個 session；`segments` 是 cubi 看到的活動時段，epoch 秒，最近 7 天；`open` 是還在進行的那段）：
+stdin（一個 session；`segments` 是 cubi 看到的活動時段，epoch 秒，最近 7 天；`open` 是還在進行的那段；`cwd`、`projectDirectory` 沒有值時整個欄位不出現；`input` 只在按了帶 `input`／`arg` 的按鈕時才有，見下方 `actions[]`）：
 
 ```json
 {"id":"3d22…","name":"範例工單","cwd":"/Users/me/proj","projectDirectory":"/Users/me/proj","agent":"claude-code",
@@ -204,9 +213,14 @@ stdin：`{"now": <epoch 秒>, "sessions": [<同上的 session 物件>…]}`，�
 ~/Applications/Cubi.app/Contents/MacOS/cubi --uninstall-hooks
 ~/Applications/Cubi.app/Contents/MacOS/cubi --settings              # 啟動 app 並直接開設定頁
 ~/Applications/Cubi.app/Contents/MacOS/cubi --tool-run <id> <action> [args…]   # 走工具插件的路徑執行一條指令，印 {ok,out,err}；參數寫 - 就從 stdin 讀
+~/Applications/Cubi.app/Contents/MacOS/cubi --validate-plugin <插件資料夾>     # 照 app 的規則檢查 manifest，加上面板檔與每個執行檔在不在、能不能執行；印出錯誤與警告，不開 app、不寫 log
 ~/Applications/Cubi.app/Contents/MacOS/cubi --new-session ~/proj [--continue | --resume <id>] [--prompt "第一句話"] [--terminal ghostty|terminal]   # 家目錄、根目錄、放金鑰的資料夾會被拒（exit 2）
 ```
 
 例：`echo '{"id":"x","name":"PROJ-12 範例","cwd":"/tmp","agent":"claude-code","segments":[]}' | cubi --tool-run sprint session.info -`。
+
+`--tool-run` 跟面板有三處不同：`reveal` 的命令只印出路徑、不在 Finder 選取；沒有時間上限（hook 命令在 app 裡是 20 秒）；每次執行與拒絕不寫進 log。找不到插件時會印出它被拒載的原因。
+
+`--validate-plugin` 結束碼：`0` 載得進來（可能有警告）、`1` 有錯誤、`2` 用法錯。例：`cubi --validate-plugin docs/plugins/example-tool`。
 
 `--hooks-plan` 與 `--install-hooks` 可加 `--retire-notify`：同時移除舊的 `notify-hook.sh` 桌面通知 hook（設定頁的同一個勾選）。CLI 跟 app 一樣以 `$HOME` 為家目錄；要對假目錄測就 `HOME=/tmp/x cubi --hooks-plan`。

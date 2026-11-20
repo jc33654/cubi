@@ -158,6 +158,7 @@ public struct ToolPlugin: Sendable, Equatable {
         }
         for (action, spec) in m["commands"]?.object ?? [:] {
             if reservedActions.contains(action) { throw LoadError.badCommand(action, "是面板內建的動作名稱，不能自己定義") }
+            guard isValidActionName(action) else { throw LoadError.badCommand(action, "動作名稱只能有小寫英數與 . _ -、第一個字要是英數，1–64 字") }
             guard let run = spec["run"]?.array?.compactMap(\.string), !run.isEmpty, !run[0].isEmpty else {
                 throw LoadError.badCommand(action, "run 要是非空的字串陣列")
             }

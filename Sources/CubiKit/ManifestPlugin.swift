@@ -19,7 +19,23 @@ public struct ManifestPlugin: AgentPlugin {
     public var installEntries: [(event: String, command: String, timeout: Int)]
     public var events: [String: EventRule]
 
-    public enum LoadError: Error, Equatable { case badID(String), missingField(String), badInstall }
+    public enum LoadError: Error, Equatable, LocalizedError {
+        case badID(String), missingField(String), badField(String, String)
+
+        public var errorDescription: String? {
+            switch self {
+            case .badID(let id): return "id「\(id)」不合法（小寫英數與 -，最多 24 字）"
+            case .missingField(let f): return "缺少欄位 \(f)"
+            case .badField(let f, let why): return "\(f)：\(why)"
+            }
+        }
+    }
+
+    public static let canonicalEvents = ["sessionStart", "prompt", "toolStart", "toolEnd", "permissionRequest", "question", "notification", "stop", "sessionEnd"]
+    /// The fields an event's `map` may pick (see `decode`).
+    public static let mapFields = ["session", "cwd", "transcript", "tool", "input", "toolUseID", "ok", "response", "source", "prompt", "type", "message", "reason"]
+    /// Seconds a hook entry may give the agent's hook runner.
+    public static let timeoutRange = 1...600
 
     // MARK: - Loading
 
@@ -51,23 +67,37 @@ public struct ManifestPlugin: AgentPlugin {
         var entries: [(String, String, Int)] = []
         switch install?["mode"]?.string {
         case "json-hooks":
-            guard let file = install?["file"]?.string else { throw LoadError.badInstall }
+            guard let file = install?["file"]?.string else { throw LoadError.missingField("install.file") }
             mode = .jsonHooks(file: file)
-            for e in install?["entries"]?.array ?? [] {
-                guard let event = e["event"]?.string, let command = e["command"]?.string else { throw LoadError.badInstall }
+            for (i, e) in (install?["entries"]?.array ?? []).enumerated() {
+                let at = "install.entries[\(i)]"
+                guard let event = e["event"]?.string else { throw LoadError.missingField(at + ".event") }
+                guard let command = e["command"]?.string else { throw LoadError.missingField(at + ".command") }
                 // Install status and uninstall find the plugin's hooks by this tag.
-                guard command.contains(ClaudeHookInstaller.agentTag(id)) else { throw LoadError.badInstall }
-                entries.append((event, command, Int(e["timeout"]?.double ?? 10)))
+                guard command.contains(ClaudeHookInstaller.agentTag(id)) else {
+                    throw LoadError.badField(at + ".command", "要含「\(ClaudeHookInstaller.agentTag(id))」（尾端有空白），安裝狀態與解除靠它認出自己的條目")
+                }
+                // Never Int(Double): 1e300 traps.
+                var timeout = 10
+                if let raw = e["timeout"] {
+                    guard let n = raw.double.flatMap(Int.init(exactly:)), timeoutRange.contains(n) else {
+                        throw LoadError.badField(at + ".timeout", "要是 \(timeoutRange.lowerBound)–\(timeoutRange.upperBound) 的整數秒")
+                    }
+                    timeout = n
+                }
+                entries.append((event, command, timeout))
             }
         case "manual", nil:
             mode = .manual(instructions: install?["instructions"]?.string ?? "")
         default:
-            throw LoadError.badInstall
+            throw LoadError.badField("install.mode", "只能是 json-hooks 或 manual")
         }
 
         var events: [String: EventRule] = [:]
         for (native, rule) in m["events"]?.object ?? [:] {
-            guard let canonical = rule["canonical"]?.string else { continue }
+            guard let canonical = rule["canonical"]?.string, canonicalEvents.contains(canonical) else {
+                throw LoadError.badField("events.\(native).canonical", "必填，要是 \(canonicalEvents.joined(separator: "、")) 之一")
+            }
             var map: [String: String] = [:]
             for (k, v) in rule["map"]?.object ?? [:] { if let s = v.string { map[k] = s } }
             events[native] = EventRule(canonical: canonical, map: map)

@@ -197,7 +197,11 @@ private final class ToolBridge: NSObject, WKScriptMessageHandlerWithReply {
                         // One rule per action the plugin named, each for `<this cubi> --tool-run <this plugin> <action>` only.
                         let rules = spec.allowActions.map { SessionLaunch.allowRule(cubi: ToolRunner.cubiBinary, tool: tool.id, action: $0) }
                         guard !rules.contains(nil) else {
-                            replyHandler(["ok": false, "err": "Cubi 的安裝路徑（\(ToolRunner.cubiBinary)）有空白或特殊字元，受限模式沒辦法只放行指定的動作，所以不開 session。把 Cubi.app 放在路徑只有英數、/、.、_、- 的位置。"], nil)
+                            // Say which it is: the install path, or (a manifest older than the action-name rule) the action.
+                            let err = SessionLaunch.isPlainPath(ToolRunner.cubiBinary)
+                                ? "動作名稱「\(zip(spec.allowActions, rules).filter { $0.1 == nil }.map(\.0).joined(separator: "、"))」有英數、.、_、- 以外的字元，受限模式沒辦法只放行它，所以不開 session。"
+                                : "Cubi 的安裝路徑（\(ToolRunner.cubiBinary)）有空白或特殊字元，受限模式沒辦法只放行指定的動作，所以不開 session。把 Cubi.app 放在路徑只有英數、/、.、_、- 的位置。"
+                            replyHandler(["ok": false, "err": err], nil)
                             return
                         }
                         restricted = .init(settingsFile: try HookSetup.writeRestrictedSettings(directory: directory).path, readDirs: spec.readDirs,

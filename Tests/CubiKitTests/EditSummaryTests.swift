@@ -15,6 +15,19 @@ import Testing
     #expect(s.label == "c.swift +2 −1")
 }
 
+/// The hunk above with its start lines at 1e300, the value Int(Double) traps on (see
+/// ToolPlugin.seconds): read as 0, never a crash.
+@Test func hugeHunkStartIsNotACrash() {
+    let input: JSONValue = .object(["file_path": .string("/a/b/c.swift"), "old_string": .string("x"), "new_string": .string("y")])
+    let response: JSONValue = .object(["structuredPatch": .array([.object([
+        "oldStart": .number(1e300), "newStart": .number(-1e300),
+        "lines": .array([.string(" keep"), .string("-old"), .string("+new1"), .string("+new2")]),
+    ])])])
+    let s = EditSummaryBuilder.build(tool: "Edit", input: input, response: response)!
+    #expect(s.lines.first?.text == "@@ -0 +0 @@")
+    #expect(s.added == 2 && s.removed == 1)
+}
+
 @Test func editFallsBackToLineDiff() {
     let input: JSONValue = .object(["file_path": .string("f.txt"), "old_string": .string("a\nb\nc"), "new_string": .string("a\nB\nc\nd")])
     let s = EditSummaryBuilder.build(tool: "Edit", input: input, response: .null)!

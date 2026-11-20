@@ -41,7 +41,7 @@ docs/                plan.md（設計與決策）、protocol.md（relay socket �
 
 ## 命令列
 
-全部列在 [advanced.md](advanced.md) 的「命令列」。開發時常用：`--tool-run <id> <action> -`（參數 `-` 從 stdin 讀，餵 hook 命令的 JSON）、`HOME=/tmp/x cubi --hooks-plan`（對假目錄測）。
+全部列在 [advanced.md](advanced.md) 的「命令列」。模式旗標（`--render-settings`、`--tool-run`、`--hooks-plan`…，清單是 `CubiCommand.modes`）必須是第一個參數，只有它決定做什麼：`cubi --dark --render-settings …` 會直接啟動 app，不會進 render（cubi 沒有 `--help`，不認得的第一個參數就是開 app）。`--tool-run <id> <action>` 之後的每個字都是那個動作的參數，旗標也一樣，不會切到別的模式（受限 session 的放行規則允許在後面接任意參數）。開發時常用：`--tool-run <id> <action> -`（參數 `-` 從 stdin 讀，餵 hook 命令的 JSON）、`HOME=/tmp/x cubi --hooks-plan`（對假目錄測）。
 
 ## 自簽憑證 `cubi-dev`
 

@@ -31,6 +31,11 @@ struct PluginsSection: View {
                 Label("\(dir)：\(registry.loadErrors[dir] ?? "")", systemImage: "xmark.octagon")
                     .font(.system(size: 11)).foregroundStyle(Dash.danger)
             }
+            // Loaded anyway; most likely a misspelt key.
+            ForEach(Array(registry.loadWarnings.keys.sorted()), id: \.self) { dir in
+                Label("\(dir)：\((registry.loadWarnings[dir] ?? []).joined(separator: "；"))", systemImage: "exclamationmark.triangle")
+                    .font(.system(size: 11)).foregroundStyle(Dash.warning)
+            }
         }
     }
 

@@ -106,6 +106,15 @@ if sys.argv[1] == "greet":
 
 實測：印出 `{"err":"","ok":true,"out":"你好，世界\n"}`。stderr 另外會有一行 `plugins: …` 的 log，可以忽略。
 
+選做：用 JSON Schema 再驗一次 manifest。`--validate-plugin` 已經照 Cubi 的載入規則檢查過了；schema 比 Cubi 嚴一點（不認得的欄位在 schema 是錯誤，在 Cubi 只是警告），但有些規則 schema 寫不出來，所以兩個都跑最保險。在 Cubi 原始碼資料夾裡執行（第一行要連網裝套件，裝在暫存資料夾，不動系統的 Python）：
+
+```sh
+python3 -m venv /tmp/cubi-schema && /tmp/cubi-schema/bin/pip install -q jsonschema
+/tmp/cubi-schema/bin/python -c 'import json,sys; from jsonschema import Draft202012Validator as V; s=json.load(open(sys.argv[1])); [print(e.json_path, e.message) for e in V(s).iter_errors(json.load(open(sys.argv[2])))] or print("ok")' docs/plugins/manifest.schema.json ~/Library/Application\ Support/cubi/plugins/hello/manifest.json
+```
+
+印出 `ok` 就是通過；不通過時每行是一個欄位和原因。
+
 ## 6. 重新載入
 
 打開 Cubi 的設定 › 插件，按「重新載入」。「工具」底下會多一張 Hello 卡片。（未實測：需要在真的 Cubi 上按）
@@ -118,7 +127,21 @@ if sys.argv[1] == "greet":
 在框裡打字、按「打招呼」，底下會出現「你好，…」。
 
 - 未實測：從選單打開需要在真的 Cubi 上點。
-- 實測：用 `cubi --render-panel hello out.png --eval "greet()"` 在螢幕外畫出面板並按下按鈕，畫面上出現「你好，世界」。
+不開 Cubi 也能看畫面：`--render-panel` 在螢幕外開一個真的面板、截一張圖。它跟 `--tool-run`、`--render-widget` 一樣，只到 `$HOME/Library/Application Support/cubi/plugins/<id>/` 找套件，而且會真的執行面板載入時（和 `--eval` 裡）呼叫的指令。想讓試跑寫的檔不落在你真的資料裡，就用一個暫時的家目錄，把套件資料夾複製進去：
+
+```sh
+T=$(mktemp -d)                                              # 暫時的家目錄
+mkdir -p "$T/Library/Application Support/cubi/plugins"
+cp -R ~/Library/Application\ Support/cubi/plugins/hello "$T/Library/Application Support/cubi/plugins/"
+CUBI=~/Applications/Cubi.app/Contents/MacOS/cubi              # 先存起來：HOME 換掉後 ~ 會指到別處
+HOME="$T" "$CUBI" --render-panel hello "$T/hello.png" --eval "greet()"
+HOME="$T" "$CUBI" --tool-run hello greet 世界
+open "$T/hello.png"
+```
+
+- 實測：上面這段照貼執行，`hello.png` 上出現「你好，世界」，`--tool-run` 印出 `{"err":"","ok":true,"out":"你好，世界\n"}`。
+- 換了 HOME 之後，腳本用 `~` 或 `$HOME` 組的路徑會落在暫時的家目錄；但腳本裡寫死的絕對路徑、或環境變數指到的地方，照樣是真的。也要注意套件會不會連外部服務（用你的帳密改遠端資料）。
+- `--eval` 的值是一段 JavaScript，在面板載入約 4 秒後執行，再過 2 秒截圖；它的結果印成 `eval → …`。結果是 Promise（例如呼叫 async 函式）時會印 `eval → nil error: JavaScript execution returned a result of an unsupported type`，這行無害：非同步的部分照樣跑完，截圖裡看得到結果（實測）。
 
 改了 HTML 之後，關掉面板再打開就會重讀。不要用 `location.reload()`，重載只會剩一張空白頁。
 
@@ -171,4 +194,12 @@ elif sys.argv[1] == "info":
 - 想看完整的例子：`docs/plugins/sprint/`（Jira 工單、時數、回顧圖表）。
 - 哪些欄位承諾相容（stable）、哪些還在變（experimental）：見 [reference.md](reference.md) 的穩定度欄。
 - 套件的資料別放在 `plugins/<id>/` 裡（重裝會被覆蓋），放 `~/Library/Application Support/cubi/<id>/` 之類；腳本用家目錄組出這個路徑，例如 Python 的 `os.path.expanduser("~/Library/Application Support/cubi/hello")`。
+- 離線畫面時 Cubi 會給腳本 `CUBI_RENDER=1`，意思是「這是乾跑」。建議讓腳本讀一個自己的環境變數決定資料夾，有 `CUBI_RENDER` 又沒設那個變數時就不寫檔：
+
+  ```python
+  DATA = os.environ.get("HELLO_DIR") or os.path.expanduser("~/Library/Application Support/cubi/hello")
+  CAN_WRITE = not (os.environ.get("CUBI_RENDER") and not os.environ.get("HELLO_DIR"))
+  ```
+
+  sprint 套件就是這樣做的（`CUBI_SPRINT_DIR`）。
 - 要回一筆以上的資料給面板，讓腳本印 JSON，面板用 `JSON.parse(r.out)` 讀。

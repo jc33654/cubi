@@ -48,7 +48,7 @@ schema 檔比 Cubi 嚴格一點：不認得的欄位在 schema 是錯誤，在 C
 | `commands.<action>.args[]`：`"value"` | | 可印字元，1–512 字，不能以 `-` 開頭（變不成選項） | stable | `ToolPlugin.swift:263-267` |
 | `commands.<action>.args[]`：`"name"` | | `[A-Za-z0-9._-]`，1–64 字，不能是 `.`／`..`（走不出目錄） | experimental | `ToolPlugin.swift:258-262` |
 | `commands.<action>.args[]`：`{"enum": […]}` | | 只能是列出的字串之一 | experimental | `ToolPlugin.swift:176-180`、`:270-271` |
-| `commands.<action>.stdin` | | 1-based 整數：第 n 個參數餵 stdin、不放 argv。hook 命令與面板指令都適用，例如面板要收長文字就寫 `"args": ["text"], "stdin": 1`（依據：兩個以上套件使用） | stable | `ToolPlugin.swift:185-187` |
+| `commands.<action>.stdin` | | 1-based 整數：第 n 個參數餵 stdin、不放 argv。hook 命令與面板指令都適用，例如面板要收長文字就寫 `"args": ["text"], "stdin": 1`（依據：兩個以上套件使用）。送進去的是那個字串的 UTF-8 原樣：結尾不補換行、CRLF 不轉換（實測：面板、`--tool-run` 參數、`--tool-run -` 三種來源都一樣）；Cubi 自己組給 hook 的 JSON 結尾也沒有換行 | stable | `ToolPlugin.swift:185-187`、`ToolRunner.swift:79-81`、`PluginIO.swift:251-255` |
 | `commands.<action>.reveal` | | `true`：stdout 去頭尾空白當路徑，在 Finder 選取；回 `{ok, out: 路徑}` | stable | `ToolPlugin.swift:198`、`ToolPanel.swift:259-262` |
 | `commands.<action>.sessionAllowed` | | 只有 `true` 算數：受限 session 可以不經核准跑它（見「受限 session」）。只標「把結果交回來」的命令，不要標會寫外部系統或改設定的 | experimental | `ToolPlugin.swift:198` |
 | `session.info` | | hook 命令名：資訊窗選到 session 時執行 | stable | `ToolPlugin.swift:202-206` |
@@ -59,7 +59,7 @@ schema 檔比 Cubi 嚴格一點：不認得的欄位在 schema 是錯誤，在 C
 
 **hook 命令**：`session.info`、`tick.action` 與資訊窗按鈕叫的命令，形狀固定是 `"args": ["text"], "stdin": 1`，不能 `reveal`，不符就整份 manifest 拒載（`ToolPlugin.swift:228-232`）。app 把 JSON 餵進 stdin、讀 stdout 的 JSON。hook 命令有 20 秒上限，到期整組行程 SIGKILL（`ToolRunner.swift:15`、`:67-78`）；**不要留背景子行程**，孫行程握著 stdout 會讓 app 一直等到時限。面板與 `--tool-run` 叫的命令沒有時限。
 
-**環境變數**（experimental）：每個命令都有 `CUBI_BIN`，是正在跑的 cubi 執行檔路徑（`ToolRunner.swift:48`）。離線渲染（`--render-panel`／`--render-widget`）時多一個 `CUBI_RENDER=1`（`main.swift:65-67`），代表乾跑：不該寫使用者真的資料（寫測試資料可以），也不該碰外部服務（用使用者的帳密連線、改遠端資料）。sprint 的做法：有 `CUBI_RENDER` 又沒指定 `CUBI_SPRINT_DIR` 時不存檔、不連 Jira、不寫回顧檔，畫面照算。
+**環境變數**（experimental）：每個命令都有 `CUBI_BIN`，是正在跑的 cubi 執行檔路徑（`ToolRunner.swift:48`）。離線渲染（`--render-panel`／`--render-widget`）時多一個 `CUBI_RENDER=1`（`main.swift:65-67`），代表乾跑：不該寫使用者真的資料（寫測試資料可以），也不該碰外部服務（用使用者的帳密連線、改遠端資料）。建議的寫法是腳本讀一個自己的環境變數決定資料夾，有 `CUBI_RENDER` 又沒設那個變數時就不寫檔（範例在 [guide.md](guide.md#下一步)）。sprint 的做法：有 `CUBI_RENDER` 又沒指定 `CUBI_SPRINT_DIR` 時不存檔、不連 Jira、不寫回顧檔，畫面照算。
 
 ## 面板 JS（bridge）
 
@@ -253,9 +253,15 @@ stdout（`hook-io.schema.json#/$defs/tickOutput`）：
 
 ## 命令列
 
-`cubi` 只看第一個參數決定做什麼（`CubiCommand.swift:15-17`），完整清單在 [advanced.md](../advanced.md) 的「命令列」。跟套件有關的兩個：
+`cubi` 只看第一個參數決定做什麼（`CubiCommand.swift:15-17`），完整清單在 [advanced.md](../advanced.md) 的「命令列」。
+
+除了 `--validate-plugin`（直接給資料夾），下面的指令都只到 `$HOME/Library/Application Support/cubi/plugins/<id>/` 找套件（`PluginRegistry.swift:13-14`、`:38`），而且會真的執行套件的指令。要在不動真資料的情況下試，就把 HOME 換成暫時的資料夾、把套件複製進去，指令範例在 [guide.md](guide.md#7-打開面板)。換了 HOME，腳本用 `~` 組的路徑會跟著換，寫死的絕對路徑與環境變數指到的地方不會。
+
+跟套件有關的指令：
 
 | 指令 | 說明 | 穩定度 | 出處 |
 |---|---|---|---|
 | `cubi --validate-plugin <資料夾>` | 見「載入規則」 | stable | `main.swift:25-38` |
+| `cubi --render-panel <id> <out.png> [--dark] [--height N] [--eval JS]` | 在螢幕外開真的面板（真的 web view 與 bridge）截圖，設定頁關掉的套件不畫。沒有 `--eval` 時約 4 秒後截圖；有的話 JS 在約 4 秒時執行，結果印成 `eval → …`，再 2 秒截圖。結果是 Promise 時印 `eval → nil error: … unsupported type`，無害，非同步的部分照樣跑完、截圖看得到（實測）。環境多一個 `CUBI_RENDER=1` | experimental | `main.swift:65-89`、`ToolPanel.swift:84-88`、`:278-298` |
+| `cubi --render-widget <id> <session 名> <out.png>` | 用一個假 session（id `render-widget`、沒有 cwd、沒有時段）跑 `session.info`，畫出資訊窗的列（不含底部按鈕）。環境多一個 `CUBI_RENDER=1` | experimental | `main.swift:93-105`、`SessionWidgetView.swift:100` |
 | `cubi --tool-run <id> <action> [args…]` | 走套件的檢查執行一條指令，印 `{ok,out,err}`；參數寫 `-` 從 stdin 讀。跟面板有三處不同：`reveal` 只印路徑、不在 Finder 選取；沒有時限；執行與拒絕不寫 log。找不到套件時印出它被拒載的原因。`text` 參數也可以直接寫在命令列，寫 `-` 才從 stdin 讀。stderr 會多一行 `plugins: …` 的 log，可以忽略 | stable | `main.swift:212-240` |

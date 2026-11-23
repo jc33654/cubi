@@ -24,10 +24,10 @@
 3. 面板只能透過 `window.webkit.messageHandlers.cubi.postMessage({action, args})` 叫 manifest `commands` 裡列的指令，回來是 `{ok, out, err}`。指令不經 shell：`run` 是 argv，第一格寫 `/usr/bin/python3`（或其他直譯器的絕對路徑），腳本放第二格用 `$plugin/…`。如果第一格直接寫腳本，就要 chmod +x 並加 shebang。
 4. 參數型別優先用 `"value"`（一行字）和 `"text"`（長內容）。`"text"` 只能走 stdin：寫 `"args": ["text"], "stdin": 1`，`run` 裡不要再寫 `$1`，腳本從 stdin 讀；這是 stable 的用法，可以直接用。要回多筆資料就讓腳本印 JSON，面板 `JSON.parse(r.out)`。動作名稱只用小寫英數與 `. _ -`，開頭是英數。
 5. 只用 reference.md 標 **stable** 的欄位。真的需要 experimental 的，先跟我說是哪個、為什麼。
-6. 套件自己的資料寫在 `~/Library/Application Support/cubi/<id>/`（腳本用家目錄組出這個路徑），不要寫在 `plugins/<id>/` 裡。
+6. 套件自己的資料寫在 `~/Library/Application Support/cubi/<id>/`（腳本用家目錄組出這個路徑），不要寫在 `plugins/<id>/` 裡。腳本另外讀一個自己的環境變數（例如 `<ID>_DIR`）當資料夾；環境裡有 `CUBI_RENDER` 又沒設那個變數時，不要寫檔（guide.md「下一步」有範例）。
 7. 寫完執行下面這行，直到印出「可以載入」而且沒有錯誤：
    `~/Applications/Cubi.app/Contents/MacOS/cubi --validate-plugin ~/Library/Application\ Support/cubi/plugins/<id>`
-   再用 `~/Applications/Cubi.app/Contents/MacOS/cubi --tool-run <id> <action> <參數>` 每個指令各跑一次，貼出輸出給我看（stderr 那行 `plugins: …` 是 log，可以忽略）。
-   最後用 `~/Applications/Cubi.app/Contents/MacOS/cubi --render-panel <id> /tmp/<id>.png` 在螢幕外畫一張面板截圖，打開那張圖看版面對不對。這一步會真的執行面板載入時呼叫的指令。
+   接著每個指令各跑一次、再畫一張面板截圖看版面。`--tool-run` 和 `--render-panel` 只到 `$HOME/Library/Application Support/cubi/plugins/<id>/` 找套件，而且會真的執行指令，所以在暫時的家目錄裡跑，套件先複製進去（照 guide.md 第 7 節那段指令，把 `hello` 換成你的 id）：
+   `HOME="$T" "$CUBI" --tool-run <id> <action> <參數>`、`HOME="$T" "$CUBI" --render-panel <id> "$T/<id>.png"`，然後打開那張圖看。輸出貼給我（stderr 那行 `plugins: …` 是 log，可以忽略）。`--eval` 的結果是 Promise 時那行 `unsupported type` 無害。
 8. `cubi` 只用 `--validate-plugin`、`--tool-run`、`--render-panel` 這三個模式；不要執行其他模式（`--install-hooks`、`--uninstall-hooks`、`--new-session` 之類），也不要碰 `~/.claude/` 底下的設定。
 9. 做完告訴我：到 Cubi 設定 › 插件按「重新載入」，然後從選單列的 Cubi 選單（「設定…」底下）打開面板。

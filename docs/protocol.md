@@ -66,4 +66,4 @@
 
 ## Plugin manifest
 
-插件規格（agent plugin、工具插件、session／tick hook、行事曆規則）搬到 [advanced.md](advanced.md)。
+套件規格（工具套件、agent 套件、session／tick hook、行事曆規則）在 [plugins/reference.md](plugins/reference.md)。

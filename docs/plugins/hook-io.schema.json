@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Cubi tool plugin hook I/O, schema 1",
+  "description": "What Cubi writes to a hook command's stdin and what it reads from its stdout (one JSON object, at most 64 KB). Validate against #/$defs/<name>. Cubi reads stdout more loosely than this schema in places: an unknown tone, a progress outside 0…1 or an unusable clock is dropped rather than refused, extra rows and actions are cut off. See reference.md.",
+  "$defs": {
+    "segment": {
+      "type": "object",
+      "required": ["start", "end", "open"],
+      "properties": {
+        "start": { "type": "number", "description": "Epoch seconds." },
+        "end": { "type": "number", "description": "Epoch seconds." },
+        "open": { "type": "boolean", "description": "The stretch still running." }
+      },
+      "additionalProperties": false
+    },
+
+    "sessionInput": {
+      "description": "stdin of session.info and of every detail-card button.",
+      "type": "object",
+      "required": ["id", "name", "agent", "segments"],
+      "properties": {
+        "id": { "type": "string", "x-stability": "stable" },
+        "name": { "type": "string", "x-stability": "stable" },
+        "cwd": { "type": "string", "description": "Absent when unknown.", "x-stability": "stable" },
+        "projectDirectory": { "type": "string", "description": "Absent when unknown.", "x-stability": "stable" },
+        "agent": { "type": "string", "x-stability": "stable" },
+        "segments": { "type": "array", "items": { "$ref": "#/$defs/segment" }, "description": "Activity stretches, last 7 days (tick: last 48 hours).", "x-stability": "stable" },
+        "input": { "type": "string", "description": "Only for a button with input (what the user typed) or arg.", "x-stability": "experimental" }
+      },
+      "additionalProperties": false
+    },
+
+    "tickInput": {
+      "description": "stdin of tick.",
+      "type": "object",
+      "required": ["now", "sessions"],
+      "properties": {
+        "now": { "type": "number", "description": "Epoch seconds.", "x-stability": "experimental" },
+        "sessions": { "type": "array", "items": { "$ref": "#/$defs/sessionInput" }, "x-stability": "experimental" }
+      },
+      "additionalProperties": false
+    },
+
+    "rowAction": {
+      "type": "object",
+      "required": ["label", "action"],
+      "properties": {
+        "label": { "type": "string", "description": "Cut to 60 characters; the tooltip when icon is set." },
+        "action": { "type": "string", "description": "A hook command of the same plugin, else the whole output is refused." },
+        "input": { "type": "string", "description": "Ask the user for one line with this prompt; sent as input." },
+        "arg": { "type": "string", "description": "Sent as input without asking; ignored when input is set." },
+        "icon": { "type": "string", "pattern": "^[a-z0-9]+(\\.[a-z0-9]+)*$", "maxLength": 40, "description": "SF Symbol name." }
+      },
+      "x-stability": "experimental"
+    },
+
+    "widgetOutput": {
+      "description": "stdout of session.info and of every detail-card button.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Cut to 60 characters.", "x-stability": "stable" },
+        "rows": {
+          "type": "array",
+          "description": "At most 10 are shown.",
+          "items": {
+            "oneOf": [
+              { "type": "array", "prefixItems": [ { "type": "string" }, { "type": "string" } ], "minItems": 2, "maxItems": 2, "description": "[label, value]" },
+              {
+                "type": "object",
+                "required": ["label", "value"],
+                "properties": {
+                  "label": { "type": "string", "x-stability": "stable" },
+                  "value": { "type": "string", "description": "Cut to 200 characters.", "x-stability": "stable" },
+                  "url": { "type": "string", "pattern": "^https?://", "description": "http(s) only, else the row is refused.", "x-stability": "stable" },
+                  "tone": { "enum": ["good", "warning", "danger", "info", "neutral"], "x-stability": "experimental" },
+                  "progress": { "type": "number", "minimum": 0, "maximum": 1, "x-stability": "experimental" },
+                  "clock": {
+                    "type": "object",
+                    "required": ["since"],
+                    "properties": {
+                      "since": { "type": "number", "description": "Epoch seconds, within a year of now." },
+                      "offset": { "type": "number" },
+                      "down": { "type": "boolean" }
+                    },
+                    "x-stability": "experimental"
+                  },
+                  "action": { "$ref": "#/$defs/rowAction" }
+                }
+              }
+            ]
+          },
+          "x-stability": "stable"
+        },
+        "actions": { "type": "array", "items": { "$ref": "#/$defs/rowAction" }, "description": "Buttons; at most 5 are shown.", "x-stability": "experimental" },
+        "error": { "type": "string", "description": "Shown as one red line.", "x-stability": "stable" }
+      }
+    },
+
+    "calendarEntry": {
+      "type": "object",
+      "required": ["title", "start", "end", "marker"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "description": "Cut to 120 characters." },
+        "start": { "type": "number", "description": "Epoch seconds, within a year of now; start < end, at most 24 h." },
+        "end": { "type": "number" },
+        "notes": { "type": "string" },
+        "marker": { "type": "string", "pattern": "^[A-Za-z0-9:._-]{1,80}$", "description": "Stable id; resending the same marker extends the event." }
+      },
+      "x-stability": "experimental"
+    },
+
+    "tickOutput": {
+      "description": "stdout of tick.",
+      "type": "object",
+      "properties": {
+        "calendar": { "type": "array", "items": { "$ref": "#/$defs/calendarEntry" }, "description": "At most 50 are taken; a bad entry is skipped alone.", "x-stability": "experimental" }
+      }
+    }
+  }
+}

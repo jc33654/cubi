@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Cubi plugin manifest, schema 1",
+  "description": "plugins/<id>/manifest.json. Every field carries x-stability: stable (kept compatible within schema 1), experimental (may change in any release), deprecated (still read, will go). Stricter than Cubi in one way: an unknown key fails here, while Cubi loads the plugin and warns. Rules a schema cannot state (the folder name equals id, stdin within args, text only on stdin, $1…$n with a matching argument, hook command shape and existence, the agent tag \"cubi-hook --agent <id> \" in install commands, files on disk) are checked by `cubi --validate-plugin <folder>`. See reference.md.",
+  "type": "object",
+  "required": ["id", "name"],
+  "properties": {
+    "schema": { "const": 1, "description": "Manifest format version. Absent means 1; a newer number is refused (update Cubi).", "x-stability": "stable" },
+    "kind": { "enum": ["tool", "agent"], "description": "Absent means agent.", "x-stability": "stable" },
+    "id": { "type": "string", "pattern": "^[a-z0-9-]{1,24}$", "description": "Must equal the folder name.", "x-stability": "stable" },
+    "name": { "type": "string", "description": "Window title, menu item, detail-card section title.", "x-stability": "stable" }
+  },
+  "patternProperties": { "^x-": { "description": "The author's own; Cubi neither reads nor warns about it." } },
+  "if": { "required": ["kind"], "properties": { "kind": { "const": "tool" } } },
+  "then": { "$ref": "#/$defs/tool" },
+  "else": { "$ref": "#/$defs/agent" },
+  "unevaluatedProperties": false,
+
+  "$defs": {
+    "tool": {
+      "type": "object",
+      "required": ["kind", "panel"],
+      "properties": {
+        "kind": { "const": "tool" },
+        "panel": {
+          "type": "object",
+          "required": ["file"],
+          "properties": {
+            "file": { "type": "string", "description": "One HTML file: relative to the plugin folder, ~ or absolute. Loaded as a string with no base URL, so sibling js/css/images do not load: inline them.", "x-stability": "stable" },
+            "width": { "type": "number", "description": "Default 900.", "x-stability": "stable" },
+            "height": { "type": "number", "description": "Default 640.", "x-stability": "stable" },
+            "bridge": { "type": "string", "description": "Name of window.webkit.messageHandlers.<bridge>; default cubi.", "x-stability": "experimental" },
+            "style": { "enum": ["cubi", null], "description": "cubi: inject the style kit (cubi- classes, cubiIcon).", "x-stability": "stable" }
+          },
+          "patternProperties": { "^x-": {} },
+          "additionalProperties": false,
+          "x-stability": "stable"
+        },
+        "commands": {
+          "type": "object",
+          "description": "Action name → command. Names: lower-case letters, digits, . _ -, starting with a letter or digit; pick.file, pick.dir, session.new are built in.",
+          "propertyNames": { "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$", "not": { "enum": ["pick.file", "pick.dir", "session.new"] } },
+          "additionalProperties": { "$ref": "#/$defs/command" },
+          "x-stability": "stable"
+        },
+        "session": {
+          "type": "object",
+          "required": ["info"],
+          "properties": {
+            "info": { "type": "string", "description": "A hook command (args [\"text\"], stdin 1) run for the selected session.", "x-stability": "stable" },
+            "refresh": { "type": "integer", "minimum": 10, "description": "Seconds; default 60.", "x-stability": "stable" }
+          },
+          "patternProperties": { "^x-": {} },
+          "additionalProperties": false,
+          "x-stability": "stable"
+        },
+        "tick": {
+          "type": "object",
+          "required": ["action"],
+          "properties": {
+            "action": { "type": "string", "description": "A hook command run with all live sessions.", "x-stability": "experimental" },
+            "every": { "type": "integer", "minimum": 30, "description": "Seconds; default 60; rounded up to a multiple of 30 in practice.", "x-stability": "experimental" }
+          },
+          "patternProperties": { "^x-": {} },
+          "additionalProperties": false,
+          "x-stability": "experimental"
+        },
+        "builtins": {
+          "type": "array",
+          "items": { "enum": ["session.new"] },
+          "description": "Built-ins that reach outside the panel and must be asked for.",
+          "x-stability": "experimental"
+        }
+      }
+    },
+
+    "command": {
+      "type": "object",
+      "required": ["run"],
+      "properties": {
+        "run": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" },
+          "prefixItems": [ { "type": "string", "minLength": 1, "anyOf": [ { "pattern": "/" }, { "const": "~" } ], "description": "The executable: absolute, ~, $plugin/… or relative with a /; never looked up on PATH." } ],
+          "description": "argv, no shell. $plugin is the plugin folder; $1…$n are the caller's arguments.",
+          "x-stability": "stable"
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "const": "text", "description": "Up to 256 KB; only on stdin.", "x-stability": "stable" },
+              { "const": "value", "description": "Printable, up to 512 characters, not starting with -.", "x-stability": "stable" },
+              { "const": "name", "description": "[A-Za-z0-9._-], 1–64, not . or ..", "x-stability": "experimental" },
+              { "type": "object", "required": ["enum"], "properties": { "enum": { "type": "array", "minItems": 1, "items": { "type": "string" } } }, "description": "One of the listed strings.", "x-stability": "experimental" }
+            ]
+          },
+          "x-stability": "stable"
+        },
+        "stdin": { "type": "integer", "minimum": 1, "description": "1-based argument fed on stdin, for hook and panel commands alike; a hook command is args [\"text\"], stdin 1. Stable: used by two or more plugins.", "x-stability": "stable" },
+        "reveal": { "type": "boolean", "description": "Show stdout (a path) in the Finder.", "x-stability": "stable" },
+        "sessionAllowed": { "type": "boolean", "description": "Only true counts: a restricted session opened by this plugin may run it.", "x-stability": "experimental" }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+
+    "agent": {
+      "type": "object",
+      "description": "Experimental as a whole: no compatibility promise.",
+      "properties": {
+        "kind": { "const": "agent" },
+        "id": { "description": "Same rule as above; as part of an agent plugin, experimental.", "x-stability": "experimental" },
+        "name": { "description": "As part of an agent plugin, experimental.", "x-stability": "experimental" },
+        "color": { "type": "string", "pattern": "^#?[0-9A-Fa-f]{6}$", "description": "#RRGGBB; anything else is grey.", "x-stability": "experimental" },
+        "capabilities": { "type": "array", "items": { "type": "string" }, "description": "Only statusline does anything.", "x-stability": "experimental" },
+        "secrets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["key"],
+            "properties": {
+              "key": { "type": "string", "x-stability": "experimental" },
+              "label": { "type": "string", "x-stability": "experimental" },
+              "required": { "type": "boolean", "x-stability": "experimental" }
+            },
+            "patternProperties": { "^x-": {} },
+            "additionalProperties": false
+          },
+          "x-stability": "experimental"
+        },
+        "install": {
+          "type": "object",
+          "properties": {
+            "mode": { "enum": ["json-hooks", "manual"], "description": "Default manual.", "x-stability": "experimental" },
+            "file": { "type": "string", "description": "Required for json-hooks.", "x-stability": "experimental" },
+            "instructions": { "type": "string", "x-stability": "experimental" },
+            "entries": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["event", "command"],
+                "properties": {
+                  "event": { "type": "string", "x-stability": "experimental" },
+                  "command": { "type": "string", "description": "Must contain \"cubi-hook --agent <id> \" (trailing space).", "x-stability": "experimental" },
+                  "timeout": { "type": "integer", "minimum": 1, "maximum": 600, "description": "Seconds; default 10.", "x-stability": "experimental" }
+                },
+                "patternProperties": { "^x-": {} },
+                "additionalProperties": false
+              },
+              "x-stability": "experimental"
+            }
+          },
+          "if": { "required": ["mode"], "properties": { "mode": { "const": "json-hooks" } } },
+          "then": { "required": ["file"] },
+          "patternProperties": { "^x-": {} },
+          "additionalProperties": false,
+          "x-stability": "experimental"
+        },
+        "events": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["canonical"],
+            "properties": {
+              "canonical": { "enum": ["sessionStart", "prompt", "toolStart", "toolEnd", "permissionRequest", "question", "notification", "stop", "sessionEnd"], "x-stability": "experimental" },
+              "map": {
+                "type": "object",
+                "description": "Canonical field → JSON path like $.a.b (objects only, no array index).",
+                "properties": {
+                  "session": { "type": "string" }, "cwd": { "type": "string" }, "transcript": { "type": "string" },
+                  "tool": { "type": "string" }, "input": { "type": "string" }, "toolUseID": { "type": "string" },
+                  "ok": { "type": "string" }, "response": { "type": "string" }, "source": { "type": "string" },
+                  "prompt": { "type": "string" }, "type": { "type": "string" }, "message": { "type": "string" },
+                  "reason": { "type": "string" }
+                },
+                "patternProperties": { "^x-": {} },
+                "additionalProperties": false,
+                "x-stability": "experimental"
+              }
+            },
+            "patternProperties": { "^x-": {} },
+            "additionalProperties": false
+          },
+          "x-stability": "experimental"
+        }
+      }
+    }
+  }
+}

@@ -11,7 +11,7 @@ Sources/cubi-hook/   relay，只 import Darwin，冷啟動個位數 ms
 Tests/CubiKitTests/  單元測試；Fixtures/claude-2.1.312/ 是實錄的 hook payload
 scripts/             bundle.sh（打包、strip、簽章、路徑守門）、install.sh（使用者安裝）、install-plugin.sh（複製插件到 plugins/）、make-icns.sh、import-fixtures.py
 .github/workflows/   ci.yml、release.yml
-docs/                plan.md（設計與決策）、protocol.md（relay socket 協定）、advanced.md（插件規格、CLI、行事曆規則）、status.md（進度）、plugins/（範例與內建插件）、images/（README 的圖）
+docs/                protocol.md（relay socket 協定）、advanced.md（命令列）、plugins/（套件指南 guide.md、規格 reference.md、schema、範例與內建 sprint 套件）、images/（README 的圖）
 ```
 
 ## make 目標

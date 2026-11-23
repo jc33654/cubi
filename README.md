@@ -183,15 +183,11 @@ open ~/Applications/Cubi.app
 - **app** 收事件、更新每個 session 的狀態機、畫機器人。審批這類 blocking 事件最多等 115 秒；app 沒開或當掉，Claude Code 自動退回終端自己問，什麼都不會卡住。
 - 島的狀態：`hidden → compact → expanded`。瀏海是物理的，所以島永遠以瀏海為中心留白，機器人在左翼、用量在右翼。沒瀏海的螢幕會在頂端置中浮一條小 pill 當瀏海用。
 - 零第三方依賴：AppKit + SwiftUI，SwiftPM，不用 Xcode.app。
-- 設計與決策寫在 [docs/plan.md](docs/plan.md)，relay 協定與欄位在 [docs/protocol.md](docs/protocol.md)，進度在 [docs/status.md](docs/status.md)。
+- relay 協定與欄位在 [docs/protocol.md](docs/protocol.md)，改程式與發版在 [docs/development.md](docs/development.md)。
 
 ## 插件
 
-都放在 `~/Library/Application Support/cubi/plugins/<id>/manifest.json`，規格在 [docs/advanced.md](docs/advanced.md)（進階操作）。
-
-**Agent plugin**：Claude Code 是內建的。其他 agent 可以用一份 manifest 接進來，在設定頁開啟；範例在 `docs/plugins/example-agent/`。目前 manifest plugin **只能監看**（session、工具開始／結束、結束），它的審批不會出現在島上，會落回那個 agent 自己的提示。要做審批得寫程式碼 plugin（實作 `AgentPlugin` 協定）。
-
-**工具插件**（`"kind": "tool"`）：一個 HTML 面板加一張指令表。面板的 JavaScript 只能呼叫表裡的指令，每個參數都有型別（名稱／值／選項／長文走 stdin），不經 shell。選單與設定頁各有入口。再掛兩個選填的 hook 就能進島：`session`（資訊窗選到 session 時執行，回幾列文字、連結與按鈕）與 `tick`（定時執行，回要寫進行事曆的事件，由 Cubi 去寫）。範例在 `docs/plugins/example-tool/`（最小）與 `docs/plugins/sprint/`（完整：Jira 工單、估點／實際、時數、回顧圖表）。
+一個 HTML 面板加一張指令表就是一個套件，放在 `~/Library/Application Support/cubi/plugins/<id>/`，從選單打開；還能在每個 session 的資訊窗掛一塊自己的內容。面板的 JavaScript 只能呼叫表裡的指令，每個參數都有型別，不經 shell。從 [自建套件指南](docs/plugins/guide.md) 開始，約 10 分鐘做出第一個；逐欄位規格與相容承諾在 [docs/plugins/reference.md](docs/plugins/reference.md)，要讓 Claude Code 幫忙寫就貼 [提示範本](docs/plugins/claude-prompt.md)。內建的 sprint 套件（Jira 工單、估點與實際、時數、回顧圖表）說明在 [docs/plugins/sprint/README.md](docs/plugins/sprint/README.md)。接其他 agent 的 agent 套件還在實驗中，只能監看。
 
 ## 解除安裝
 

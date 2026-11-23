@@ -81,7 +81,7 @@ private func modesInMain() throws -> Set<String> {
     #expect(!ToolPlugin.isValidActionName("--install-hooks") && !ToolPlugin.isValidActionName("--version"))
     // Names that start with `.` or `_` from the sprint plugin's own code (store.py:75 the lock file
     // `.lock`, sprint.py:78 the result key `_raw`), and one that starts with a digit from the docs
-    // (advanced.md: the Claude Code version `2.1.322`), which is all letters-digits-dots.
+    // (docs/plugins/reference.md: the Claude Code version `2.1.322`), which is all letters-digits-dots.
     #expect(!ToolPlugin.isValidActionName(".lock") && !ToolPlugin.isValidActionName("_raw"))
     #expect(ToolPlugin.isValidActionName("2.1.322"))
 }

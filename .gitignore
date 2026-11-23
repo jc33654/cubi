@@ -9,3 +9,6 @@ __pycache__/
 # Requirement drafts and acceptance checklists: kept on this machine only
 docs/prd/
 .vscode/
+# Internal development records: kept on this machine only
+docs/status.md
+docs/plan.md

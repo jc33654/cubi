@@ -99,9 +99,19 @@ curl -fsSL https://raw.githubusercontent.com/jc33654/cubi/main/scripts/install.s
 **你在信任什麼**：Cubi 沒有 Apple 公證（不買 Developer ID 的代價），所以 macOS 的 Gatekeeper 會擋它。腳本替你做的事是：先用 `codesign -R` 確認這個包真的是用 Cubi 的憑證簽的，確認過才拿掉 quarantine。不想跑 `curl | bash` 的話，自己來：
 
 1. 到 [Releases](https://github.com/jc33654/cubi/releases) 下載 `Cubi.zip`，解開拖到 `~/Applications`。
-2. 第一次打開會被擋：對 app 按右鍵 → 打開，或到「系統設定 → 隱私與安全性」按「強制打開」。
+2. 第一次打開會被擋：到「系統設定 › 隱私權與安全性」，在下方找到 Cubi 被阻擋的訊息，按「強制打開」，再確認一次（依 Apple 2024-08-06 的公告 [Updates to runtime protection in macOS Sequoia](https://developer.apple.com/news/?id=saqachfa)：macOS Sequoia 起不能再用 Control-click（右鍵）「打開」略過，要到系統設定的隱私權與安全性；按鈕字樣取自 macOS 26 的系統設定）。
 
 每一版都用同一張自簽憑證簽，更新後 Automation 授權不用重做（推論，依 TCC 以 designated requirement 認 app 的規則）。
+
+`Cubi.zip` 只有 app 本身。內建的 sprint 套件與範例套件是選用的，要用的話從原始碼裝，版本要跟你裝的 Cubi 一致（下面第一行會讀你裝的 Cubi 版本，clone 同一版）：
+
+```
+git clone --branch "v$(~/Applications/Cubi.app/Contents/MacOS/cubi --version | cut -d' ' -f2)" --depth 1 https://github.com/jc33654/cubi.git
+cd cubi
+scripts/install-plugin.sh docs/plugins/sprint
+```
+
+裝完到設定 › 插件按「重新載入」。範例套件同理（`scripts/install-plugin.sh docs/plugins/example-tool`）。各版的變化見 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ### 從原始碼建置
 

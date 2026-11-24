@@ -107,7 +107,7 @@ extension ToolPlugin {
             try checkHook("tick.action", action: action, in: commands)
             tick = TickHook(action: action, every: try seconds(t["every"], field: "tick.every", least: minTickInterval))
         }
-        let service = try m["service"].map { try parseService($0, commands: commands) }
+        let service = try m["service"].map { try parseService($0, baseDirectory: baseDirectory, home: home) }
         return ToolPlugin(id: id, displayName: name, directory: baseDirectory, panel: panel, commands: commands,
                           session: session, tick: tick, builtins: builtins, service: service)
     }

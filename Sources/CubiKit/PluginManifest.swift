@@ -127,8 +127,8 @@ public enum PluginManifest {
 
     // MARK: - What only the disk can tell (`--validate-plugin`)
 
-    /// The panel file is there, and every command's executable exists and may be run. Commands
-    /// sharing one executable are named together.
+    /// The panel file is there, and every command's executable, and the service's, exists and may be
+    /// run. Commands sharing one executable are named together.
     public static func fileProblems(_ tool: ToolPlugin, fileManager fm: FileManager = .default) -> [String] {
         var problems: [String] = []
         var isDir: ObjCBool = false
@@ -136,8 +136,9 @@ public enum PluginManifest {
             problems.append("panel.file：找不到 \(tool.panel.file)")
         }
         let byExecutable = Dictionary(grouping: tool.commands.keys.sorted()) { tool.commands[$0]!.run[0] }
-        for (path, actions) in byExecutable.sorted(by: { $0.key < $1.key }) {
-            let who = "commands." + actions.joined(separator: "、")
+        var executables = byExecutable.sorted(by: { $0.key < $1.key }).map { (path: $0.key, who: "commands." + $0.value.joined(separator: "、")) }
+        if let service = tool.service { executables.append((path: service.run[0], who: "service.run")) }
+        for (path, who) in executables {
             if !fm.fileExists(atPath: path, isDirectory: &isDir) {
                 problems.append("\(who)：找不到執行檔 \(path)")
             } else if isDir.boolValue || !fm.isExecutableFile(atPath: path) {

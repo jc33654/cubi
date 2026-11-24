@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Cubi plugin manifest, schema 1",
-  "description": "plugins/<id>/manifest.json. Every field carries x-stability: stable (kept compatible within schema 1), experimental (may change in any release), deprecated (still read, will go). Stricter than Cubi in one way: an unknown key fails here, while Cubi loads the plugin and warns. Rules a schema cannot state (the folder name equals id, stdin within args, text only on stdin, $1…$n with a matching argument, hook command shape and existence, service.run naming a command without args, stdin, reveal or sessionAllowed, the agent tag \"cubi-hook --agent <id> \" in install commands, files on disk) are checked by `cubi --validate-plugin <folder>`. See reference.md.",
+  "description": "plugins/<id>/manifest.json. Every field carries x-stability: stable (kept compatible within schema 1), experimental (may change in any release), deprecated (still read, will go). Stricter than Cubi in two ways: an unknown key fails here, while Cubi loads the plugin and warns; and in service.run a $ followed by more digits than fit in a number fails here, while Cubi takes it as a plain word. Rules a schema cannot state (the folder name equals id, stdin within args, text only on stdin, $1…$n with a matching argument, hook command shape and existence, the agent tag \"cubi-hook --agent <id> \" in install commands, files on disk) are checked by `cubi --validate-plugin <folder>`. See reference.md.",
   "type": "object",
   "required": ["id", "name"],
   "properties": {
@@ -74,9 +74,16 @@
         "service": {
           "type": "object",
           "required": ["run", "events"],
-          "description": "A command Cubi keeps running while the plugin is on. Parsed only: this Cubi does not start it yet.",
+          "description": "A program Cubi keeps running while the plugin is on. Parsed only: this Cubi does not start it yet. A Cubi without service (0.2.0 and older) warns about the key and never runs it.",
           "properties": {
-            "run": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$", "description": "Name of a command with no args, no stdin, no reveal, not sessionAllowed. Panels and --tool-run cannot run it.", "x-stability": "experimental" },
+            "run": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "not": { "pattern": "^\\$[+-]?[0-9]+$" } },
+              "prefixItems": [ { "type": "string", "minLength": 1, "anyOf": [ { "pattern": "/" }, { "const": "~" } ], "description": "The executable: absolute, ~, $plugin/… or relative with a /; never looked up on PATH." } ],
+              "description": "Its own argv, no shell, like commands.<action>.run; $plugin is the plugin folder; no $1…$n (it takes no arguments). Every entry must be a string.",
+              "x-stability": "experimental"
+            },
             "restart": { "enum": ["on-failure", "never"], "description": "Default on-failure: start it again after a non-zero exit or a signal; exit 0 is a deliberate stop.", "x-stability": "experimental" },
             "events": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["notice", "present", "state", "log", "reply"] }, "description": "What it may ask Cubi for on stdout; anything else is dropped.", "x-stability": "experimental" }
           },

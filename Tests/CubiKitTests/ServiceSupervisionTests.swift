@@ -83,6 +83,18 @@ private func waitStatus(_ argv: [String], signal: Int32? = nil) -> Int32 {
     #expect(again.decide(.code(1), startedAt: t0, at: t0.advanced(by: .seconds(P.maxFailures))) == .restart(after: P.delays[0]))
 }
 
+@Test func anEndCubiAskedForIsNeitherRestartedNorCounted() {
+    typealias P = ServiceRestartPolicy
+    var policy = P(restart: .onFailure)
+    let t0 = ContinuousClock.now
+    // Turning the switch off sends SIGTERM (and SIGKILL if need be): not a crash.
+    for exit in [ServiceExit.signal(SIGTERM), .signal(SIGKILL), .code(0), .code(1)] {
+        #expect(policy.decide(exit, startedAt: t0, at: t0, askedToStop: true) == .stoppedByCubi)
+    }
+    // None of those counted: the next real failure is the first.
+    #expect(policy.decide(.signal(SIGTERM), startedAt: t0, at: t0) == .restart(after: P.delays[0]))
+}
+
 @Test func theTailKeepsTheLastBytesAndQuotesTheLastLine() {
     var tail = ServiceTail()
     #expect(tail.lastLine == nil)

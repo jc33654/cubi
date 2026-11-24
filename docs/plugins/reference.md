@@ -17,13 +17,13 @@
 
 | 規則 | 說明 | 穩定度 | 出處 |
 |---|---|---|---|
-| 位置 | `~/Library/Application Support/cubi/plugins/<id>/manifest.json`；設定頁「插件」的「重新載入」重掃一次 | stable | `Sources/cubi/Plugins/PluginRegistry.swift:13-14`、`:38` |
+| 位置 | `~/Library/Application Support/cubi/plugins/<id>/manifest.json`；設定頁「插件」的「重新載入」重掃一次 | stable | `Sources/cubi/Plugins/PluginRegistry.swift:13-14`、`:42` |
 | 資料夾名 | 必須等於 `id`，不一樣就拒載 | stable | `PluginManifest.swift:71` |
 | `kind` | `tool`、`agent` 或不寫（等於 agent）；其他值拒載 | stable | `PluginManifest.swift:66-70` |
-| 不認得的欄位 | 照樣載入，但設定頁用黃字列出，log 寫 `plugin <資料夾> warning:`；以 `x-` 開頭的是你自己的，不警告 | stable | `PluginManifest.swift:112`、`PluginRegistry.swift:62`、`Sources/cubi/Settings/PluginsSection.swift:35` |
-| 拒載 | 原因用紅字列在設定頁，log 寫 `plugin <資料夾> rejected:` | stable | `PluginRegistry.swift:61`、`PluginsSection.swift:30` |
-| id 命名空間 | 兩種套件共用；跟內建的 `claude-code` 撞名就拒載 | stable | `PluginRegistry.swift:42-45` |
-| 預設開關 | 工具套件預設開，agent 套件預設關。在設定頁關掉工具套件後，已開著的面板送來的請求也會被拒，資訊窗區塊與 tick 也停 | stable | `PluginRegistry.swift:73`、`ToolPanel.swift:153-156` |
+| 不認得的欄位 | 照樣載入，但設定頁用黃字列出，log 寫 `plugin <資料夾> warning:`；以 `x-` 開頭的是你自己的，不警告 | stable | `PluginManifest.swift:112`、`PluginRegistry.swift:66`、`Sources/cubi/Settings/PluginsSection.swift:35` |
+| 拒載 | 原因用紅字列在設定頁，log 寫 `plugin <資料夾> rejected:` | stable | `PluginRegistry.swift:65`、`PluginsSection.swift:30` |
+| id 命名空間 | 兩種套件共用；跟內建的 `claude-code` 撞名就拒載 | stable | `PluginRegistry.swift:46-49` |
+| 預設開關 | 工具套件預設開，agent 套件預設關。在設定頁關掉工具套件後，已開著的面板送來的請求也會被拒，資訊窗區塊與 tick 也停 | stable | `PluginRegistry.swift:78`、`ToolPanel.swift:153-156` |
 | 檢查指令 | `cubi --validate-plugin <資料夾>`：照上面的規則檢查，加上面板檔、每個命令與 `service` 的執行檔在不在、能不能執行；不開 app、不寫 log。結束碼 0 載得進來（可能有警告）、1 有錯、2 用法錯 | stable | `Sources/cubi/main.swift:25-38`、`PluginManifest.swift:132-172` |
 
 schema 檔比 Cubi 嚴格一點：不認得的欄位在 schema 是錯誤，在 Cubi 只是警告；`service.run` 裡 `$` 後面接一串長到放不進整數的數字，schema 會拒，Cubi 當一般字串。有些規則 schema 寫不出來，請用 `--validate-plugin` 檢查：資料夾名要等於 `id`、`text` 參數要走 stdin、`stdin` 不能超過參數數量、`$1`…`$n` 要有對應參數、hook 命令的形狀（包括 `session.info`／`tick.action` 指到的命令存在）、agent 套件 `install.entries[].command` 要含 `cubi-hook --agent <id> `、檔案在不在。
@@ -56,10 +56,10 @@ schema 檔比 Cubi 嚴格一點：不認得的欄位在 schema 是錯誤，在 C
 | `tick.action` | | hook 命令名：定時執行，不管島開不開 | experimental | `ToolPlugin+Load.swift:105-109` |
 | `tick.every` | | 秒，整數，≥30，預設 60。Cubi 每 30 秒檢查一次，所以實際間隔是 30 的倍數往上湊（寫 45 約每 60 秒一次） | experimental | `Sources/cubi/Plugins/PluginTicker.swift:25`、`:43` |
 | `builtins` | | 目前只收 `"session.new"`：要用它得先在這裡寫 | experimental | `ToolPlugin+Load.swift:50-55` |
-| `service` | | 背景服務：套件開著時由 Cubi 啟動並看管的一支程式。**目前只檢查格式，這一版 Cubi 還不會啟動它。** 不認得 `service` 的 Cubi（0.2.0 和更早的版本）會在設定頁與 `--validate-plugin` 顯示黃字「不認得的欄位 service」，套件其他部分照常載入，背景服務不會啟動；它也不在 `commands` 裡，所以面板與 `--tool-run` 都叫不到它 | experimental | `ToolPlugin+Load.swift:110`、`ToolPlugin+Service.swift:26-58` |
+| `service` | | 背景服務：套件開著、而且使用者在設定 › 插件打開這個套件的「背景服務」開關（預設關）時，由 Cubi 啟動並看管的一支程式，見「背景服務」。不認得 `service` 的 Cubi（0.2.0 和更早的版本）會在設定頁與 `--validate-plugin` 顯示黃字「不認得的欄位 service」，套件其他部分照常載入，背景服務不會啟動；它也不在 `commands` 裡，所以面板與 `--tool-run` 都叫不到它 | experimental | `ToolPlugin+Load.swift:110`、`ToolPlugin+Service.swift:26-58`、`Sources/cubi/Plugins/PluginRegistry.swift:92-96` |
 | `service.run` | ✔（寫了 `service` 時） | 它自己的 argv，寫法跟 `commands.<action>.run` 一樣：不經 shell；執行檔要是路徑（絕對、`~`、`$plugin/…` 或含 `/` 的相對路徑），只寫名字不會去 PATH 或 `commands` 找；`$plugin` 是套件資料夾。比 `commands` 嚴兩點：每一格都要是字串（`commands` 的非字串格會被略過），而且不能有 `$1`…`$n`（沒有參數，stdin 留給 Cubi 跟它溝通）。`--validate-plugin` 會檢查執行檔在不在、能不能執行 | experimental | `ToolPlugin+Service.swift:28-40`、`PluginManifest.swift:140` |
-| `service.restart` | | `on-failure`（預設）或 `never`。`on-failure`：非 0 結束或被訊號結束時再啟動；以 0 結束算是自己停 | experimental | `ToolPlugin+Service.swift:16-20`、`:41-47` |
-| `service.events` | ✔（寫了 `service` 時） | 它可以在 stdout 請 Cubi 做的事：`notice`、`present`、`state`、`log`、`reply` 裡挑，至少一個、不能重複；沒列的會被丟掉。每一種的格式之後的版本才定 | experimental | `ToolPlugin+Service.swift:22-24`、`:48-56` |
+| `service.restart` | | `on-failure`（預設）或 `never`。以 0 結束算是自己停，不重新啟動；其他結束在 `on-failure` 時依 1、2、4、8 秒重新啟動，10 分鐘內第 5 次就不再啟動。見「背景服務」 | experimental | `ToolPlugin+Service.swift:16-20`、`:41-47`、`ServiceSupervision.swift:20-24` |
+| `service.events` | ✔（寫了 `service` 時） | 它可以在 stdout 請 Cubi 做的事：`notice`、`present`、`state`、`log`、`reply` 裡挑，至少一個、不能重複；沒列的會被丟掉。格式見「背景服務」 | experimental | `ToolPlugin+Service.swift:22-24`、`:48-56`、`ServiceProtocol.swift:65` |
 
 **hook 命令**：`session.info`、`tick.action` 與資訊窗按鈕叫的命令，形狀固定是 `"args": ["text"], "stdin": 1`，不能 `reveal`，不符就整份 manifest 拒載（`ToolPlugin+Load.swift:126-130`）。app 把 JSON 餵進 stdin、讀 stdout 的 JSON。hook 命令有 20 秒上限，到期整組行程 SIGKILL（`ToolRunner.swift:15`、`:67-78`）；**不要留背景子行程**，孫行程握著 stdout 會讓 app 一直等到時限。面板與 `--tool-run` 叫的命令沒有時限。
 
@@ -167,6 +167,36 @@ stdout（`hook-io.schema.json#/$defs/tickOutput`）：
 - 行事曆沒授權或沒選（設定頁「行事曆」）時整批略過；log 每 10 分鐘提醒一次（`PluginTicker.swift:16`、`:67-70`）。
 - 其他 tick 失敗（exit 非 0、逾時、輸出不合規）只進 log，同一類 10 分鐘一次。
 
+## 背景服務（`service`，experimental）
+
+套件開著、而且使用者打開它的「背景服務」開關（預設關）時，Cubi 啟動 `service.run` 並一直看管它；開關或套件關掉、重新載入後 `service` 變了、Cubi 結束時讓它結束。設定頁在開關旁顯示狀態：執行中、幾秒後重新啟動、一啟動就結束（黃）、不再重新啟動（紅），黃、紅會附上它 stderr 的最後一行（`Sources/cubi/Plugins/PluginServices.swift:48`、`:160-198`、`Sources/cubi/Settings/PluginsSection.swift`）。
+
+**怎麼啟動**（`ServiceProcess.swift`）：
+- 不經 shell，在套件資料夾裡，環境跟命令一樣多一個 `CUBI_BIN`（`ServiceProcess.swift:76`、`PluginServices.swift:83`）。
+- 它自己承擔權限：macOS 的區域網路、輔助使用等權限算它的，不是 Cubi 的。用的是 libsystem 的 `responsibility_spawnattrs_setdisclaim`（不是公開 API）；這個 macOS 沒有它時就不啟動並顯示紅字，不會改用 Cubi 的權限跑（`ServiceProcess.swift:55`）。權限詢問視窗與系統設定上顯示的名字，還沒在真機確認。
+- 所有訊號回到預設、沒有遮罩（Cubi 自己忽略 SIGPIPE，忽略的訊號會被繼承），自成一個行程群組，除了 stdin、stdout、stderr 拿不到 Cubi 的其他檔案（`ServiceProcess.swift:68`）。
+
+**對話**（`ServiceProtocol.swift`）：一行一個 JSON 物件。
+- Cubi 的第一行是 `{"protocol":1,"type":"hello"}`（`ServiceProtocol.swift:98`、`PluginServices.swift:100`）。服務在收到這一行之前不該做任何事；沒收到、或 `protocol` 不是它認得的數字就結束。這樣從面板、hook 或終端機直接執行它都不會動作。
+- 服務的 stdout：每行最多 16384 bytes，超過整行丟；每秒最多 10 行（`ServiceProtocol.swift:12-15`、`PluginServices.swift:135`）。`type` 是 `service.events` 沒列的、或欄位不合規則的，丟掉並寫一行 log（每分鐘最多 5 行）。
+- Cubi 寫給服務的訊息不會等它讀：它沒讀的累積超過 65536 bytes，新的那則就丟掉並寫一行 log；一則訊息不會只送一半（`ServiceProcess.swift:137`、`PluginServices.swift:145-147`）。
+
+| type | 欄位 | 這一版 Cubi 怎麼處理 |
+|---|---|---|
+| `log` | `text`：1–200 字 | 寫進 cubi.log，每分鐘最多 20 行（`PluginServices.swift:139`） |
+| `state` | `data`：物件 | 留著；之後的版本給面板讀（`PluginServices.swift:141`） |
+| `notice` | `title` 1–40 字，`body` 選填 1–120 字，`sound` 選填 `knock`／`zap`／`thud` | 目前只寫進 log；島上顯示在之後的版本（`PluginServices.swift:148`） |
+| `present` | `id` 0 以上整數，`effect` 是 `knock`／`zap`／`shake`，`from` 1–40 字，`windowShaken` 選填 | 目前一律回 `{"id":…,"ok":false,"reason":"unavailable","type":"presented"}`；浮層在之後的版本（`PluginServices.swift:143`） |
+| `reply` | `id`、`ok`、`out` 任意 JSON | 目前沒有對應的 `call`，略過（`PluginServices.swift:150`）。之後 `out` 會原樣交給面板 |
+
+文字欄位不能有控制字元、換行（含 U+2028、U+2029）、文字方向控制字元，不能只有空白；以字算長度，另外最多是上限 ×4 個 Unicode 字元（`ServiceProtocol.swift` 的 `optionalText`）。
+
+**結束**：
+- Cubi 要它停時先關它的 stdin（服務讀到 EOF 就該結束），2 秒後對整個群組送 SIGTERM，再 2 秒送 SIGKILL；Cubi 結束時改成立刻送 SIGTERM、1 秒後 SIGKILL（`ServiceProcess.swift:187-214`）。這種結束不論怎麼結束都不算失敗，不重新啟動、不計入次數（`ServiceSupervision.swift:46`、`PluginServices.swift:171`）。
+- 它自己結束時，它啟動的其他程式（同一個群組）一起被結束（`ServiceProcess.swift:118`）。
+- 以 0 結束：不重新啟動；啟動後 10 秒內就以 0 結束的顯示黃字。其他結束：`restart: on-failure` 時 1、2、4、8 秒後重新啟動，10 分鐘內第 5 次就停下來顯示紅字，要使用者關掉再打開開關才會再試；`never` 直接紅字（`ServiceSupervision.swift:20-55`、`PluginServices.swift:171`）。
+- 它的 stderr 只留最後 8192 bytes，顯示最後一行時控制字元改成 `\u{…}`、最多 200 字（`ServiceSupervision.swift:64-78`）。
+
 ## 受限 session（`session.new`，experimental）
 
 `session.new` 把一段文字交給一個 agent，所以 manifest 要先寫 `"builtins": ["session.new"]`，而且每次都會跳確認框列出目錄與第一句話（`ToolPanel.swift:162-190`）。目錄要存在，prompt 選填；失敗回 `{ok:false, err}`，取消回 `{ok:false, cancelled:true}`。
@@ -259,7 +289,7 @@ stdout（`hook-io.schema.json#/$defs/tickOutput`）：
 
 `cubi` 只看第一個參數決定做什麼（`CubiCommand.swift:15-17`），完整清單在 [advanced.md](../advanced.md) 的「命令列」。
 
-除了 `--validate-plugin`（直接給資料夾），下面的指令都只到 `$HOME/Library/Application Support/cubi/plugins/<id>/` 找套件（`PluginRegistry.swift:13-14`、`:38`），而且會真的執行套件的指令。要在不動真資料的情況下試，就把 HOME 換成暫時的資料夾、把套件複製進去，指令範例在 [guide.md](guide.md#7-打開面板)。換了 HOME，腳本用 `~` 組的路徑會跟著換，寫死的絕對路徑與環境變數指到的地方不會。
+除了 `--validate-plugin`（直接給資料夾），下面的指令都只到 `$HOME/Library/Application Support/cubi/plugins/<id>/` 找套件（`PluginRegistry.swift:13-14`、`:42`），而且會真的執行套件的指令。要在不動真資料的情況下試，就把 HOME 換成暫時的資料夾、把套件複製進去，指令範例在 [guide.md](guide.md#7-打開面板)。換了 HOME，腳本用 `~` 組的路徑會跟著換，寫死的絕對路徑與環境變數指到的地方不會。
 
 跟套件有關的指令：
 

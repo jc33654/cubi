@@ -58,8 +58,29 @@ private struct ToolCard: View {
             HStack(spacing: 6) {
                 if tool.session != nil { TraitTag(text: "資訊窗") }
                 if tool.tick != nil { TraitTag(text: "定時") }
+                if tool.service != nil { TraitTag(text: "背景服務") }
                 if tool.panel.style == .cubi { TraitTag(text: "樣式包") }
             }
+            if tool.service != nil {
+                SettingRow(title: "背景服務", help: "開著才會啟動：插件開著時一直在背景執行，可能在區域網路上收發資料。它的權限（例如區域網路）算它自己的，不沿用 Cubi 的。實驗中。") {
+                    if let status = registry.serviceStatus[tool.id] {
+                        StatusPill(text: status.text, tone: status.tone.pill).lineLimit(2)
+                    }
+                    switchToggle(Binding(get: { registry.isServiceOn(tool.id) }, set: { registry.setServiceOn(tool.id, $0); settingChanged() }))
+                        .disabled(!registry.isEnabled(tool.id))
+                }
+            }
+        }
+    }
+}
+
+private extension PluginServices.Status.Tone {
+    var pill: StatusPill.Tone {
+        switch self {
+        case .good: .good
+        case .warning: .warning
+        case .danger: .danger
+        case .neutral: .neutral
         }
     }
 }

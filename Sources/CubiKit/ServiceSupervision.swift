@@ -16,13 +16,16 @@ public enum ServiceExit: Sendable, Equatable {
 /// without a word. Any other end is a failure: with `restart: on-failure` it is started again after
 /// a growing delay, until too many failures fall in one window.
 public struct ServiceRestartPolicy: Sendable {
-    public static let delays: [Duration] = [1, 2, 4, 8, 16, 32, 60].map { .seconds($0) }
+    /// One per failure before giving up (`maxFailures` − 1 of them); the last repeats if there are more.
+    public static let delays: [Duration] = [1, 2, 4, 8].map { .seconds($0) }
     public static let failureWindow: Duration = .seconds(600)
     public static let maxFailures = 5
     /// Ending sooner than this after the start counts as ending right away.
     public static let quickExit: Duration = .seconds(10)
 
     public enum Decision: Sendable, Equatable {
+        /// Cubi asked it to end (switch or plugin off, a reload, Cubi quitting): whatever the exit, not a failure.
+        case stoppedByCubi
         case restart(after: Duration)
         case stopped
         case stoppedRightAway
@@ -37,7 +40,10 @@ public struct ServiceRestartPolicy: Sendable {
 
     public init(restart: ToolPlugin.Restart) { self.restart = restart }
 
-    public mutating func decide(_ exit: ServiceExit, startedAt start: ContinuousClock.Instant, at now: ContinuousClock.Instant) -> Decision {
+    public mutating func decide(_ exit: ServiceExit, startedAt start: ContinuousClock.Instant, at now: ContinuousClock.Instant,
+                                askedToStop: Bool = false) -> Decision {
+        // Its SIGTERM looks like a crash; it is not one, and is not counted.
+        if askedToStop { return .stoppedByCubi }
         if exit == .code(0) {
             return start.duration(to: now) < Self.quickExit ? .stoppedRightAway : .stopped
         }

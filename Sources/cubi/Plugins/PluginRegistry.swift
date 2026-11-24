@@ -20,6 +20,10 @@ final class PluginRegistry {
     private(set) var loadErrors: [String: String] = [:]
     /// Keys no parser reads in a manifest that did load (likely typos), by folder name.
     private(set) var loadWarnings: [String: [String]] = [:]
+    /// What `PluginServices` last said about each plugin's background service, for the settings page.
+    var serviceStatus: [String: PluginServices.Status] = [:]
+    /// Called after a reload and when a switch changes; `PluginServices` starts and stops services on it.
+    @ObservationIgnored var onChange: (() -> Void)?
 
     init() { reload() }
 
@@ -60,6 +64,7 @@ final class PluginRegistry {
         CubiLog.write("plugins: \(names.joined(separator: ", "))")
         for (folder, why) in errors.sorted(by: { $0.key < $1.key }) { CubiLog.write("plugin \(folder) rejected: \(why)") }
         for (folder, list) in warnings.sorted(by: { $0.key < $1.key }) { CubiLog.write("plugin \(folder) warning: \(list.joined(separator: "；"))") }
+        onChange?()
     }
 
     func plugin(for agent: String) -> (any AgentPlugin)? {
@@ -79,6 +84,22 @@ final class PluginRegistry {
         CubiLog.write("plugin \(id) \(on ? "enabled" : "disabled")")
         // Observers key off `plugins`; nudge them.
         plugins = plugins
+        onChange?()
+    }
+
+    // MARK: Background services
+
+    static let servicesKey = "enabledServices"
+    /// Off unless the user turns it on: a service runs all the time and may listen on the network.
+    private var servicesOn = UserDefaults.standard.dictionary(forKey: PluginRegistry.servicesKey) as? [String: Bool] ?? [:]
+
+    func isServiceOn(_ id: String) -> Bool { servicesOn[id] ?? false }
+
+    func setServiceOn(_ id: String, _ on: Bool) {
+        servicesOn[id] = on
+        UserDefaults.standard.set(servicesOn, forKey: Self.servicesKey)
+        CubiLog.write("plugin \(id) service \(on ? "on" : "off")")
+        onChange?()
     }
 
     // MARK: Secrets

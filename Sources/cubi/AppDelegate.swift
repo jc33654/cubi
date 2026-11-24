@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settings: SettingsWindow?
     private var toolPanels: ToolPanels?
     private var ticker: PluginTicker?
+    private var services: PluginServices?
     private var showObserver: NSObjectProtocol?
     private let linePrompt = LinePrompt()
 
@@ -111,6 +112,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         island.contextMenu = statusBar.menu
         coordinator.start()
         ticker.start()
+        let services = PluginServices(registry: coordinator.registry)
+        self.services = services
+        coordinator.registry.onChange = { [weak services] in services?.sync() }
+        services.sync()
         // Where development left project-local hooks behind; the settings window offers to clean them.
         if UserDefaults.standard.stringArray(forKey: HookSetupModel.projectLocalKey) == nil {
             UserDefaults.standard.set(["~/Documents/cubi"], forKey: HookSetupModel.projectLocalKey)
@@ -169,6 +174,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         ticker?.stop()
+        services?.stopAll()
         coordinator?.stop()
         island?.shutdown()
     }

@@ -148,9 +148,9 @@ public enum ServiceProtocol {
         u.properties.isWhitespace || u.properties.isDefaultIgnorableCodePoint
     }
 
-    /// The service's own words, for a log line: at most 40 scalars, the forbidden ones as `\u{…}`.
-    static func quoted(_ s: String) -> String {
-        s.unicodeScalars.prefix(40).map { isForbidden($0) ? "\\u{\(String($0.value, radix: 16))}" : String($0) }.joined()
+    /// The service's own words, for a log line: at most `limit` scalars, the forbidden ones as `\u{…}`.
+    static func quoted(_ s: String, limit: Int = 40) -> String {
+        s.unicodeScalars.prefix(limit).map { isForbidden($0) ? "\\u{\(String($0.value, radix: 16))}" : String($0) }.joined()
     }
 
     private static func name(_ v: JSONValue, _ field: String, in names: Set<String>) throws -> String {

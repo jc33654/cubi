@@ -25,8 +25,8 @@ private func chars(_ count: Int) -> String { String(repeating: String(P.sounds.s
     #expect(P.effects.contains(shake))
     #expect(event(["type": s("notice"), "title": s(knock)]) == .success(.notice(title: knock, body: nil, sound: nil)))
     #expect(event(["type": s("notice"), "title": s(knock), "body": s(shake), "sound": s(knock)]) == .success(.notice(title: knock, body: shake, sound: knock)))
-    #expect(event(["type": s("present"), "id": n(0), "effect": s(shake), "from": s(knock)]) == .success(.present(id: 0, effect: shake, from: knock, windowShaken: false)))
-    #expect(event(["type": s("present"), "id": n(1), "effect": s(shake), "from": s(knock), "windowShaken": .bool(true)]) == .success(.present(id: 1, effect: shake, from: knock, windowShaken: true)))
+    #expect(event(["type": s("present"), "id": n(0), "effect": s(shake), "from": s(knock)]) == .success(.present(P.Present(id: 0, effect: shake, from: knock))))
+    #expect(event(["type": s("present"), "id": n(1), "effect": s(shake), "from": s(knock), "windowShaken": .bool(true)]) == .success(.present(P.Present(id: 1, effect: shake, from: knock, windowShaken: true))))
     let data = try JSONDecoder().decode(JSONValue.self, from: Data(P.hello().utf8))
     #expect(event(["type": s("state"), "data": data]) == .success(.state(data)))
     #expect(event(["type": s("log"), "text": s(knock)]) == .success(.log(knock)))
@@ -224,4 +224,47 @@ private let forbidden = "不能有控制字元、換行或文字方向控制字�
     let pad = P.lineLimit - #"{"a":""}"#.utf8.count
     #expect((try? P.panelCall(["send", #"{"a":""# + chars(pad) + #""}"#]).get()) != nil)
     #expect(throws: P.Problem.self) { try P.panelCall(["send", #"{"a":""# + chars(pad + 1) + #""}"#]).get() }
+}
+
+// Batch 68: a present's message, seconds, emphasis and color. Limits are ServiceProtocol's and
+// SessionPalette's own; 1e300 is the value that traps Int(Double) (ToolPlugin.seconds).
+@Test func aPresentsOptionalFieldsAreCheckedOrKeptInBounds() throws {
+    let base: [String: JSONValue] = ["type": s("present"), "id": n(0), "effect": s("knock"), "from": s("alpha")]
+    func present(_ extra: [String: JSONValue]) -> Result<P.Event, P.Problem> { event(base.merging(extra) { _, new in new }) }
+    func seconds(_ v: JSONValue) -> Double? {
+        if case .success(.present(let p)) = present(["seconds": v]) { return p.seconds }
+        return nil
+    }
+    // None of them: as before.
+    #expect(present([:]) == .success(.present(P.Present(id: 0, effect: "knock", from: "alpha"))))
+    #expect(P.Present(id: 0, effect: "knock", from: "alpha").seconds == P.defaultPresentSeconds)
+
+    // seconds: any number, kept within presentSeconds; anything else refuses the line.
+    let low = P.presentSeconds.lowerBound, high = P.presentSeconds.upperBound
+    #expect(seconds(n(8)) == 8)
+    #expect(seconds(n(high)) == high)
+    for v in [0, -1, low / 2] { #expect(seconds(n(v)) == low) }
+    for v in [high + 0.5, 1e300] { #expect(seconds(n(v)) == high) }
+    for v: JSONValue in [s("2"), .bool(true), .null] { #expect(seconds(v) == nil) }
+
+    // message: Cubi's text rules, at most messageLimit characters.
+    let full = chars(P.messageLimit)
+    #expect(try present(["message": s(full)]).get() == .present(P.Present(id: 0, effect: "knock", from: "alpha", message: full)))
+    for bad in [chars(P.messageLimit + 1), "a\nb", "a\u{2028}b", "\u{202E}a", " ", ""] {
+        #expect(throws: P.Problem.self) { try present(["message": s(bad)]).get() }
+    }
+
+    // emphasis: normal or loud.
+    for e in P.Emphasis.allCases {
+        #expect(try present(["emphasis": s(e.rawValue)]).get() == .present(P.Present(id: 0, effect: "knock", from: "alpha", emphasis: e)))
+    }
+    #expect(throws: P.Problem.self) { try present(["emphasis": s("LOUD")]).get() }
+
+    // color: a SessionPalette index; anything else refuses the line (and so no `presented`).
+    for i in [0, SessionPalette.colors.count - 1] {
+        #expect(try present(["color": n(Double(i))]).get() == .present(P.Present(id: 0, effect: "knock", from: "alpha", color: i)))
+    }
+    for bad: JSONValue in [n(-1), n(Double(SessionPalette.colors.count)), n(1.5), n(1e300), s("1"), .bool(true), .null] {
+        #expect(throws: P.Problem.self) { try present(["color": bad]).get() }
+    }
 }

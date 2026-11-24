@@ -122,7 +122,8 @@ struct IslandContent: View {
                     // Plain text, checked by ServiceProtocol; the second line names the plugin.
                     VStack(alignment: .trailing, spacing: 1) {
                         ForEach(Array(notice.enumerated()), id: \.offset) { i, line in
-                            Text(line).foregroundStyle(i == 0 ? .white : .white.opacity(0.7))
+                            // Clipped to itself: the title's marks never cover the plugin's name.
+                            Text(line).foregroundStyle(i == 0 ? .white : .white.opacity(0.7)).clipped()
                         }
                     }
                     .font(.system(size: 10, weight: .semibold))

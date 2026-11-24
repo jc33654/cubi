@@ -54,7 +54,7 @@ if let i = at("--probe-ghostty"), i + 2 < arguments.count {
 }
 
 // Offline preview of the island for layout work:
-//   --render-island <hidden|compact|expanded|detail|approval|question|question-long|usage|usage-compact|focus-miss|focus-miss-named|focus-miss-untitled|focus-miss-detail|diff|focus|focus-12|focus-expanded|focus-nousage|floating|…-gear (any of them with 12 專注獎勵)|floating-approval|service-notice[-test|-long][-floating]|service-overlay-<knock|zap|shake>> <botState> <out.png>
+//   --render-island <hidden|compact|expanded|detail|approval|question|question-long|usage|usage-compact|focus-miss|focus-miss-named|focus-miss-untitled|focus-miss-detail|diff|focus|focus-12|focus-expanded|focus-nousage|floating|…-gear (any of them with 12 專注獎勵)|floating-approval|service-notice[-test|-long][-floating] (CUBI_RENDER_TITLE)|service-overlay-<knock|zap|shake> (CUBI_RENDER_FROM, CUBI_RENDER_MESSAGE, CUBI_RENDER_COLOR)> <botState> <out.png>
 if let i = at("--render-island"), i + 3 < arguments.count {
     let ok = IconRenderer.renderIsland(mode: arguments[i + 1], botState: arguments[i + 2], to: arguments[i + 3])
     exit(ok ? 0 : 1)
@@ -90,7 +90,7 @@ if let i = at("--render-panel"), i + 2 < arguments.count {
         if arguments.contains("--with-service") {
             let started = PluginServices(registry: registry,
                                          notice: { lines, _ in print("service notice: \(lines.joined(separator: " / "))") },
-                                         present: { effect, from, _, _ in print("service present: \(effect) from \(from)"); return "unavailable" })
+                                         present: { request, _ in print("service present: \(request.effect) from \(request.from)"); return "unavailable" })
             started.sync(only: id)
             services = started
         }

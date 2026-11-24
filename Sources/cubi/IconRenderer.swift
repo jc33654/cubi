@@ -70,7 +70,18 @@ enum IconRenderer {
                     title: String(repeating: "很長的標題", count: ServiceProtocol.titleLimit / 5),
                     plugin: "LAN Nudge 套件版（實驗中，名稱也很長）")
             default:
-                state.serviceNotice = ServiceProtocol.noticeLines(title: "alpha 戳了你一下", plugin: "LAN Nudge")
+                // CUBI_RENDER_TITLE: a notice title of one's own, checked as Cubi checks a service's line.
+                var title = "alpha 戳了你一下"
+                if let asked = ProcessInfo.processInfo.environment["CUBI_RENDER_TITLE"] {
+                    let line = JSONValue.object(["type": .string("notice"), "title": .string(asked)])
+                    guard let data = try? JSONEncoder().encode(line),
+                          case .success(.notice(let checked, _, _)) = ServiceProtocol.event(data, allowed: [.notice]) else {
+                        FileHandle.standardError.write(Data("cubi: Cubi would refuse this notice\n".utf8))
+                        return false
+                    }
+                    title = checked
+                }
+                state.serviceNotice = ServiceProtocol.noticeLines(title: title, plugin: "LAN Nudge")
             }
         case "floating", "floating-approval":
             floatingShell = true
@@ -195,10 +206,23 @@ enum IconRenderer {
         return writePNG(ImageRenderer(content: view), scale: 2, to: path)
     }
 
-    /// The card a service's `present` puts up, its still frame (what Reduce Motion shows).
+    /// The card a service's `present` puts up, its still frame (what Reduce Motion shows), in the
+    /// panel's full size. CUBI_RENDER_FROM, CUBI_RENDER_MESSAGE and CUBI_RENDER_COLOR (a palette
+    /// index) are the `present`'s from, message and color, checked as Cubi checks a service's line.
     @MainActor
     private static func renderServiceOverlay(effect: String, to path: String) -> Bool {
-        let view = ServiceOverlayView(effect: effect, from: "alpha", plugin: "LAN Nudge", shakes: false, reduceMotion: true)
+        let env = ProcessInfo.processInfo.environment
+        var line: [String: JSONValue] = ["type": .string("present"), "id": .number(0), "effect": .string(effect),
+                                         "from": .string(env["CUBI_RENDER_FROM"] ?? "alpha")]
+        line["message"] = env["CUBI_RENDER_MESSAGE"].map(JSONValue.string)
+        line["color"] = env["CUBI_RENDER_COLOR"].flatMap(Double.init).map(JSONValue.number)
+        guard let data = try? JSONEncoder().encode(JSONValue.object(line)),
+              case .success(.present(let request)) = ServiceProtocol.event(data, allowed: [.present]) else {
+            FileHandle.standardError.write(Data("cubi: Cubi would refuse this present\n".utf8))
+            return false
+        }
+        let view = ServiceOverlayView(effect: request.effect, from: request.from, plugin: "LAN Nudge", message: request.message,
+                                      color: request.color, shakes: false, reduceMotion: true)
             .frame(width: ServiceOverlay.size.width, height: ServiceOverlay.size.height)
             .padding(16)
             .background(Color(white: 0.35))

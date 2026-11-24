@@ -122,3 +122,26 @@ private func waitStatus(_ argv: [String], signal: Int32? = nil) -> Int32 {
     #expect(tail.lastLine == "last")
     #expect(Mirror(reflecting: tail).children.compactMap { $0.value as? Data }.first?.count == ServiceTail.limit)
 }
+
+// F67-3 and the review of batch 67: over the rate limit, a line is read for a reply at most as many
+// times as calls still wait; an answered call gives its read back.
+@Test func overTheLimitRepliesAreReadNoMoreThanCallsWait() {
+    var budget = ServiceReplyBudget()
+    var read = budget.read()
+    #expect(!read)
+    for _ in 0..<3 { budget.called() }
+    read = budget.read()
+    #expect(read && budget.spare == 2)
+    // Two answered in time, one still waiting: one read left, not two.
+    budget.settled(waiting: 1)
+    #expect(budget.spare == 1)
+    let first = budget.read(), second = budget.read()
+    #expect(first && !second)
+    // Never more than wait, never below none.
+    budget.settled(waiting: 5)
+    #expect(budget.spare == 0)
+    budget.called()
+    budget.settled(waiting: 0)
+    read = budget.read()
+    #expect(!read)
+}

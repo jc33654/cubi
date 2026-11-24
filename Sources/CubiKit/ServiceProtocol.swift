@@ -23,12 +23,44 @@ public enum ServiceProtocol {
     public static let sounds: Set<String> = ["knock", "zap", "thud"]
     public static let effects: Set<String> = ["knock", "zap", "shake"]
     public static let presentFailures: Set<String> = ["busy", "unavailable"]
+    /// A `present`'s message, as LAN Nudge's own limit.
+    public static let messageLimit = 60
+    /// How long a `present` stays up: the service's `seconds`, kept within these; 2 when it says none.
+    public static let presentSeconds: ClosedRange<Double> = 1...10
+    public static let defaultPresentSeconds = 2.0
+
+    public enum Emphasis: String, Sendable, CaseIterable { case normal, loud }
+
+    /// A `present`: what to draw and for how long. `color` is an index into the island's robot
+    /// palette (SessionPalette), never a colour of the service's choosing.
+    public struct Present: Sendable, Equatable {
+        public var id: Int
+        public var effect: String
+        public var from: String
+        public var windowShaken: Bool
+        public var message: String?
+        public var seconds: Double
+        public var emphasis: Emphasis
+        public var color: Int?
+
+        public init(id: Int, effect: String, from: String, windowShaken: Bool = false, message: String? = nil,
+                    seconds: Double = ServiceProtocol.defaultPresentSeconds, emphasis: Emphasis = .normal, color: Int? = nil) {
+            self.id = id
+            self.effect = effect
+            self.from = from
+            self.windowShaken = windowShaken
+            self.message = message
+            self.seconds = seconds
+            self.emphasis = emphasis
+            self.color = color
+        }
+    }
 
     public enum Event: Sendable, Equatable {
         /// A few seconds on the island.
         case notice(title: String, body: String?, sound: String?)
         /// Draw the overlay and answer with `presented` (same id).
-        case present(id: Int, effect: String, from: String, windowShaken: Bool)
+        case present(Present)
         /// Kept for the panel to read.
         case state(JSONValue)
         case log(String)
@@ -77,8 +109,11 @@ public enum ServiceProtocol {
                 return .success(.notice(title: try text(v, "title", titleLimit), body: try optionalText(v, "body", bodyLimit),
                                         sound: try optionalName(v, "sound", in: sounds)))
             case .present:
-                return .success(.present(id: try id(v), effect: try name(v, "effect", in: effects), from: try text(v, "from", titleLimit),
-                                         windowShaken: try flag(v, "windowShaken") ?? false))
+                return .success(.present(Present(
+                    id: try id(v), effect: try name(v, "effect", in: effects), from: try text(v, "from", titleLimit),
+                    windowShaken: try flag(v, "windowShaken") ?? false, message: try optionalText(v, "message", messageLimit),
+                    seconds: try seconds(v), emphasis: try optionalName(v, "emphasis", in: Set(Emphasis.allCases.map(\.rawValue))).flatMap(Emphasis.init) ?? .normal,
+                    color: try paletteIndex(v))))
             case .state:
                 guard let data = v["data"], data.object != nil else { throw Problem.badField("data", "要是物件") }
                 return .success(.state(data))
@@ -201,79 +236,24 @@ public enum ServiceProtocol {
         return n
     }
 
+    /// Any number, kept within `presentSeconds`; anything else refuses the line.
+    private static func seconds(_ v: JSONValue) throws -> Double {
+        guard let raw = v["seconds"] else { return defaultPresentSeconds }
+        guard let n = raw.double else { throw Problem.badField("seconds", "要是數字") }
+        return min(max(n, presentSeconds.lowerBound), presentSeconds.upperBound)
+    }
+
+    private static func paletteIndex(_ v: JSONValue) throws -> Int? {
+        guard let raw = v["color"] else { return nil }
+        guard let n = raw.double.flatMap(Int.init(exactly:)), SessionPalette.colors.indices.contains(n) else {
+            throw Problem.badField("color", "要是 0–\(SessionPalette.colors.count - 1) 的整數（島上機器人調色盤的編號）")
+        }
+        return n
+    }
+
     private static func flag(_ v: JSONValue, _ field: String) throws -> Bool? {
         guard let raw = v[field] else { return nil }
         guard let b = raw.bool else { throw Problem.badField(field, "要是 true 或 false") }
         return b
-    }
-}
-
-/// Splits a stream into lines. A line longer than the limit is dropped whole, its size reported
-/// once it ends, and memory stays bounded while it goes on.
-public struct ServiceLineReader: Sendable {
-    public enum Item: Sendable, Equatable {
-        case line(Data)
-        case dropped(Int)
-    }
-
-    private var buffer = Data()
-    private var overflow: Int?
-    private let limit: Int
-
-    public init(limit: Int = ServiceProtocol.lineLimit) { self.limit = limit }
-
-    public mutating func push(_ bytes: Data) -> [Item] {
-        var out: [Item] = []
-        var rest = bytes[...]
-        while let nl = rest.firstIndex(of: 0x0a) {
-            let piece = rest[rest.startIndex..<nl]
-            rest = rest[rest.index(after: nl)...]
-            if let skipped = overflow {
-                out.append(.dropped(skipped + piece.count))
-                overflow = nil
-            } else if buffer.count + piece.count > limit {
-                out.append(.dropped(buffer.count + piece.count))
-            } else {
-                out.append(.line(buffer + piece))
-            }
-            buffer = Data()
-        }
-        if let skipped = overflow {
-            overflow = skipped + rest.count
-        } else if buffer.count + rest.count > limit {
-            overflow = buffer.count + rest.count
-            buffer = Data()
-        } else {
-            buffer.append(contentsOf: rest)
-        }
-        return out
-    }
-
-    /// At the end of the stream: what is left without a newline is the last line (dropped if it
-    /// was too long), so a service that prints and exits does not lose it.
-    public mutating func finish() -> [Item] {
-        defer { buffer = Data(); overflow = nil }
-        if let skipped = overflow { return [.dropped(skipped)] }
-        return buffer.isEmpty ? [] : [.line(buffer)]
-    }
-}
-
-/// At most `count` per `window`, the window sliding. Monotonic time, so setting the clock back
-/// (by hand or NTP) does not hold a service's output up.
-public struct ServiceRateLimit: Sendable {
-    private let count: Int
-    private let window: Duration
-    private var times: [ContinuousClock.Instant] = []
-
-    public init(count: Int, per window: Duration) {
-        self.count = count
-        self.window = window
-    }
-
-    public mutating func allow(at now: ContinuousClock.Instant) -> Bool {
-        times.removeAll { $0.duration(to: now) >= window }
-        guard times.count < count else { return false }
-        times.append(now)
-        return true
     }
 }

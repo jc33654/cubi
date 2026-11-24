@@ -120,9 +120,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 island?.showBriefly()
                 if let sound { Sounds.play(ServiceOverlay.cue(sound: sound)) }
             },
-            present: { [overlay] effect, from, plugin, windowShaken in
-                overlay.show(effect: effect, from: from, plugin: plugin, windowShaken: windowShaken)
-            })
+            present: { [overlay] request, plugin in overlay.show(request, plugin: plugin) })
         self.services = services
         toolPanels.services = services
         services.onState = { [toolPanels] in toolPanels.serviceStateChanged($0, $1) }

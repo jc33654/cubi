@@ -77,3 +77,95 @@ public struct ServiceTail: Sendable {
         return lines.last { !$0.isEmpty }.map { ServiceProtocol.quoted($0, limit: ServiceProtocol.logLimit) }
     }
 }
+
+/// How many lines over the rate limit may still be read for a `reply`: never more than calls still
+/// waiting, and each read uses one up, so a service that floods while a call waits is read at most
+/// that many times.
+public struct ServiceReplyBudget: Sendable, Equatable {
+    public private(set) var spare = 0
+
+    public init() {}
+
+    /// A call went out.
+    public mutating func called() { spare += 1 }
+
+    /// Whether one more line over the limit may be read; uses one up if so.
+    public mutating func read() -> Bool {
+        guard spare > 0 else { return false }
+        spare -= 1
+        return true
+    }
+
+    /// A call was answered or ended, `waiting` still wait.
+    public mutating func settled(waiting: Int) { spare = min(spare, waiting) }
+}
+
+/// At most `count` per `window`, the window sliding. Monotonic time, so setting the clock back
+/// (by hand or NTP) does not hold a service's output up.
+public struct ServiceRateLimit: Sendable {
+    private let count: Int
+    private let window: Duration
+    private var times: [ContinuousClock.Instant] = []
+
+    public init(count: Int, per window: Duration) {
+        self.count = count
+        self.window = window
+    }
+
+    public mutating func allow(at now: ContinuousClock.Instant) -> Bool {
+        times.removeAll { $0.duration(to: now) >= window }
+        guard times.count < count else { return false }
+        times.append(now)
+        return true
+    }
+}
+
+/// Splits a stream into lines. A line longer than the limit is dropped whole, its size reported
+/// once it ends, and memory stays bounded while it goes on.
+public struct ServiceLineReader: Sendable {
+    public enum Item: Sendable, Equatable {
+        case line(Data)
+        case dropped(Int)
+    }
+
+    private var buffer = Data()
+    private var overflow: Int?
+    private let limit: Int
+
+    public init(limit: Int = ServiceProtocol.lineLimit) { self.limit = limit }
+
+    public mutating func push(_ bytes: Data) -> [Item] {
+        var out: [Item] = []
+        var rest = bytes[...]
+        while let nl = rest.firstIndex(of: 0x0a) {
+            let piece = rest[rest.startIndex..<nl]
+            rest = rest[rest.index(after: nl)...]
+            if let skipped = overflow {
+                out.append(.dropped(skipped + piece.count))
+                overflow = nil
+            } else if buffer.count + piece.count > limit {
+                out.append(.dropped(buffer.count + piece.count))
+            } else {
+                out.append(.line(buffer + piece))
+            }
+            buffer = Data()
+        }
+        if let skipped = overflow {
+            overflow = skipped + rest.count
+        } else if buffer.count + rest.count > limit {
+            overflow = buffer.count + rest.count
+            buffer = Data()
+        } else {
+            buffer.append(contentsOf: rest)
+        }
+        return out
+    }
+
+    /// At the end of the stream: what is left without a newline is the last line (dropped if it
+    /// was too long), so a service that prints and exits does not lose it.
+    public mutating func finish() -> [Item] {
+        defer { buffer = Data(); overflow = nil }
+        if let skipped = overflow { return [.dropped(skipped)] }
+        return buffer.isEmpty ? [] : [.line(buffer)]
+    }
+}

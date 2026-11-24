@@ -120,17 +120,22 @@ private func start(_ argv: [String], in dir: String = FileManager.default.tempor
 
 // F64-1: a service that reads slowly gets every line it was sent, whole and in order.
 @Test func aSlowReaderGetsEveryAcceptedLineWholeAndInOrder() throws {
-    let (p, run) = try start(["/bin/sh", "-c", "sleep 0.5; while IFS= read -r l; do printf '%s\\n' \"$l\"; done"])
-    let lines = (0..<2500).map { ServiceProtocol.call(id: $0, action: "send", args: nil) }
-    let accepted = lines.filter { p.send($0) }
-    #expect(accepted.count > 0)
-    // Everything accepted reaches it in time (stop drops what is still waiting, so wait first).
-    let all = accepted.joined()
-    // More than the pipe holds: some of it went through the pending buffer.
-    #expect(all.utf8.count > 65_536)
-    let deadline = Date().addingTimeInterval(15)
-    while run.stdout.utf8.count < all.utf8.count && Date() < deadline { usleep(50_000) }
-    #expect(run.stdout == all)
+    // Reads nothing for half a second after the first line of each round (ids 0 and 10000), so both
+    // rounds fill the pipe and the second needs the suspended writer back.
+    let (p, run) = try start(["/bin/sh", "-c", "while IFS= read -r l; do printf '%s\\n' \"$l\"; case \"$l\" in *'\"id\":0,'*|*'\"id\":10000,'*) sleep 0.5;; esac; done; exit 0"])
+    var all = ""
+    // Two rounds: the second needs the writer back after it went quiet.
+    for round in 0..<2 {
+        let lines = (0..<2500).map { ServiceProtocol.call(id: round * 10_000 + $0, action: "send", args: nil) }
+        let accepted = lines.filter { p.send($0) }
+        // More than the pipe holds: some of it went through the pending buffer.
+        #expect(accepted.joined().utf8.count > 65_536)
+        all += accepted.joined()
+        // Everything accepted reaches it in time (stop drops what is still waiting, so wait first).
+        let deadline = Date().addingTimeInterval(15)
+        while run.stdout.utf8.count < all.utf8.count && Date() < deadline { usleep(50_000) }
+        #expect(run.stdout == all)
+    }
     p.stop(grace: 5)
     #expect(run.exit(within: 10) == .code(0))
 }

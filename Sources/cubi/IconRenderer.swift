@@ -42,6 +42,7 @@ enum IconRenderer {
         // `<mode>-gear`: the same, with 12 專注獎勵 on the wing (what must give way to what).
         let gear = asked.hasSuffix("-gear")
         let mode = gear ? String(asked.dropLast(5)) : asked
+        if mode.hasPrefix("service-overlay-") { return renderServiceOverlay(effect: String(mode.dropFirst("service-overlay-".count)), to: path) }
         let geometry = NotchGeometry(screenFrame: CGRect(x: 0, y: 0, width: 1512, height: 982),
                                      hasNotch: true, notchWidth: 190, notchHeight: 32)
         let state = IslandState(geometry: geometry)
@@ -52,6 +53,25 @@ enum IconRenderer {
         state.botSizeChoice = IslandState.BotSizeChoice(rawValue: ProcessInfo.processInfo.environment["CUBI_RENDER_BOT_SIZE"] ?? "") ?? .regular
         var floatingShell = false
         switch mode {
+        case "service-notice", "service-notice-floating", "service-notice-test", "service-notice-test-floating",
+             "service-notice-long", "service-notice-long-floating":
+            // A plugin service's `notice` on the right wing: its title, then the plugin's name, as Cubi
+            // puts them together. `-test`: what the test plugin sends; `-long`: both as long as they
+            // get, to see what the wing cuts (the name must stay in sight).
+            floatingShell = mode.hasSuffix("-floating")
+            if floatingShell { state.placement = .floating }
+            state.mode = .compact
+            let base = floatingShell ? String(mode.dropLast("-floating".count)) : mode
+            switch base {
+            case "service-notice-test":
+                state.serviceNotice = ServiceProtocol.noticeLines(title: "測試通知", plugin: "Service Test")
+            case "service-notice-long":
+                state.serviceNotice = ServiceProtocol.noticeLines(
+                    title: String(repeating: "很長的標題", count: ServiceProtocol.titleLimit / 5),
+                    plugin: "LAN Nudge 套件版（實驗中，名稱也很長）")
+            default:
+                state.serviceNotice = ServiceProtocol.noticeLines(title: "alpha 戳了你一下", plugin: "LAN Nudge")
+            }
         case "floating", "floating-approval":
             floatingShell = true
             state.placement = .floating
@@ -172,6 +192,16 @@ enum IconRenderer {
         .frame(width: IslandPanel.size.width, height: mode == "question-long" ? IslandPanel.size.height : mode == "detail" || mode == "expanded" ? 420 : 220, alignment: .top)
         .background(Color(white: 0.35))
         .environment(\.drawsScrollContentFlat, true)
+        return writePNG(ImageRenderer(content: view), scale: 2, to: path)
+    }
+
+    /// The card a service's `present` puts up, its still frame (what Reduce Motion shows).
+    @MainActor
+    private static func renderServiceOverlay(effect: String, to path: String) -> Bool {
+        let view = ServiceOverlayView(effect: effect, from: "alpha", plugin: "LAN Nudge", shakes: false, reduceMotion: true)
+            .frame(width: ServiceOverlay.size.width, height: ServiceOverlay.size.height)
+            .padding(16)
+            .background(Color(white: 0.35))
         return writePNG(ImageRenderer(content: view), scale: 2, to: path)
     }
 

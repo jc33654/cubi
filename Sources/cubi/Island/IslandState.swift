@@ -166,6 +166,21 @@ final class IslandState {
             self.focusMissShown = false
         }
     }
+    /// A plugin service's `notice`: the right wing shows it for a few seconds, like a focus miss.
+    var serviceNotice: [String]?
+    @ObservationIgnored private var serviceNoticeGeneration = 0
+    static let serviceNoticeSeconds: Double = 5
+
+    func showServiceNotice(_ lines: [String]) {
+        serviceNotice = lines
+        serviceNoticeGeneration += 1
+        let generation = serviceNoticeGeneration
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(Self.serviceNoticeSeconds))
+            guard let self, self.serviceNoticeGeneration == generation else { return }
+            self.serviceNotice = nil
+        }
+    }
     /// User setting: the island never hides; its resting mode is compact so every robot stays visible.
     var pinned: Bool {
         didSet { if persists { UserDefaults.standard.set(pinned, forKey: Self.pinnedKey) } }

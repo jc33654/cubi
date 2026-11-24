@@ -174,6 +174,23 @@ private let forbidden = "不能有控制字元、換行或文字方向控制字�
     do { let got = empty.finish(); #expect(got == []) }
 }
 
+// F65 (review of batch 65): the island names the plugin (its name is "LAN Nudge" in the author repo's
+// cubi-plugin/lan-nudge/manifest.json), and one service gets one notice per noticeInterval.
+@Test func aNoticeNamesItsPluginAndComesAtMostOncePerInterval() {
+    let knock = P.sounds.sorted()[0], plugin = "LAN Nudge"
+    // Two lines, whatever the service says: the second is the plugin's name, not something it wrote.
+    #expect(P.noticeLines(title: knock, plugin: plugin) == [knock, plugin])
+
+    var gate = ServiceRateLimit(count: 1, per: P.noticeInterval)
+    let t0 = ContinuousClock.now
+    do { let got = gate.allow(at: t0); #expect(got) }
+    // As many more as the line limit lets through in that time: none of them.
+    let tries = Int(P.noticeInterval.components.seconds) * P.linesPerSecond - 1
+    let blocked = (1...tries).map { i in gate.allow(at: t0.advanced(by: P.noticeInterval / (tries + 1) * i)) }
+    #expect(!blocked.contains(true))
+    do { let got = gate.allow(at: t0.advanced(by: P.noticeInterval)); #expect(got) }
+}
+
 // F61-3: monotonic instants (ContinuousClock.now plus offsets): only the interval counts, so a
 // wall clock set back cannot hold the output up.
 @Test func theRateLimitSlidesOnMonotonicTime() {

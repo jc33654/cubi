@@ -116,8 +116,20 @@ struct IslandContent: View {
                 .buttonStyle(.plain)
                 .help("開新 session")
                 // The "no window" hint says what to do next and is gone in seconds: it gets the room.
-                if let focus = state.focus, !state.focusMissShown { FocusBadge(day: focus) }
-                if state.focusMissShown {
+                if let focus = state.focus, !state.focusMissShown, state.serviceNotice == nil { FocusBadge(day: focus) }
+                // A focus miss first (it says what to do next), then a plugin service's notice.
+                if let notice = state.serviceNotice, !state.focusMissShown {
+                    // Plain text, checked by ServiceProtocol; the second line names the plugin.
+                    VStack(alignment: .trailing, spacing: 1) {
+                        ForEach(Array(notice.enumerated()), id: \.offset) { i, line in
+                            Text(line).foregroundStyle(i == 0 ? .white : .white.opacity(0.7))
+                        }
+                    }
+                    .font(.system(size: 10, weight: .semibold))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: 150, alignment: .trailing)
+                } else if state.focusMissShown {
                     // Short enough for the wing; the session's ticker says it in full.
                     VStack(alignment: .trailing, spacing: 1) {
                         ForEach(state.focusMissLines, id: \.self) { Text($0) }

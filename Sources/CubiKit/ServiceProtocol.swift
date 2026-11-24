@@ -13,6 +13,9 @@ public enum ServiceProtocol {
     /// Lines a second, and `log` events a minute, the app takes from one service; the rest are dropped.
     public static let linesPerSecond = 10
     public static let logsPerMinute = 20
+    /// At most one `notice` per this long from one service, as long as one stays on the island: a
+    /// service passing on other people's actions must not make a Mac chime at will. More are dropped.
+    public static let noticeInterval: Duration = .seconds(5)
     public static let titleLimit = 40
     public static let bodyLimit = 120
     public static let logLimit = 200
@@ -92,6 +95,15 @@ public enum ServiceProtocol {
         }
     }
 
+    // MARK: - What the island shows
+
+    /// For a `notice`: its title, then whose it is (the plugin's name, which the service cannot
+    /// choose). The island is where Cubi itself speaks. The body does not fit the wing and only goes
+    /// to the log, for now.
+    public static func noticeLines(title: String, plugin: String) -> [String] {
+        [title, plugin]
+    }
+
     // MARK: - Cubi to the service
 
     /// The first line Cubi writes.
@@ -149,7 +161,7 @@ public enum ServiceProtocol {
     }
 
     /// The service's own words, for a log line: at most `limit` scalars, the forbidden ones as `\u{…}`.
-    static func quoted(_ s: String, limit: Int = 40) -> String {
+    public static func quoted(_ s: String, limit: Int = 40) -> String {
         s.unicodeScalars.prefix(limit).map { isForbidden($0) ? "\\u{\(String($0.value, radix: 16))}" : String($0) }.joined()
     }
 

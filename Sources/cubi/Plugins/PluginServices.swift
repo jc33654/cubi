@@ -27,6 +27,7 @@ final class PluginServices {
         var lines = ServiceRateLimit(count: ServiceProtocol.linesPerSecond, per: .seconds(1))
         var logs = ServiceRateLimit(count: ServiceProtocol.logsPerMinute, per: .seconds(60))
         var problems = ServiceRateLimit(count: 5, per: .seconds(60))
+        var notices = ServiceRateLimit(count: 1, per: ServiceProtocol.noticeInterval)
         var tail = ServiceTail()
         var state: JSONValue?
 
@@ -39,9 +40,17 @@ final class PluginServices {
 
     private let registry: PluginRegistry
     private var entries: [String: Entry] = [:]
+    /// A `notice`: the lines for the island (ServiceProtocol.noticeLines) and a sound (ServiceProtocol.sounds).
+    private let notice: ([String], String?) -> Void
+    /// A `present`: effect, from, the plugin's name, whether the service shook the real window.
+    /// nil when it was drawn, otherwise the `presented` failure.
+    private let present: (String, String, String, Bool) -> String?
 
-    init(registry: PluginRegistry) {
+    init(registry: PluginRegistry, notice: @escaping ([String], String?) -> Void,
+         present: @escaping (String, String, String, Bool) -> String?) {
         self.registry = registry
+        self.notice = notice
+        self.present = present
     }
 
     /// The services that should run, run; the others stop. Called on start, after a reload and when a switch changes.
@@ -140,13 +149,19 @@ final class PluginServices {
                 if entry.logs.allow(at: .now) { CubiLog.write("service \(id): \(text)") }
             case .success(.state(let data)):
                 entry.state = data
-            case .success(.present(let requestID, _, _, _)):
-                // Nothing draws overlays yet: the service hears it could not be shown.
-                if entry.process?.send(ServiceProtocol.presented(id: requestID, failure: "unavailable")) == false {
+            case .success(.present(let requestID, let effect, let from, let windowShaken)):
+                let failure = present(effect, from, entry.tool.displayName, windowShaken)
+                if entry.process?.send(ServiceProtocol.presented(id: requestID, failure: failure)) == false {
                     problem(entry, "它沒在讀 stdin，回覆丟掉了")
                 }
-            case .success(.notice(let title, _, _)):
-                if entry.logs.allow(at: .now) { CubiLog.write("service \(id) notice: \(title)") }
+            case .success(.notice(let title, let body, let sound)):
+                guard entry.notices.allow(at: .now) else {
+                    return problem(entry, "notice 太密：\(ServiceProtocol.noticeInterval.components.seconds) 秒內只顯示一則，這則丟掉")
+                }
+                if let body, entry.logs.allow(at: .now) {
+                    CubiLog.write("service \(id) notice: \(ServiceProtocol.quoted(title)) — \(ServiceProtocol.quoted(body, limit: ServiceProtocol.bodyLimit))")
+                }
+                notice(ServiceProtocol.noticeLines(title: title, plugin: entry.tool.displayName), sound)
             case .success(.reply):
                 break
             }

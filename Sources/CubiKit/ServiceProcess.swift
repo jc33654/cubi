@@ -38,7 +38,10 @@ public final class ServiceProcess: @unchecked Sendable {
     private var ended = false
     private var inputClosed = false
     private var pending = Data()
+    /// Waits for the pipe to take more; suspended while nothing is pending, cancelled only when the
+    /// input closes (whose cancel handler closes the fd, as Dispatch requires).
     private var writer: DispatchSourceWrite?
+    private var writerSuspended = false
 
     private init(pid: pid_t, pipes: [Pipe], inputFD: Int32) {
         self.pid = pid
@@ -148,22 +151,29 @@ public final class ServiceProcess: @unchecked Sendable {
         if n < 0 && errno != EAGAIN { return false }
         // Part of the line may be in: the rest has to follow, whatever the buffer holds.
         pending = Data(data.dropFirst(max(n, 0)))
-        let source = DispatchSource.makeWriteSource(fileDescriptor: inputFD, queue: .global())
-        source.setEventHandler { [weak self] in self?.flush() }
-        writer = source
-        source.resume()
+        if let writer {
+            if writerSuspended { writer.resume(); writerSuspended = false }
+        } else {
+            let source = DispatchSource.makeWriteSource(fileDescriptor: inputFD, queue: .global())
+            source.setEventHandler { [weak self] in self?.flush() }
+            writer = source
+            source.resume()
+        }
         return true
     }
 
     private func flush() {
         lock.lock(); defer { lock.unlock() }
-        guard !inputClosed, !pending.isEmpty else { return }
-        let n = pending.withUnsafeBytes { write(inputFD, $0.baseAddress, $0.count) }
-        if n > 0 { pending.removeFirst(n) }
-        if n < 0 && errno != EAGAIN { pending.removeAll() }
-        if pending.isEmpty {
-            writer?.cancel()
-            writer = nil
+        guard !inputClosed else { return }
+        if !pending.isEmpty {
+            let n = pending.withUnsafeBytes { write(inputFD, $0.baseAddress, $0.count) }
+            if n > 0 { pending.removeFirst(n) }
+            if n < 0 && errno != EAGAIN { pending.removeAll() }
+        }
+        // Nothing left: stop listening, or a writable pipe would wake this for ever.
+        if pending.isEmpty, let writer, !writerSuspended {
+            writer.suspend()
+            writerSuspended = true
         }
     }
 
@@ -175,6 +185,8 @@ public final class ServiceProcess: @unchecked Sendable {
         let fd = inputFD
         if let writer {
             writer.setCancelHandler { close(fd) }
+            // A suspended source does not run its cancel handler until it is resumed.
+            if writerSuspended { writer.resume(); writerSuspended = false }
             writer.cancel()
             self.writer = nil
         } else {

@@ -112,7 +112,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         island.contextMenu = statusBar.menu
         coordinator.start()
         ticker.start()
-        let services = PluginServices(registry: coordinator.registry)
+        let overlay = ServiceOverlay()
+        let services = PluginServices(
+            registry: coordinator.registry,
+            notice: { [weak island] lines, sound in
+                island?.state.showServiceNotice(lines)
+                island?.showBriefly()
+                if let sound { Sounds.play(ServiceOverlay.cue(sound: sound)) }
+            },
+            present: { [overlay] effect, from, plugin, windowShaken in
+                overlay.show(effect: effect, from: from, plugin: plugin, windowShaken: windowShaken)
+            })
         self.services = services
         coordinator.registry.onChange = { [weak services] in services?.sync() }
         services.sync()

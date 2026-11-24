@@ -59,7 +59,7 @@ schema 檔比 Cubi 嚴格一點：不認得的欄位在 schema 是錯誤，在 C
 | `service` | | 背景服務：套件開著、而且使用者在設定 › 插件打開這個套件的「背景服務」開關（預設關）時，由 Cubi 啟動並看管的一支程式，見「背景服務」。不認得 `service` 的 Cubi（0.2.0 和更早的版本）會在設定頁與 `--validate-plugin` 顯示黃字「不認得的欄位 service」，套件其他部分照常載入，背景服務不會啟動；它也不在 `commands` 裡，所以面板與 `--tool-run` 都叫不到它 | experimental | `ToolPlugin+Load.swift:110`、`ToolPlugin+Service.swift:26-58`、`Sources/cubi/Plugins/PluginRegistry.swift:92-96` |
 | `service.run` | ✔（寫了 `service` 時） | 它自己的 argv，寫法跟 `commands.<action>.run` 一樣：不經 shell；執行檔要是路徑（絕對、`~`、`$plugin/…` 或含 `/` 的相對路徑），只寫名字不會去 PATH 或 `commands` 找；`$plugin` 是套件資料夾。比 `commands` 嚴兩點：每一格都要是字串（`commands` 的非字串格會被略過），而且不能有 `$1`…`$n`（沒有參數，stdin 留給 Cubi 跟它溝通）。`--validate-plugin` 會檢查執行檔在不在、能不能執行 | experimental | `ToolPlugin+Service.swift:28-40`、`PluginManifest.swift:140` |
 | `service.restart` | | `on-failure`（預設）或 `never`。以 0 結束算是自己停，不重新啟動；其他結束在 `on-failure` 時依 1、2、4、8 秒重新啟動，10 分鐘內第 5 次就不再啟動。見「背景服務」 | experimental | `ToolPlugin+Service.swift:16-20`、`:41-47`、`ServiceSupervision.swift:20-24` |
-| `service.events` | ✔（寫了 `service` 時） | 它可以在 stdout 請 Cubi 做的事：`notice`、`present`、`state`、`log`、`reply` 裡挑，至少一個、不能重複；沒列的會被丟掉。格式見「背景服務」 | experimental | `ToolPlugin+Service.swift:22-24`、`:48-56`、`ServiceProtocol.swift:65` |
+| `service.events` | ✔（寫了 `service` 時） | 它可以在 stdout 請 Cubi 做的事：`notice`、`present`、`state`、`log`、`reply` 裡挑，至少一個、不能重複；沒列的會被丟掉。格式見「背景服務」 | experimental | `ToolPlugin+Service.swift:22-24`、`:48-56`、`ServiceProtocol.swift:68` |
 
 **hook 命令**：`session.info`、`tick.action` 與資訊窗按鈕叫的命令，形狀固定是 `"args": ["text"], "stdin": 1`，不能 `reveal`，不符就整份 manifest 拒載（`ToolPlugin+Load.swift:126-130`）。app 把 JSON 餵進 stdin、讀 stdout 的 JSON。hook 命令有 20 秒上限，到期整組行程 SIGKILL（`ToolRunner.swift:15`、`:67-78`）；**不要留背景子行程**，孫行程握著 stdout 會讓 app 一直等到時限。面板與 `--tool-run` 叫的命令沒有時限。
 
@@ -169,32 +169,32 @@ stdout（`hook-io.schema.json#/$defs/tickOutput`）：
 
 ## 背景服務（`service`，experimental）
 
-套件開著、而且使用者打開它的「背景服務」開關（預設關）時，Cubi 啟動 `service.run` 並一直看管它；開關或套件關掉、重新載入後 `service` 變了、Cubi 結束時讓它結束。設定頁在開關旁顯示狀態：執行中、幾秒後重新啟動、一啟動就結束（黃）、不再重新啟動（紅），黃、紅會附上它 stderr 的最後一行（`Sources/cubi/Plugins/PluginServices.swift:48`、`:160-198`、`Sources/cubi/Settings/PluginsSection.swift`）。
+套件開著、而且使用者打開它的「背景服務」開關（預設關）時，Cubi 啟動 `service.run` 並一直看管它；開關或套件關掉、重新載入後 `service` 變了、Cubi 結束時讓它結束。設定頁在開關旁顯示狀態：執行中、幾秒後重新啟動、一啟動就結束（黃）、不再重新啟動（紅），黃、紅會附上它 stderr 的最後一行（`Sources/cubi/Plugins/PluginServices.swift:57`、`:175-213`、`Sources/cubi/Settings/PluginsSection.swift`）。
 
 **怎麼啟動**（`ServiceProcess.swift`）：
-- 不經 shell，在套件資料夾裡，環境跟命令一樣多一個 `CUBI_BIN`（`ServiceProcess.swift:76`、`PluginServices.swift:83`）。
-- 它自己承擔權限：macOS 的區域網路、輔助使用等權限算它的，不是 Cubi 的。用的是 libsystem 的 `responsibility_spawnattrs_setdisclaim`（不是公開 API）；這個 macOS 沒有它時就不啟動並顯示紅字，不會改用 Cubi 的權限跑（`ServiceProcess.swift:55`）。權限詢問視窗與系統設定上顯示的名字，還沒在真機確認。
-- 所有訊號回到預設、沒有遮罩（Cubi 自己忽略 SIGPIPE，忽略的訊號會被繼承），自成一個行程群組，除了 stdin、stdout、stderr 拿不到 Cubi 的其他檔案（`ServiceProcess.swift:68`）。
+- 不經 shell，在套件資料夾裡，環境跟命令一樣多一個 `CUBI_BIN`（`ServiceProcess.swift:79`、`PluginServices.swift:92`）。
+- 它自己承擔權限：macOS 的區域網路、輔助使用等權限算它的，不是 Cubi 的。用的是 libsystem 的 `responsibility_spawnattrs_setdisclaim`（不是公開 API）；這個 macOS 沒有它時就不啟動並顯示紅字，不會改用 Cubi 的權限跑（`ServiceProcess.swift:58`）。權限詢問視窗與系統設定上顯示的名字，還沒在真機確認。
+- 所有訊號回到預設、沒有遮罩（Cubi 自己忽略 SIGPIPE，忽略的訊號會被繼承），自成一個行程群組，除了 stdin、stdout、stderr 拿不到 Cubi 的其他檔案（`ServiceProcess.swift:71`）。
 
 **對話**（`ServiceProtocol.swift`）：一行一個 JSON 物件。
-- Cubi 的第一行是 `{"protocol":1,"type":"hello"}`（`ServiceProtocol.swift:98`、`PluginServices.swift:100`）。服務在收到這一行之前不該做任何事；沒收到、或 `protocol` 不是它認得的數字就結束。這樣從面板、hook 或終端機直接執行它都不會動作。
-- 服務的 stdout：每行最多 16384 bytes，超過整行丟；每秒最多 10 行（`ServiceProtocol.swift:12-15`、`PluginServices.swift:135`）。`type` 是 `service.events` 沒列的、或欄位不合規則的，丟掉並寫一行 log（每分鐘最多 5 行）。
-- Cubi 寫給服務的訊息不會等它讀：它沒讀的累積超過 65536 bytes，新的那則就丟掉並寫一行 log；一則訊息不會只送一半（`ServiceProcess.swift:137`、`PluginServices.swift:145-147`）。
+- Cubi 的第一行是 `{"protocol":1,"type":"hello"}`（`ServiceProtocol.swift:110`、`PluginServices.swift:109`）。服務在收到這一行之前不該做任何事；沒收到、或 `protocol` 不是它認得的數字就結束。這樣從面板、hook 或終端機直接執行它都不會動作。
+- 服務的 stdout：每行最多 16384 bytes，超過整行丟；每秒最多 10 行（`ServiceProtocol.swift:12-15`、`PluginServices.swift:144`）。`type` 是 `service.events` 沒列的、或欄位不合規則的，丟掉並寫一行 log（每分鐘最多 5 行）。
+- Cubi 寫給服務的訊息不會等它讀：它沒讀的累積超過 65536 bytes，新的那則就丟掉並寫一行 log；一則訊息不會只送一半（`ServiceProcess.swift:140`、`PluginServices.swift:154-156`）。
 
 | type | 欄位 | 這一版 Cubi 怎麼處理 |
 |---|---|---|
-| `log` | `text`：1–200 字 | 寫進 cubi.log，每分鐘最多 20 行（`PluginServices.swift:139`） |
-| `state` | `data`：物件 | 留著；之後的版本給面板讀（`PluginServices.swift:141`） |
-| `notice` | `title` 1–40 字，`body` 選填 1–120 字，`sound` 選填 `knock`／`zap`／`thud` | 目前只寫進 log；島上顯示在之後的版本（`PluginServices.swift:148`） |
-| `present` | `id` 0 以上整數，`effect` 是 `knock`／`zap`／`shake`，`from` 1–40 字，`windowShaken` 選填 | 目前一律回 `{"id":…,"ok":false,"reason":"unavailable","type":"presented"}`；浮層在之後的版本（`PluginServices.swift:143`） |
-| `reply` | `id`、`ok`、`out` 任意 JSON | 目前沒有對應的 `call`，略過（`PluginServices.swift:150`）。之後 `out` 會原樣交給面板 |
+| `log` | `text`：1–200 字 | 寫進 cubi.log，每分鐘最多 20 行（`PluginServices.swift:148`） |
+| `state` | `data`：物件 | 留著；之後的版本給面板讀（`PluginServices.swift:150`） |
+| `notice` | `title` 1–40 字，`body` 選填 1–120 字，`sound` 選填 `knock`／`zap`／`thud` | 島的右翼顯示 5 秒：第一行 `title`，第二行是套件名稱（取自 manifest，服務不能自己決定），太長就尾端截斷；島收著時先滑出來一下。**島上只顯示 `title` 與套件名稱，`body` 目前只寫進 log。**`sound` 播 macOS 內建音效（knock＝Bottle、zap＝Funk、thud＝Submarine），跟著 Cubi 的音效開關。同一個服務 5 秒內只顯示一則，多的丟掉並寫 log（`PluginServices.swift:157-164`、`ServiceProtocol.swift:18`、`:103-105`、`AppDelegate.swift:118`、`IslandState.swift:172-183`、`Sounds.swift:26-28`） |
+| `present` | `id` 0 以上整數，`effect` 是 `knock`／`zap`／`shake`，`from` 1–40 字，`windowShaken` 選填 | 滑鼠所在螢幕右下角一張卡片 2 秒：「`from` 在敲你的門」（knock）或「`from` 戳了你一下」，下面一行是套件名稱，附音效（knock、zap 各自，shake 用 thud）；不搶焦點，滑鼠點得穿。`shake` 而 `windowShaken` 不是 true 時卡片左右晃；開了「減少動態效果」就不動。Cubi 回 `presented`：畫出來是 `ok:true`；已有一張還在是 `busy`；螢幕鎖定或休眠是 `unavailable`（`PluginServices.swift:152`、`ServiceOverlay.swift:29-51`） |
+| `reply` | `id`、`ok`、`out` 任意 JSON | 目前沒有對應的 `call`，略過（`PluginServices.swift:165`）。之後 `out` 會原樣交給面板 |
 
 文字欄位不能有控制字元、換行（含 U+2028、U+2029）、文字方向控制字元，不能只有空白；以字算長度，另外最多是上限 ×4 個 Unicode 字元（`ServiceProtocol.swift` 的 `optionalText`）。
 
 **結束**：
-- Cubi 要它停時先關它的 stdin（服務讀到 EOF 就該結束），2 秒後對整個群組送 SIGTERM，再 2 秒送 SIGKILL；Cubi 結束時改成立刻送 SIGTERM、1 秒後 SIGKILL（`ServiceProcess.swift:187-214`）。這種結束不論怎麼結束都不算失敗，不重新啟動、不計入次數（`ServiceSupervision.swift:46`、`PluginServices.swift:171`）。
-- 它自己結束時，它啟動的其他程式（同一個群組）一起被結束（`ServiceProcess.swift:118`）。
-- 以 0 結束：不重新啟動；啟動後 10 秒內就以 0 結束的顯示黃字。其他結束：`restart: on-failure` 時 1、2、4、8 秒後重新啟動，10 分鐘內第 5 次就停下來顯示紅字，要使用者關掉再打開開關才會再試；`never` 直接紅字（`ServiceSupervision.swift:20-55`、`PluginServices.swift:171`）。
+- Cubi 要它停時先關它的 stdin（服務讀到 EOF 就該結束），2 秒後對整個群組送 SIGTERM，再 2 秒送 SIGKILL；Cubi 結束時改成立刻送 SIGTERM、1 秒後 SIGKILL（`ServiceProcess.swift:199-226`）。這種結束不論怎麼結束都不算失敗，不重新啟動、不計入次數（`ServiceSupervision.swift:46`、`PluginServices.swift:186`）。
+- 它自己結束時，它啟動的其他程式（同一個群組）一起被結束（`ServiceProcess.swift:121`）。
+- 以 0 結束：不重新啟動；啟動後 10 秒內就以 0 結束的顯示黃字。其他結束：`restart: on-failure` 時 1、2、4、8 秒後重新啟動，10 分鐘內第 5 次就停下來顯示紅字，要使用者關掉再打開開關才會再試；`never` 直接紅字（`ServiceSupervision.swift:20-55`、`PluginServices.swift:186`）。
 - 它的 stderr 只留最後 8192 bytes，顯示最後一行時控制字元改成 `\u{…}`、最多 200 字（`ServiceSupervision.swift:64-78`）。
 
 ## 受限 session（`session.new`，experimental）

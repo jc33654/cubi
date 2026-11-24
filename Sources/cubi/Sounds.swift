@@ -14,7 +14,8 @@ enum Sounds {
         set { UserDefaults.standard.set(newValue, forKey: enabledKey) }
     }
 
-    enum Cue: CaseIterable { case pending, allow, deny, answer, done }
+    /// The last three are a plugin service's to pick (ServiceProtocol.sounds: knock, zap, thud).
+    enum Cue: CaseIterable { case pending, allow, deny, answer, done, knock, zap, thud }
 
     nonisolated private static func name(_ cue: Cue) -> String {
         switch cue {
@@ -22,6 +23,9 @@ enum Sounds {
         case .allow, .answer: return "Pop"
         case .deny: return "Basso"
         case .done: return "Glass"
+        case .knock: return "Bottle"
+        case .zap: return "Funk"
+        case .thud: return "Submarine"
         }
     }
 

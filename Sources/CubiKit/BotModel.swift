@@ -9,6 +9,8 @@ public enum BotState: String, Sendable, CaseIterable, Codable {
 
 public enum EyeShape: Sendable, Equatable {
     case pill, wide, flat, closedArc, happyArc, droop
+    /// ✕ ✕: a service's zap (NudgeMotion); the island's robots never take it.
+    case cross
 }
 
 public enum Badge: Sendable, Equatable {

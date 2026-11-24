@@ -130,6 +130,12 @@ enum BotPainter {
                 p.addArc(center: CGPoint(x: center.x, y: center.y + eyeW * 0.25), radius: eyeW * 0.55,
                          startAngle: .degrees(200), endAngle: .degrees(340), clockwise: false)
                 c.stroke(p, with: .color(ink), style: StrokeStyle(lineWidth: max(1, h * 0.06), lineCap: .round))
+            case .cross:
+                let r = eyeW / 2
+                var p = Path()
+                p.move(to: CGPoint(x: center.x - r, y: center.y - r)); p.addLine(to: CGPoint(x: center.x + r, y: center.y + r))
+                p.move(to: CGPoint(x: center.x + r, y: center.y - r)); p.addLine(to: CGPoint(x: center.x - r, y: center.y + r))
+                c.stroke(p, with: .color(ink), style: StrokeStyle(lineWidth: max(1, h * 0.06), lineCap: .round))
             }
         }
     }

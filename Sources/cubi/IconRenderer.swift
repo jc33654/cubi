@@ -206,23 +206,39 @@ enum IconRenderer {
         return writePNG(ImageRenderer(content: view), scale: 2, to: path)
     }
 
-    /// The card a service's `present` puts up, its still frame (what Reduce Motion shows), in the
-    /// panel's full size. CUBI_RENDER_FROM, CUBI_RENDER_MESSAGE and CUBI_RENDER_COLOR (a palette
-    /// index) are the `present`'s from, message and color, checked as Cubi checks a service's line.
+    /// What a service's `present` puts up: `<effect>` the card in the panel's full size,
+    /// `<effect>-loud` the giant Cubi on a 1512×982 screen. CUBI_RENDER_FROM, CUBI_RENDER_MESSAGE,
+    /// CUBI_RENDER_COLOR (a palette index) and CUBI_RENDER_SECONDS are the `present`'s fields,
+    /// checked as Cubi checks a service's line. CUBI_RENDER_T draws that moment (seconds from the
+    /// start), CUBI_RENDER_REDUCE=1 as with Reduce Motion; without CUBI_RENDER_T, the Reduce Motion
+    /// still (the loud one a second in, faded in).
     @MainActor
-    private static func renderServiceOverlay(effect: String, to path: String) -> Bool {
+    private static func renderServiceOverlay(effect asked: String, to path: String) -> Bool {
         let env = ProcessInfo.processInfo.environment
+        let loud = asked.hasSuffix("-loud")
+        let effect = loud ? String(asked.dropLast("-loud".count)) : asked
         var line: [String: JSONValue] = ["type": .string("present"), "id": .number(0), "effect": .string(effect),
                                          "from": .string(env["CUBI_RENDER_FROM"] ?? "alpha")]
         line["message"] = env["CUBI_RENDER_MESSAGE"].map(JSONValue.string)
         line["color"] = env["CUBI_RENDER_COLOR"].flatMap(Double.init).map(JSONValue.number)
+        line["seconds"] = env["CUBI_RENDER_SECONDS"].flatMap(Double.init).map(JSONValue.number)
+        if loud { line["emphasis"] = .string(ServiceProtocol.Emphasis.loud.rawValue) }
+        let moment = env["CUBI_RENDER_T"].flatMap(Double.init)
+        let reduce = moment == nil || env["CUBI_RENDER_REDUCE"] == "1"
         guard let data = try? JSONEncoder().encode(JSONValue.object(line)),
               case .success(.present(let request)) = ServiceProtocol.event(data, allowed: [.present]) else {
             FileHandle.standardError.write(Data("cubi: Cubi would refuse this present\n".utf8))
             return false
         }
+        if loud {
+            let screen = CGSize(width: 1512, height: 982)
+            let view = ServiceLoudView(request: request, plugin: "LAN Nudge", screen: screen, reduceMotion: reduce, frozenAt: moment ?? 1)
+                .frame(width: screen.width, height: screen.height)
+                .background(Color(white: 0.35))
+            return writePNG(ImageRenderer(content: view), scale: 1, to: path)
+        }
         let view = ServiceOverlayView(effect: request.effect, from: request.from, plugin: "LAN Nudge", message: request.message,
-                                      color: request.color, shakes: false, reduceMotion: true)
+                                      color: request.color, shakes: effect == "shake", reduceMotion: reduce, frozenAt: moment ?? 0)
             .frame(width: ServiceOverlay.size.width, height: ServiceOverlay.size.height)
             .padding(16)
             .background(Color(white: 0.35))

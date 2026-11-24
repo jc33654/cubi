@@ -2,7 +2,7 @@
 // Stability per member: @stable (kept compatible within schema 1), @experimental (may change in any
 // release), @deprecated (still works, will go). The rules behind each are in reference.md.
 
-/** The reply to a manifest command (Sources/cubi/Plugins/ToolPanel.swift, replyHandler). */
+/** The reply to a manifest command (Sources/cubi/Plugins/ToolBridge.swift, replyHandler). */
 interface CubiCommandResult {
   /** @stable exit code 0 (for a `reveal` command: a non-empty path). */
   ok: boolean;

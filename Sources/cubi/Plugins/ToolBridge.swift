@@ -6,8 +6,12 @@ import CubiKit
 final class ToolBridge: NSObject, WKScriptMessageHandlerWithReply {
     var tool: ToolPlugin?
     private let isEnabled: () -> Bool
+    private let services: () -> PluginServices?
 
-    init(isEnabled: @escaping () -> Bool) { self.isEnabled = isEnabled }
+    init(isEnabled: @escaping () -> Bool, services: @escaping () -> PluginServices? = { nil }) {
+        self.isEnabled = isEnabled
+        self.services = services
+    }
 
     private static let question = LinePrompt()
 
@@ -91,6 +95,31 @@ final class ToolBridge: NSObject, WKScriptMessageHandlerWithReply {
             }
             return
         }
+        // Built in: the plugin's own service. `service.call` sends it `{type:"call"}` and answers
+        // with its `reply` as `{ok, out, err}`; `service.state` answers `{ok, state}` with the last
+        // `state` it sent (null before the first). Only for a manifest with `service`.
+        if action == "service.call" || action == "service.state" {
+            let fail = { (err: String) in replyHandler(["ok": false, "out": NSNull(), "err": err], nil) }
+            guard tool.service != nil else { return fail("manifest 沒有 service") }
+            guard let services = services() else { return fail("背景服務沒有在跑") }
+            if action == "service.state" {
+                replyHandler(["ok": true, "state": Self.foundation(services.state(of: tool.id) ?? .null)], nil)
+                return
+            }
+            guard let list = body["args"] as? [String] else { return fail("args 要是字串陣列：動作，以及可選的 JSON 物件字串") }
+            let request: (action: String, args: JSONValue?)
+            switch ServiceProtocol.panelCall(list) {
+            case .success(let parsed): request = parsed
+            case .failure(let problem): return fail(problem.localizedDescription)
+            }
+            let id = tool.id
+            Task { @MainActor in
+                let result = await services.call(id, action: request.action, args: request.args)
+                if let err = result.err { CubiLog.write("tool \(id) service.call \(request.action): \(err)") }
+                replyHandler(["ok": result.ok, "out": Self.foundation(result.out ?? .null), "err": result.err ?? ""], nil)
+            }
+            return
+        }
         // Built in: native file pickers, no command involved.
         if action == "pick.file" || action == "pick.dir" {
             let panel = NSOpenPanel()
@@ -137,6 +166,18 @@ final class ToolBridge: NSObject, WKScriptMessageHandlerWithReply {
                     replyHandler(["ok": r.code == 0, "out": r.out, "err": r.err], nil)
                 }
             }
+        }
+    }
+
+    /// What WebKit hands the page as plain JavaScript values.
+    static func foundation(_ value: JSONValue) -> Any {
+        switch value {
+        case .null: NSNull()
+        case .bool(let b): b
+        case .number(let n): n
+        case .string(let s): s
+        case .array(let a): a.map(foundation)
+        case .object(let o): o.mapValues(foundation)
         }
     }
 }

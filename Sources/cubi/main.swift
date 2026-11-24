@@ -61,7 +61,7 @@ if let i = at("--render-island"), i + 3 < arguments.count {
 }
 
 // Offline picture of a tool plugin's panel, real web view and bridge, window kept off screen:
-//   --render-panel <tool id> <out.png> [--dark] [--height N] [--eval JS]   (JS runs after load, the shot 2 s later; point the plugin at test data with its own env, e.g. CUBI_SPRINT_DIR)
+//   --render-panel <tool id> <out.png> [--dark] [--height N] [--eval JS] [--with-service]   (JS runs after load, the shot 2 s later; point the plugin at test data with its own env, e.g. CUBI_SPRINT_DIR)
 // Both renders are dry runs for the plugins they run: CUBI_RENDER tells a plugin not to write its
 // real data (a test-data override is fine). See docs/advanced.md.
 if mode == "--render-panel" || mode == "--render-widget" { setenv("CUBI_RENDER", "1", 1) }
@@ -83,7 +83,21 @@ if let i = at("--render-panel"), i + 2 < arguments.count {
             exit(1)
         }
         if let height { tool.panel.height = height }
-        PanelRenderer.render(tool, dark: dark, to: out, script: script) { ok in exit(ok ? 0 : 1) }
+        // Its service only when asked for by name: it is really run, with whatever it does beyond
+        // Cubi (its own defaults, keychain, network), told only by CUBI_RENDER that this is a dry run.
+        // Nothing is put on screen for it; notices and presents are printed, presents answered unavailable.
+        var services: PluginServices?
+        if arguments.contains("--with-service") {
+            let started = PluginServices(registry: registry,
+                                         notice: { lines, _ in print("service notice: \(lines.joined(separator: " / "))") },
+                                         present: { effect, from, _, _ in print("service present: \(effect) from \(from)"); return "unavailable" })
+            started.sync(only: id)
+            services = started
+        }
+        PanelRenderer.render(tool, dark: dark, to: out, script: script, services: services) { ok in
+            services?.stopAll()
+            exit(ok ? 0 : 1)
+        }
     }
     NSApplication.shared.run()
 }

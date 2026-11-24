@@ -74,9 +74,9 @@ public struct ToolPlugin: Sendable, Equatable {
     public static let textLimit = 262_144
     public static let minRefresh = 10
     public static let minTickInterval = 30
-    /// Handled by the panel itself (native pickers, starting a Claude Code session); a manifest
-    /// cannot take these names.
-    public static let reservedActions: Set<String> = ["pick.file", "pick.dir", "session.new"]
+    /// Handled by the panel itself (native pickers, starting a Claude Code session, talking to the
+    /// plugin's service); a manifest cannot take these names.
+    public static let reservedActions: Set<String> = ["pick.file", "pick.dir", "session.new", "service.call", "service.state"]
     /// Built-ins a manifest has to ask for (`"builtins": […]`) because they reach outside the panel.
     public static let optionalBuiltins: Set<String> = ["session.new"]
 

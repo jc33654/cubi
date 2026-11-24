@@ -38,8 +38,8 @@
         },
         "commands": {
           "type": "object",
-          "description": "Action name → command. Names: lower-case letters, digits, . _ -, starting with a letter or digit; pick.file, pick.dir, session.new are built in.",
-          "propertyNames": { "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$", "not": { "enum": ["pick.file", "pick.dir", "session.new"] } },
+          "description": "Action name → command. Names: lower-case letters, digits, . _ -, starting with a letter or digit; pick.file, pick.dir, session.new, service.call, service.state are built in.",
+          "propertyNames": { "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$", "not": { "enum": ["pick.file", "pick.dir", "session.new", "service.call", "service.state"] } },
           "additionalProperties": { "$ref": "#/$defs/command" },
           "x-stability": "stable"
         },
@@ -74,7 +74,7 @@
         "service": {
           "type": "object",
           "required": ["run", "events"],
-          "description": "A program Cubi keeps running while the plugin is on. Parsed only: this Cubi does not start it yet. A Cubi without service (0.2.0 and older) warns about the key and never runs it.",
+          "description": "A program Cubi keeps running while the plugin and its background-service switch (off by default) are on; a panel reaches it through service.call and service.state. A Cubi without service (0.2.0 and older) warns about the key and never runs it.",
           "properties": {
             "run": {
               "type": "array",

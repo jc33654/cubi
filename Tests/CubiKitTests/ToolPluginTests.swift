@@ -59,6 +59,8 @@ private let sample = #"""
     fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"x":{"run":["/c"],"args":["path"]}}}"#, .badCommand("x", "args[0] 不認得的型別「path」"))
     fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"pick.file":{"run":["/c"]}}}"#, .badCommand("pick.file", "是面板內建的動作名稱，不能自己定義"))
     fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"session.new":{"run":["/c"]}}}"#, .badCommand("session.new", "是面板內建的動作名稱，不能自己定義"))
+    fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"service.call":{"run":["/c"]}}}"#, .badCommand("service.call", "是面板內建的動作名稱，不能自己定義"))
+    fails(#"{"id":"t","name":"T","panel":{"file":"a"},"commands":{"service.state":{"run":["/c"]}}}"#, .badCommand("service.state", "是面板內建的動作名稱，不能自己定義"))
     fails(#"{"id":"t","name":"T","panel":{"file":"a"},"builtins":["pick.file"],"commands":{}}"#, .badField("builtins", "只能是 session.new"))
 }
 

@@ -38,6 +38,22 @@ interface CubiSessionNewSpec {
   allowActions?: string[];
 }
 
+/** JSON as the page gets it. */
+type CubiJSON = null | boolean | number | string | CubiJSON[] | { [key: string]: CubiJSON };
+
+/**
+ * `service.call`: the service's `reply` (`ok`, `out` as it sent them, `err` ""), or why there is
+ * none (`ok` false, `out` null, `err` a Chinese sentence). Never rejects. @experimental
+ */
+interface CubiServiceCallResult {
+  ok: boolean;
+  out: CubiJSON;
+  err: string;
+}
+
+/** `service.state`: the last `state.data` the service sent; null before the first and once it has ended. @experimental */
+type CubiServiceStateResult = { ok: true; state: { [key: string]: CubiJSON } | null } | { ok: false; err: string };
+
 interface CubiBridge {
   /**
    * @stable Run a manifest command. Rejects (never resolves) when the action is not in the
@@ -49,6 +65,13 @@ interface CubiBridge {
   postMessage(message: { action: "pick.file" | "pick.dir"; args?: string[] }): Promise<CubiPickResult>;
   /** @experimental args[0] is JSON.stringify(CubiSessionNewSpec); the user confirms every time. */
   postMessage(message: { action: "session.new"; args: [string] }): Promise<CubiSessionNewResult>;
+  /**
+   * @experimental Only with `service` in the manifest. args[0] is the action (a command name),
+   * args[1] optional: JSON.stringify of an object, at most 16384 bytes. Waits 10 s at most.
+   */
+  postMessage(message: { action: "service.call"; args: [string] | [string, string] }): Promise<CubiServiceCallResult>;
+  /** @experimental Only with `service` in the manifest. */
+  postMessage(message: { action: "service.state"; args?: string[] }): Promise<CubiServiceStateResult>;
   /** @deprecated The old shape: name and value become args [name, value]. Use args. */
   postMessage(message: { action: string; name?: string; value?: string }): Promise<CubiCommandResult>;
 }
@@ -91,4 +114,6 @@ interface Window {
 interface WindowEventMap {
   /** @stable The panel, already open, was handed another session: read window.cubiSession again. */
   cubisession: Event;
+  /** @experimental The plugin's service sent a new `state` (`detail` is its `data`), or ended (`detail` null). */
+  cubiservicestate: CustomEvent<{ [key: string]: CubiJSON } | null>;
 }

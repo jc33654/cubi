@@ -124,6 +124,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 overlay.show(effect: effect, from: from, plugin: plugin, windowShaken: windowShaken)
             })
         self.services = services
+        toolPanels.services = services
+        services.onState = { [toolPanels] in toolPanels.serviceStateChanged($0, $1) }
         coordinator.registry.onChange = { [weak services] in services?.sync() }
         services.sync()
         // Where development left project-local hooks behind; the settings window offers to clean them.

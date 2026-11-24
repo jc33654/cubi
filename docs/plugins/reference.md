@@ -23,7 +23,7 @@
 | 不認得的欄位 | 照樣載入，但設定頁用黃字列出，log 寫 `plugin <資料夾> warning:`；以 `x-` 開頭的是你自己的，不警告 | stable | `PluginManifest.swift:112`、`PluginRegistry.swift:66`、`Sources/cubi/Settings/PluginsSection.swift:35` |
 | 拒載 | 原因用紅字列在設定頁，log 寫 `plugin <資料夾> rejected:` | stable | `PluginRegistry.swift:65`、`PluginsSection.swift:30` |
 | id 命名空間 | 兩種套件共用；跟內建的 `claude-code` 撞名就拒載 | stable | `PluginRegistry.swift:46-49` |
-| 預設開關 | 工具套件預設開，agent 套件預設關。在設定頁關掉工具套件後，已開著的面板送來的請求也會被拒，資訊窗區塊與 tick 也停 | stable | `PluginRegistry.swift:78`、`ToolBridge.swift:26-29` |
+| 預設開關 | 工具套件預設開，agent 套件預設關。在設定頁關掉工具套件後，已開著的面板送來的請求也會被拒，資訊窗區塊與 tick 也停 | stable | `PluginRegistry.swift:78`、`ToolBridge.swift:30-33` |
 | 檢查指令 | `cubi --validate-plugin <資料夾>`：照上面的規則檢查，加上面板檔、每個命令與 `service` 的執行檔在不在、能不能執行；不開 app、不寫 log。結束碼 0 載得進來（可能有警告）、1 有錯、2 用法錯 | stable | `Sources/cubi/main.swift:25-38`、`PluginManifest.swift:132-172` |
 
 schema 檔比 Cubi 嚴格一點：不認得的欄位在 schema 是錯誤，在 Cubi 只是警告；`service.run` 裡 `$` 後面接一串長到放不進整數的數字，schema 會拒，Cubi 當一般字串。有些規則 schema 寫不出來，請用 `--validate-plugin` 檢查：資料夾名要等於 `id`、`text` 參數要走 stdin、`stdin` 不能超過參數數量、`$1`…`$n` 要有對應參數、hook 命令的形狀（包括 `session.info`／`tick.action` 指到的命令存在）、agent 套件 `install.entries[].command` 要含 `cubi-hook --agent <id> `、檔案在不在。
@@ -38,18 +38,18 @@ schema 檔比 Cubi 嚴格一點：不認得的欄位在 schema 是錯誤，在 C
 | `kind` | ✔ | `"tool"` | stable | `PluginManifest.swift:66-70` |
 | `id` | ✔ | `[a-z0-9-]`，1–24 字，等於資料夾名 | stable | `Sources/CubiKit/ToolPlugin+Load.swift:31-32`、`Sources/CubiKit/AgentPlugin.swift:77-78` |
 | `name` | ✔ | 視窗標題、選單文字、資訊窗區塊標題 | stable | `ToolPlugin+Load.swift:33` |
-| `panel.file` | ✔ | 一個 HTML 檔：相對套件資料夾、`~` 或絕對路徑；每次開窗重讀。以字串載入、沒有基底網址（origin 是 null），**同資料夾的 js、css、圖片用相對路徑載不到，要全部寫在這個 HTML 裡**（實測：同資料夾的 `app.js` 沒有載入）。外部網址的 script、img、fetch 不擋：面板跟 manifest 一樣是你自己放的，一樣信任 | stable | `ToolPlugin+Load.swift:34`、`Sources/cubi/Plugins/ToolPanel.swift:75-77` |
+| `panel.file` | ✔ | 一個 HTML 檔：相對套件資料夾、`~` 或絕對路徑；每次開窗重讀。以字串載入、沒有基底網址（origin 是 null），**同資料夾的 js、css、圖片用相對路徑載不到，要全部寫在這個 HTML 裡**（實測：同資料夾的 `app.js` 沒有載入）。外部網址的 script、img、fetch 不擋：面板跟 manifest 一樣是你自己放的，一樣信任 | stable | `ToolPlugin+Load.swift:34`、`Sources/cubi/Plugins/ToolPanel.swift:88-90` |
 | `panel.width`、`panel.height` | | 視窗大小，預設 900×640 | stable | `ToolPlugin+Load.swift:43-44` |
-| `panel.style` | | `"cubi"`：注入樣式包（見「樣式包」）；不寫或 `null` 就不注入，既有面板不受影響 | stable | `ToolPlugin+Load.swift:36-41`、`ToolPanel.swift:104-106` |
-| `panel.bridge` | | JS 用的 handler 名，預設 `cubi`；既有面板寫死別的名字時在這裡宣告，不用改面板 | experimental | `ToolPlugin+Load.swift:45`、`ToolPanel.swift:58` |
-| `commands.<action>` | | 動作名稱：小寫英數與 `.`、`_`、`-`，第一個字要是英數，1–64 字；`pick.file`、`pick.dir`、`session.new` 是內建的，不能自己定義 | stable | `ToolPlugin+Load.swift:57-58`、`PluginManifest.swift:178-182` |
+| `panel.style` | | `"cubi"`：注入樣式包（見「樣式包」）；不寫或 `null` 就不注入，既有面板不受影響 | stable | `ToolPlugin+Load.swift:36-41`、`ToolPanel.swift:117-119` |
+| `panel.bridge` | | JS 用的 handler 名，預設 `cubi`；既有面板寫死別的名字時在這裡宣告，不用改面板 | experimental | `ToolPlugin+Load.swift:45`、`ToolPanel.swift:71` |
+| `commands.<action>` | | 動作名稱：小寫英數與 `.`、`_`、`-`，第一個字要是英數，1–64 字；`pick.file`、`pick.dir`、`session.new`、`service.call`、`service.state` 是內建的，不能自己定義 | stable | `ToolPlugin+Load.swift:57-58`、`PluginManifest.swift:178-182` |
 | `commands.<action>.run` | ✔ | argv，**不經 shell**。第一格是執行檔：絕對路徑、`~`、`$plugin/…` 或含 `/` 的相對路徑，只寫名字不會去 PATH 找。自己寫的腳本要 `chmod +x`，或第一格寫直譯器，例如 `["/usr/bin/python3", "$plugin/main.py"]`。任何一格可用 `$plugin`（整格是它或以 `$plugin/` 開頭）；`$1`…`$n` 換成呼叫端的第 n 個參數；走 stdin 的那個參數不能再寫成 `$n`（會拒載）。工作目錄是套件資料夾 | stable | `ToolPlugin+Load.swift:59-65`、`:88-93`、`:142-152`、`Sources/cubi/Plugins/ToolRunner.swift:45` |
 | `commands.<action>.args[]`：`"text"` | | ≤256 KB，只能走 stdin | stable | `ToolPlugin+Load.swift:85-87`、`ToolPlugin+Invoke.swift:49-50` |
 | `commands.<action>.args[]`：`"value"` | | 可印字元，1–512 字，不能以 `-` 開頭（變不成選項） | stable | `ToolPlugin+Invoke.swift:44-48` |
 | `commands.<action>.args[]`：`"name"` | | `[A-Za-z0-9._-]`，1–64 字，不能是 `.`／`..`（走不出目錄） | experimental | `ToolPlugin+Invoke.swift:39-43` |
 | `commands.<action>.args[]`：`{"enum": […]}` | | 只能是列出的字串之一 | experimental | `ToolPlugin+Load.swift:73-77`、`ToolPlugin+Invoke.swift:51-52` |
 | `commands.<action>.stdin` | | 1-based 整數：第 n 個參數餵 stdin、不放 argv。hook 命令與面板指令都適用，例如面板要收長文字就寫 `"args": ["text"], "stdin": 1`（依據：兩個以上套件使用）。送進去的是那個字串的 UTF-8 原樣：結尾不補換行、CRLF 不轉換（實測：面板、`--tool-run` 參數、`--tool-run -` 三種來源都一樣）；Cubi 自己組給 hook 的 JSON 結尾也沒有換行 | stable | `ToolPlugin+Load.swift:82-84`、`ToolRunner.swift:79-81`、`PluginIO.swift:251-255` |
-| `commands.<action>.reveal` | | `true`：stdout 去頭尾空白當路徑，在 Finder 選取；回 `{ok, out: 路徑}` | stable | `ToolPlugin+Load.swift:95`、`ToolBridge.swift:132-135` |
+| `commands.<action>.reveal` | | `true`：stdout 去頭尾空白當路徑，在 Finder 選取；回 `{ok, out: 路徑}` | stable | `ToolPlugin+Load.swift:95`、`ToolBridge.swift:161-164` |
 | `commands.<action>.sessionAllowed` | | 只有 `true` 算數：受限 session 可以不經核准跑它（見「受限 session」）。只標「把結果交回來」的命令，不要標會寫外部系統或改設定的 | experimental | `ToolPlugin+Load.swift:95` |
 | `session.info` | | hook 命令名：資訊窗選到 session 時執行 | stable | `ToolPlugin+Load.swift:99-103` |
 | `session.refresh` | | 秒，整數，≥10，預設 60；資訊窗離開畫面（換 session、島收起）就停 | stable | `ToolPlugin+Load.swift:117-122`、`Sources/cubi/Island/SessionWidgetView.swift:50-57` |
@@ -74,26 +74,32 @@ const bridge = window.webkit?.messageHandlers?.cubi;          // 或 manifest �
 const r = await bridge.postMessage({ action: "skill.on", args: ["my-skill"] });   // {ok, out, err}
 const picked = await bridge.postMessage({ action: "pick.file", args: [] });      // 內建：{ok, path, cancelled?}
 await bridge.postMessage({ action: "session.new", args: [JSON.stringify({ directory: "~/proj", prompt: "第一句話" })] });
+// 有 service 的套件：叫自己的背景服務、讀它最新的 state
+const sent = await bridge.postMessage({ action: "service.call", args: ["send", JSON.stringify({ peer: "…" })] });  // {ok, out, err}
+const { state } = await bridge.postMessage({ action: "service.state", args: [] });
+window.addEventListener("cubiservicestate", e => render(e.detail));   // detail 是 null：服務結束了
 // 從資訊窗「開面板」打開時：
 window.cubiSession   // {id, name, cwd, projectDirectory, agent, segments}；之後換 session 會收到 "cubisession" 事件
 ```
 
 | 項目 | 說明 | 穩定度 | 出處 |
 |---|---|---|---|
-| `{action, args}` → `{ok, out, err}` | `ok` 是 exit code 為 0 | stable | `ToolBridge.swift:108-141` |
-| 拒絕 | 動作不在表裡、參數數量或型別不符、套件在設定頁關掉 → 不執行，Promise reject，原因是中文。每次執行與拒絕都寫進 log | stable | `ToolBridge.swift:22-29`、`ToolBridge.swift:119-125`、`ToolPlugin+Invoke.swift:21-35` |
-| 舊形狀 `{action, name, value}` | name、value 依序當成 args | deprecated | `ToolBridge.swift:113-117` |
-| `pick.file`、`pick.dir` | 原生選擇器，回 `{ok, path, cancelled?}` | experimental | `ToolBridge.swift:95-106` |
-| `session.new` | 見「受限 session」 | experimental | `ToolBridge.swift:35-89` |
-| `window.cubiSession`、`cubisession` 事件 | 從資訊窗打開時設定；面板已開時換 session 不重載頁面 | stable | `ToolPanel.swift:45-53`、`ToolPanel.swift:107-109` |
-| 導頁 | 任何離開已載入 HTML 的導頁一律取消；主頁面的 http(s) 改用系統瀏覽器開，iframe 裡的只取消。bridge 只給面板自己的頁面用 | stable | `ToolPanel.swift:117-129` |
-| `location.reload()` | 別用：HTML 以字串載入，重載只剩空白頁。要重抓資料就重新呼叫自己的讀取函式；改了 HTML 要看效果就關掉面板再開（每次開窗重讀檔案） | stable | `ToolPanel.swift:75-77` |
+| `{action, args}` → `{ok, out, err}` | `ok` 是 exit code 為 0 | stable | `ToolBridge.swift:137-170` |
+| 拒絕 | 動作不在表裡、參數數量或型別不符、套件在設定頁關掉 → 不執行，Promise reject，原因是中文。每次執行與拒絕都寫進 log | stable | `ToolBridge.swift:26-33`、`ToolBridge.swift:148-154`、`ToolPlugin+Invoke.swift:21-35` |
+| 舊形狀 `{action, name, value}` | name、value 依序當成 args | deprecated | `ToolBridge.swift:142-146` |
+| `pick.file`、`pick.dir` | 原生選擇器，回 `{ok, path, cancelled?}` | experimental | `ToolBridge.swift:124-135` |
+| `session.new` | 見「受限 session」 | experimental | `ToolBridge.swift:39-93` |
+| `service.call` | 只給寫了 `service` 的套件。`args[0]` 是動作名稱（規則同 `commands`），`args[1]` 選填、是 JSON 物件的字串（最多 16384 bytes）。Cubi 寫一行 `call` 給服務，等它的 `reply`，回 `{ok, out, err}`：`ok`、`out` 是服務給的，`out` 原樣交回（沒有就是 `null`），`err` 是 `""`。服務沒在跑、`service.events` 沒列 `reply`、送不出去、10 秒內沒回、等的時候服務結束，都回 `{ok:false, out:null, err}`，`err` 是中文原因；格式錯也是這樣回，不會 reject。不限次數，可以同時有好幾個在等 | experimental | `ToolBridge.swift:98-122`、`PluginServices.swift:111-138`、`ServiceProtocol.swift:110-125` |
+| `service.state`、`cubiservicestate` 事件 | `service.state` 回 `{ok:true, state}`：服務最後一次送的 `state.data`；還沒送過、或服務已經結束是 `null`。之後服務每送一次 `state`，開著的面板就收到 `cubiservicestate` 事件，`event.detail` 是同一份資料；服務結束時收到一次 `detail` 為 `null` 的 | experimental | `ToolBridge.swift:105-108`、`PluginServices.swift:219-221`、`:259-264`、`ToolPanel.swift:16-18`、`:51-54` |
+| `window.cubiSession`、`cubisession` 事件 | 從資訊窗打開時設定；面板已開時換 session 不重載頁面 | stable | `ToolPanel.swift:58-66`、`ToolPanel.swift:120-122` |
+| 導頁 | 任何離開已載入 HTML 的導頁一律取消；主頁面的 http(s) 改用系統瀏覽器開，iframe 裡的只取消。bridge 只給面板自己的頁面用 | stable | `ToolPanel.swift:130-142` |
+| `location.reload()` | 別用：HTML 以字串載入，重載只剩空白頁。要重抓資料就重新呼叫自己的讀取函式；改了 HTML 要看效果就關掉面板再開（每次開窗重讀檔案） | stable | `ToolPanel.swift:88-90` |
 
 安全邊界：manifest 與面板是你自己放進 `plugins/` 的，Cubi 信任它們；邊界在「面板的 JS 只能叫到表裡的指令、參數過型別檢查、不經 shell」。
 
 ## 樣式包（`panel.style: "cubi"`）
 
-stable，class 名稱清單本身也在承諾範圍內。Cubi 在頁面載入前塞一段 `<style>` 到最前面（面板自己的規則照樣蓋得過去），外加 `window.cubiIcon(name, size?)` 回一段 SVG 字串（`ToolPanel.swift:104-106`、`Sources/cubi/Plugins/PanelStyleKit.swift`）。淺色、深色跟系統走，顏色跟 Cubi 設定頁同一套。所有 class 以 `cubi-` 開頭；body、按鈕、輸入框、表格的基本樣式也只套在有要求的頁面。最小範例：`docs/plugins/example-tool/index.html`。
+stable，class 名稱清單本身也在承諾範圍內。Cubi 在頁面載入前塞一段 `<style>` 到最前面（面板自己的規則照樣蓋得過去），外加 `window.cubiIcon(name, size?)` 回一段 SVG 字串（`ToolPanel.swift:117-119`、`Sources/cubi/Plugins/PanelStyleKit.swift`）。淺色、深色跟系統走，顏色跟 Cubi 設定頁同一套。所有 class 以 `cubi-` 開頭；body、按鈕、輸入框、表格的基本樣式也只套在有要求的頁面。最小範例：`docs/plugins/example-tool/index.html`。
 
 | 用途 | class |
 |---|---|
@@ -169,37 +175,39 @@ stdout（`hook-io.schema.json#/$defs/tickOutput`）：
 
 ## 背景服務（`service`，experimental）
 
-套件開著、而且使用者打開它的「背景服務」開關（預設關）時，Cubi 啟動 `service.run` 並一直看管它；開關或套件關掉、重新載入後 `service` 變了、Cubi 結束時讓它結束。設定頁在開關旁顯示狀態：執行中、幾秒後重新啟動、一啟動就結束（黃）、不再重新啟動（紅），黃、紅會附上它 stderr 的最後一行（`Sources/cubi/Plugins/PluginServices.swift:57`、`:175-213`、`Sources/cubi/Settings/PluginsSection.swift`）。
+套件開著、而且使用者打開它的「背景服務」開關（預設關）時，Cubi 啟動 `service.run` 並一直看管它；開關或套件關掉、重新載入後 `service` 變了、Cubi 結束時讓它結束。設定頁在開關旁顯示狀態：執行中、幾秒後重新啟動、一啟動就結束（黃）、不再重新啟動（紅），黃、紅會附上它 stderr 的最後一行（`Sources/cubi/Plugins/PluginServices.swift:78`、`:248-292`、`Sources/cubi/Settings/PluginsSection.swift`）。
 
 **怎麼啟動**（`ServiceProcess.swift`）：
-- 不經 shell，在套件資料夾裡，環境跟命令一樣多一個 `CUBI_BIN`（`ServiceProcess.swift:79`、`PluginServices.swift:92`）。
+- 不經 shell，在套件資料夾裡，環境跟命令一樣多一個 `CUBI_BIN`；在 `--render-panel --with-service` 裡啟動時還有 `CUBI_RENDER=1`，這時服務不該上網路、不該碰鑰匙圈或使用者真的資料，只回畫面要用的 state（`ServiceProcess.swift:79`、`PluginServices.swift:148`）。
 - 它自己承擔權限：macOS 的區域網路、輔助使用等權限算它的，不是 Cubi 的。用的是 libsystem 的 `responsibility_spawnattrs_setdisclaim`（不是公開 API）；這個 macOS 沒有它時就不啟動並顯示紅字，不會改用 Cubi 的權限跑（`ServiceProcess.swift:58`）。權限詢問視窗與系統設定上顯示的名字，還沒在真機確認。
 - 所有訊號回到預設、沒有遮罩（Cubi 自己忽略 SIGPIPE，忽略的訊號會被繼承），自成一個行程群組，除了 stdin、stdout、stderr 拿不到 Cubi 的其他檔案（`ServiceProcess.swift:71`）。
 
 **對話**（`ServiceProtocol.swift`）：一行一個 JSON 物件。
-- Cubi 的第一行是 `{"protocol":1,"type":"hello"}`（`ServiceProtocol.swift:110`、`PluginServices.swift:109`）。服務在收到這一行之前不該做任何事；沒收到、或 `protocol` 不是它認得的數字就結束。這樣從面板、hook 或終端機直接執行它都不會動作。
-- 服務的 stdout：每行最多 16384 bytes，超過整行丟；每秒最多 10 行（`ServiceProtocol.swift:12-15`、`PluginServices.swift:144`）。`type` 是 `service.events` 沒列的、或欄位不合規則的，丟掉並寫一行 log（每分鐘最多 5 行）。
-- Cubi 寫給服務的訊息不會等它讀：它沒讀的累積超過 65536 bytes，新的那則就丟掉並寫一行 log；一則訊息不會只送一半（`ServiceProcess.swift:140`、`PluginServices.swift:154-156`）。
+- Cubi 的第一行是 `{"protocol":1,"type":"hello"}`（`ServiceProtocol.swift:130`、`PluginServices.swift:165`）。服務在收到這一行之前不該做任何事；沒收到、或 `protocol` 不是它認得的數字就結束。這樣從面板、hook 或終端機直接執行它都不會動作。
+- 服務的 stdout：每行最多 16384 bytes，超過整行丟；每秒最多 10 行（`ServiceProtocol.swift:12-15`、`PluginServices.swift:201-213`）。`state` 也算在內，超過的丟掉，所以狀態常變的服務要自己合併（例如每秒最多送一次）。例外是回答面板還在等的 `call` 的 `reply`：超過限制時，含 `"reply"` 的行還會讀，最多讀面板呼叫過的次數那麼多行，是在等的 `reply` 就放行。`type` 是 `service.events` 沒列的、或欄位不合規則的，丟掉並寫一行 log（每分鐘最多 5 行）。
+- 面板叫 `service.call` 時，Cubi 寫 `{"action":…,"args":{…},"id":n,"type":"call"}`（沒有參數就沒有 `args`）；`id` 每次加一，服務用同一個 `id` 回 `reply`（`ServiceProtocol.swift:133`、`PluginServices.swift:122-128`）。服務結束或被關掉時，還在等的呼叫都回失敗（`PluginServices.swift:173`、`:259`）。
+- Cubi 寫給服務的訊息不會等它讀：它沒讀的累積超過 65536 bytes，新的那則就丟掉並寫一行 log；一則訊息不會只送一半（`ServiceProcess.swift:140`、`PluginServices.swift:224-226`）。
 
 | type | 欄位 | 這一版 Cubi 怎麼處理 |
 |---|---|---|
-| `log` | `text`：1–200 字 | 寫進 cubi.log，每分鐘最多 20 行（`PluginServices.swift:148`） |
-| `state` | `data`：物件 | 留著；之後的版本給面板讀（`PluginServices.swift:150`） |
-| `notice` | `title` 1–40 字，`body` 選填 1–120 字，`sound` 選填 `knock`／`zap`／`thud` | 島的右翼顯示 5 秒：第一行 `title`，第二行是套件名稱（取自 manifest，服務不能自己決定），太長就尾端截斷；島收著時先滑出來一下。**島上只顯示 `title` 與套件名稱，`body` 目前只寫進 log。**`sound` 播 macOS 內建音效（knock＝Bottle、zap＝Funk、thud＝Submarine），跟著 Cubi 的音效開關。同一個服務 5 秒內只顯示一則，多的丟掉並寫 log（`PluginServices.swift:157-164`、`ServiceProtocol.swift:18`、`:103-105`、`AppDelegate.swift:118`、`IslandState.swift:172-183`、`Sounds.swift:26-28`） |
-| `present` | `id` 0 以上整數，`effect` 是 `knock`／`zap`／`shake`，`from` 1–40 字，`windowShaken` 選填 | 滑鼠所在螢幕右下角一張卡片 2 秒：「`from` 在敲你的門」（knock）或「`from` 戳了你一下」，下面一行是套件名稱，附音效（knock、zap 各自，shake 用 thud）；不搶焦點，滑鼠點得穿。`shake` 而 `windowShaken` 不是 true 時卡片左右晃；開了「減少動態效果」就不動。Cubi 回 `presented`：畫出來是 `ok:true`；已有一張還在是 `busy`；螢幕鎖定或休眠是 `unavailable`（`PluginServices.swift:152`、`ServiceOverlay.swift:29-51`） |
-| `reply` | `id`、`ok`、`out` 任意 JSON | 目前沒有對應的 `call`，略過（`PluginServices.swift:165`）。之後 `out` 會原樣交給面板 |
+| `log` | `text`：1–200 字 | 寫進 cubi.log，每分鐘最多 20 行（`PluginServices.swift:217`） |
+| `state` | `data`：物件 | 留著最新的一份給面板讀（`service.state`），並發給開著的面板（`cubiservicestate` 事件）；服務結束就清掉（`PluginServices.swift:219-221`、`:259-264`） |
+| `notice` | `title` 1–40 字，`body` 選填 1–120 字，`sound` 選填 `knock`／`zap`／`thud` | 島的右翼顯示 5 秒：第一行 `title`，第二行是套件名稱（取自 manifest，服務不能自己決定），太長就尾端截斷；島收著時先滑出來一下。**島上只顯示 `title` 與套件名稱，`body` 目前只寫進 log。**`sound` 播 macOS 內建音效（knock＝Bottle、zap＝Funk、thud＝Submarine），跟著 Cubi 的音效開關。同一個服務 5 秒內只顯示一則，多的丟掉並寫 log（`PluginServices.swift:227-234`、`ServiceProtocol.swift:18`、`:103-105`、`AppDelegate.swift:118`、`IslandState.swift:172-183`、`Sounds.swift:26-28`） |
+| `present` | `id` 0 以上整數，`effect` 是 `knock`／`zap`／`shake`，`from` 1–40 字，`windowShaken` 選填 | 滑鼠所在螢幕右下角一張卡片 2 秒：「`from` 在敲你的門」（knock）或「`from` 戳了你一下」，下面一行是套件名稱，附音效（knock、zap 各自，shake 用 thud）；不搶焦點，滑鼠點得穿。`shake` 而 `windowShaken` 不是 true 時卡片左右晃；開了「減少動態效果」就不動。Cubi 回 `presented`：畫出來是 `ok:true`；已有一張還在是 `busy`；螢幕鎖定或休眠是 `unavailable`（`PluginServices.swift:222`、`ServiceOverlay.swift:29-51`） |
+| `reply` | `id`、`ok`、`out` 任意 JSON | 回答同一個 `id` 的 `call`：`ok`、`out` 原樣交回面板。沒有在等的 `id`（已逾時或沒送過）丟掉並寫 log（`PluginServices.swift:235-239`） |
 
 文字欄位不能有控制字元、換行（含 U+2028、U+2029）、文字方向控制字元，不能只有空白；以字算長度，另外最多是上限 ×4 個 Unicode 字元（`ServiceProtocol.swift` 的 `optionalText`）。
 
 **結束**：
-- Cubi 要它停時先關它的 stdin（服務讀到 EOF 就該結束），2 秒後對整個群組送 SIGTERM，再 2 秒送 SIGKILL；Cubi 結束時改成立刻送 SIGTERM、1 秒後 SIGKILL（`ServiceProcess.swift:199-226`）。這種結束不論怎麼結束都不算失敗，不重新啟動、不計入次數（`ServiceSupervision.swift:46`、`PluginServices.swift:186`）。
+- Cubi 要它停時先關它的 stdin（服務讀到 EOF 就該結束），2 秒後對整個群組送 SIGTERM，再 2 秒送 SIGKILL；Cubi 結束時改成立刻送 SIGTERM、1 秒後 SIGKILL（`ServiceProcess.swift:199-226`）。這種結束不論怎麼結束都不算失敗，不重新啟動、不計入次數（`ServiceSupervision.swift:46`、`PluginServices.swift:265`）。
+- Cubi 被強制結束或當掉時，不會送任何訊號：服務只會讀到 stdin 的 EOF。不處理 EOF 的服務（和它啟動的程式）會一直留著，所以一定要在 EOF 時結束。
 - 它自己結束時，它啟動的其他程式（同一個群組）一起被結束（`ServiceProcess.swift:121`）。
-- 以 0 結束：不重新啟動；啟動後 10 秒內就以 0 結束的顯示黃字。其他結束：`restart: on-failure` 時 1、2、4、8 秒後重新啟動，10 分鐘內第 5 次就停下來顯示紅字，要使用者關掉再打開開關才會再試；`never` 直接紅字（`ServiceSupervision.swift:20-55`、`PluginServices.swift:186`）。
+- 以 0 結束：不重新啟動；啟動後 10 秒內就以 0 結束的顯示黃字。其他結束：`restart: on-failure` 時 1、2、4、8 秒後重新啟動，10 分鐘內第 5 次就停下來顯示紅字，要使用者關掉再打開開關才會再試；`never` 直接紅字（`ServiceSupervision.swift:20-55`、`PluginServices.swift:265`）。
 - 它的 stderr 只留最後 8192 bytes，顯示最後一行時控制字元改成 `\u{…}`、最多 200 字（`ServiceSupervision.swift:64-78`）。
 
 ## 受限 session（`session.new`，experimental）
 
-`session.new` 把一段文字交給一個 agent，所以 manifest 要先寫 `"builtins": ["session.new"]`，而且每次都會跳確認框列出目錄與第一句話（`ToolBridge.swift:35-63`）。目錄要存在，prompt 選填；失敗回 `{ok:false, err}`，取消回 `{ok:false, cancelled:true}`。
+`session.new` 把一段文字交給一個 agent，所以 manifest 要先寫 `"builtins": ["session.new"]`，而且每次都會跳確認框列出目錄與第一句話（`ToolBridge.swift:39-67`）。目錄要存在，prompt 選填；失敗回 `{ok:false, err}`，取消回 `{ok:false, cancelled:true}`。
 
 欄位只有五個，其他一律拒絕，不能傳旗標、指令或規則（`Sources/CubiKit/SessionNewSpec.swift:14-16`）：
 
@@ -222,7 +230,7 @@ stdout（`hook-io.schema.json#/$defs/tickOutput`）：
 - 確認框寫明是受限模式、不會問、能執行哪些動作、另外能讀哪些資料夾。
 - **`readDirs` 不受使用者拒絕規則保護**：拒絕規則大多寫成 `**/.env` 這種相對工作目錄的樣式，蓋不到 `--add-dir` 的資料夾。所以 `readDirs` 只能指向專門放要給 session 看的檔的資料夾（sprint 用它資料目錄底下的 `briefs/`）。這一條是推論，沒有用 Claude Code 實測過。
 - 路徑以連續的點結尾之類、Claude Code 覺得可疑的資料夾，讀取一定要人核准，在不問的模式下等於讀不到。工作目錄與 `readDirs` 都要避開。
-- Cubi 執行檔的路徑有英數、`/`、`.`、`_`、`-` 以外的字元時，帶 `allowActions` 的受限 session 不開，訊息會說是安裝路徑（`SessionLaunch.swift:57`、`ToolBridge.swift:72-79`）。
+- Cubi 執行檔的路徑有英數、`/`、`.`、`_`、`-` 以外的字元時，帶 `allowActions` 的受限 session 不開，訊息會說是安裝路徑（`SessionLaunch.swift:57`、`ToolBridge.swift:76-83`）。
 - 受限模式不讀使用者的設定檔，Cubi 的 hooks 也跟著不見。所以每次開受限 session 前，Cubi 把以下內容寫到 `~/.cubi/restricted-settings.json`，用 `--settings` 帶進去（`Sources/cubi/HookSetup.swift:59`、`Sources/CubiKit/ClaudeHookInstaller.swift:162-163`）：
   - Cubi 的 hooks。
   - 你的拒絕規則：`~/.claude/settings.json`、工作目錄的 `.claude/settings.json` 與 `.claude/settings.local.json` 三份的 `permissions.deny` 合併；允許規則與其他設定一律不帶。
@@ -296,6 +304,6 @@ stdout（`hook-io.schema.json#/$defs/tickOutput`）：
 | 指令 | 說明 | 穩定度 | 出處 |
 |---|---|---|---|
 | `cubi --validate-plugin <資料夾>` | 見「載入規則」 | stable | `main.swift:25-38` |
-| `cubi --render-panel <id> <out.png> [--dark] [--height N] [--eval JS]` | 在螢幕外開真的面板（真的 web view 與 bridge）截圖，設定頁關掉的套件不畫。沒有 `--eval` 時約 4 秒後截圖；有的話 JS 在約 4 秒時執行，結果印成 `eval → …`，再 2 秒截圖。結果是 Promise 時印 `eval → nil error: … unsupported type`，無害，非同步的部分照樣跑完、截圖看得到（實測）。環境多一個 `CUBI_RENDER=1` | experimental | `main.swift:65-89`、`ToolPanel.swift:84-88`、`ToolPanel.swift:139-159` |
-| `cubi --render-widget <id> <session 名> <out.png>` | 用一個假 session（id `render-widget`、沒有 cwd、沒有時段）跑 `session.info`，畫出資訊窗的列（不含底部按鈕）。環境多一個 `CUBI_RENDER=1` | experimental | `main.swift:93-105`、`SessionWidgetView.swift:100` |
-| `cubi --tool-run <id> <action> [args…]` | 走套件的檢查執行一條指令，印 `{ok,out,err}`；參數寫 `-` 從 stdin 讀。跟面板有三處不同：`reveal` 只印路徑、不在 Finder 選取；沒有時限；執行與拒絕不寫 log。找不到套件時印出它被拒載的原因。`text` 參數也可以直接寫在命令列，寫 `-` 才從 stdin 讀。stderr 會多一行 `plugins: …` 的 log，可以忽略 | stable | `main.swift:212-240` |
+| `cubi --render-panel <id> <out.png> [--dark] [--height N] [--eval JS] [--with-service]` | 在螢幕外開真的面板（真的 web view 與 bridge）截圖，設定頁關掉的套件不畫。沒有 `--eval` 時約 4 秒後截圖；有的話 JS 在約 4 秒時執行，結果印成 `eval → …`，再 2 秒截圖。結果是 Promise 時印 `eval → nil error: … unsupported type`，無害，非同步的部分照樣跑完、截圖看得到（實測）。環境多一個 `CUBI_RENDER=1`。背景服務預設不啟動（面板的 `service.*` 回「背景服務沒有在跑」）；加 `--with-service` 才啟動這個套件的背景服務，不看設定頁的開關。它是真的執行：它自己的 defaults、鑰匙圈、網路等副作用 Cubi 管不到，只靠環境裡同樣的 `CUBI_RENDER=1` 告訴它這是乾跑。它的 `notice`、`present` 只印出來，`present` 一律回 `unavailable`；截完圖（成功或失敗）就停掉它的整個行程群組。cubi 被強制結束時，服務的 stdin 會讀到 EOF，照「結束」一節的規則該自己結束 | experimental | `main.swift:65-103`、`ToolPanel.swift:97-101`、`ToolPanel.swift:153-174`、`PluginServices.swift:78-81` |
+| `cubi --render-widget <id> <session 名> <out.png>` | 用一個假 session（id `render-widget`、沒有 cwd、沒有時段）跑 `session.info`，畫出資訊窗的列（不含底部按鈕）。環境多一個 `CUBI_RENDER=1` | experimental | `main.swift:107-119`、`SessionWidgetView.swift:100` |
+| `cubi --tool-run <id> <action> [args…]` | 走套件的檢查執行一條指令，印 `{ok,out,err}`；參數寫 `-` 從 stdin 讀。跟面板有三處不同：`reveal` 只印路徑、不在 Finder 選取；沒有時限；執行與拒絕不寫 log。找不到套件時印出它被拒載的原因。`text` 參數也可以直接寫在命令列，寫 `-` 才從 stdin 讀。stderr 會多一行 `plugins: …` 的 log，可以忽略 | stable | `main.swift:226-254` |

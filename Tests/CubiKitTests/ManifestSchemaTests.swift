@@ -74,3 +74,9 @@ private func compare(_ keys: PluginManifest.Keys, _ node: JSONValue, root: JSONV
     }
     #expect(Set(values(root)).isSubset(of: ["stable", "experimental", "deprecated"]))
 }
+
+@Test func theSchemaRefusesExactlyTheBuiltInActionNames() throws {
+    let names = try #require(schema()["$defs"]?["tool"]?["properties"]?["commands"]?["propertyNames"]?["not"]?["enum"]?.array)
+    #expect(Set(names.compactMap(\.string)) == ToolPlugin.reservedActions)
+    #expect(names.count == ToolPlugin.reservedActions.count)
+}

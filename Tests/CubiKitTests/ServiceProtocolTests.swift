@@ -204,3 +204,24 @@ private let forbidden = "不能有控制字元、換行或文字方向控制字�
     let taken = (0..<(P.logsPerMinute + 1)).map { _ in logs.allow(at: t0) }.filter { $0 }.count
     #expect(taken == P.logsPerMinute)
 }
+
+// From the panel: args[0] is the action, args[1] (optional) a JSON object as a string.
+@Test func aPanelCallIsAnActionNameAndAtMostOneJSONObject() throws {
+    let plain = try P.panelCall(["send"]).get()
+    #expect(plain.action == "send" && plain.args == nil)
+    let args = P.hello().dropLast()
+    let withArgs = try P.panelCall(["send", String(args)]).get()
+    #expect(withArgs.args == (try JSONDecoder().decode(JSONValue.self, from: Data(args.utf8))))
+    // The line Cubi writes carries them as they came.
+    #expect(P.call(id: 1, action: withArgs.action, args: withArgs.args) == P.call(id: 1, action: "send", args: withArgs.args))
+
+    #expect(throws: P.Problem.self) { try P.panelCall([]).get() }
+    #expect(throws: P.Problem.self) { try P.panelCall(["Send"]).get() }
+    #expect(throws: P.Problem.self) { try P.panelCall(["send", "{}", "{}"]).get() }
+    #expect(throws: P.Problem.self) { try P.panelCall(["send", "[]"]).get() }
+    #expect(throws: P.Problem.self) { try P.panelCall(["send", "{"]).get() }
+    // At the line limit as a string it passes; one byte over does not.
+    let pad = P.lineLimit - #"{"a":""}"#.utf8.count
+    #expect((try? P.panelCall(["send", #"{"a":""# + chars(pad) + #""}"#]).get()) != nil)
+    #expect(throws: P.Problem.self) { try P.panelCall(["send", #"{"a":""# + chars(pad + 1) + #""}"#]).get() }
+}

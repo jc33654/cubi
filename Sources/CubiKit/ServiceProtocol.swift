@@ -104,6 +104,26 @@ public enum ServiceProtocol {
         [title, plugin]
     }
 
+    // MARK: - From the panel
+
+    /// How long a panel's `service.call` waits for the service's `reply`.
+    public static let callTimeout: Duration = .seconds(10)
+
+    /// A panel's `service.call`, from the bridge's `args`: the action, then optionally a JSON object
+    /// of arguments. The action is named as a manifest command is.
+    public static func panelCall(_ args: [String]) -> Result<(action: String, args: JSONValue?), Problem> {
+        guard let action = args.first, ToolPlugin.isValidActionName(action) else {
+            return .failure(.badField("action", "動作名稱只能有小寫英數與 . _ -、第一個字要是英數，1–64 字"))
+        }
+        guard args.count <= 2 else { return .failure(.badField("args", "最多兩個：動作與參數")) }
+        guard args.count == 2 else { return .success((action, nil)) }
+        guard args[1].utf8.count <= lineLimit,
+              let value = try? JSONDecoder().decode(JSONValue.self, from: Data(args[1].utf8)), value.object != nil else {
+            return .failure(.badField("args", "參數要是 JSON 物件，最多 \(lineLimit) bytes"))
+        }
+        return .success((action, value))
+    }
+
     // MARK: - Cubi to the service
 
     /// The first line Cubi writes.

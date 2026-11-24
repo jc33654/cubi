@@ -7,8 +7,15 @@ import CubiKit
 final class ToolPanels {
     private let registry: PluginRegistry
     private var panels: [String: ToolPanel] = [:]
+    /// Set once the services exist; panels ask for it on every `service.*` message.
+    weak var services: PluginServices?
 
     init(registry: PluginRegistry) { self.registry = registry }
+
+    /// A service's new `state`, to its plugin's panel if open, as a `cubiservicestate` event.
+    func serviceStateChanged(_ id: String, _ state: JSONValue) {
+        panels[id]?.dispatchServiceState(state)
+    }
 
     /// `session`: opened from a session's detail card; the page gets it as `window.cubiSession`.
     func show(_ id: String, session: PluginIO.SessionInput? = nil) {
@@ -16,7 +23,7 @@ final class ToolPanels {
             CubiLog.write("tool \(id): not loaded or disabled")
             return
         }
-        let panel = panels[id] ?? ToolPanel(isEnabled: { [registry] in registry.isEnabled(id) })
+        let panel = panels[id] ?? ToolPanel(isEnabled: { [registry] in registry.isEnabled(id) }, services: { [weak self] in self?.services })
         panels[id] = panel
         panel.show(tool, session: session)
     }
@@ -36,8 +43,14 @@ final class ToolPanel: NSObject, NSWindowDelegate, WKNavigationDelegate {
 
     /// `isEnabled` is asked on every message, so switching the plugin off in the settings stops
     /// an open panel too.
-    init(isEnabled: @escaping () -> Bool) {
-        bridge = ToolBridge(isEnabled: isEnabled)
+    init(isEnabled: @escaping () -> Bool, services: @escaping () -> PluginServices? = { nil }) {
+        bridge = ToolBridge(isEnabled: isEnabled, services: services)
+    }
+
+    /// `event.detail` is the state; JSON is a JavaScript expression, so it goes in as it is.
+    func dispatchServiceState(_ state: JSONValue) {
+        guard let web, let data = try? JSONEncoder().encode(state), let json = String(data: data, encoding: .utf8) else { return }
+        web.evaluateJavaScript("window.dispatchEvent(new CustomEvent('cubiservicestate', {detail: \(json)}));")
     }
 
     func show(_ tool: ToolPlugin, session: PluginIO.SessionInput?, offscreen: Bool = false, appearance: NSAppearance? = nil) {
@@ -136,10 +149,12 @@ final class ToolPanel: NSObject, NSWindowDelegate, WKNavigationDelegate {
 enum PanelRenderer {
     private static var keep: [AnyObject] = []
 
+    /// `services`: the plugin's service, already started, for `service.*` and `cubiservicestate`.
     static func render(_ tool: ToolPlugin, dark: Bool, to url: URL, script: String? = nil, after delay: TimeInterval = 4,
-                       done: @escaping (Bool) -> Void) {
-        let panel = ToolPanel(isEnabled: { true })
+                       services: PluginServices? = nil, done: @escaping (Bool) -> Void) {
+        let panel = ToolPanel(isEnabled: { true }, services: { services })
         keep.append(panel)
+        services?.onState = { [weak panel] id, state in if id == tool.id { panel?.dispatchServiceState(state) } }
         panel.show(tool, session: nil, offscreen: true, appearance: NSAppearance(named: dark ? .darkAqua : .aqua))
         if let script {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { panel.evaluate(script) }

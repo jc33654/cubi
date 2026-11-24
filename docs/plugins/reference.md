@@ -2,7 +2,7 @@
 
 第一次做套件先看 [guide.md](guide.md)。這份是逐欄位的規格；給工具讀的版本是 [manifest.schema.json](manifest.schema.json)（manifest）、[hook-io.schema.json](hook-io.schema.json)（hook 的 stdin／stdout）、[bridge.d.ts](bridge.d.ts)（面板 JS）。
 
-- 「出處」是基準 commit `a68bf22` 的程式行號，每個行為都對得到那一行。
+- 「出處」是跟這份文件同一個 commit 的程式行號，每個行為都對得到那一行；改程式動到行號時，這份文件跟著改。
 - 標「實測」的是實際跑過；沒標的是讀程式碼得到的。
 - 穩定度：**stable** 在 schema 1 內保持相容；**experimental** 任何版本都可能改；**deprecated** 還能用，之後會拿掉。
 
@@ -11,7 +11,7 @@
 - `schema` 是 manifest 格式的版本，沒寫等於 1（`Sources/CubiKit/PluginManifest.swift:61`）。這個 Cubi 認得到 1（`PluginManifest.swift:9`）；寫更大的數字會被拒載，並請你更新 Cubi；不是 1 以上的整數也拒載。
 - **stable** 欄位在 schema 1 內不會改意思、不會被拿掉。要淘汰時，先在這份文件標成 deprecated，並且至少保留一個版本照常能用，之後才拿掉。改變不相容就升 `schema`。
 - **experimental** 的欄位與整個 agent 套件，任何版本都可能改，不另行通知。標準：等有第二個真實套件也在用，才考慮升成 stable。
-- 新增欄位不算破壞：舊的 Cubi 遇到不認得的欄位只警告、照樣載入（`PluginManifest.swift:103-121`）。
+- 新增欄位不算破壞：舊的 Cubi 遇到不認得的欄位只警告、照樣載入（`PluginManifest.swift:104-122`）。
 
 ## 載入規則
 
@@ -20,13 +20,13 @@
 | 位置 | `~/Library/Application Support/cubi/plugins/<id>/manifest.json`；設定頁「插件」的「重新載入」重掃一次 | stable | `Sources/cubi/Plugins/PluginRegistry.swift:13-14`、`:38` |
 | 資料夾名 | 必須等於 `id`，不一樣就拒載 | stable | `PluginManifest.swift:71` |
 | `kind` | `tool`、`agent` 或不寫（等於 agent）；其他值拒載 | stable | `PluginManifest.swift:66-70` |
-| 不認得的欄位 | 照樣載入，但設定頁用黃字列出，log 寫 `plugin <資料夾> warning:`；以 `x-` 開頭的是你自己的，不警告 | stable | `PluginManifest.swift:111`、`PluginRegistry.swift:62`、`Sources/cubi/Settings/PluginsSection.swift:35` |
+| 不認得的欄位 | 照樣載入，但設定頁用黃字列出，log 寫 `plugin <資料夾> warning:`；以 `x-` 開頭的是你自己的，不警告 | stable | `PluginManifest.swift:112`、`PluginRegistry.swift:62`、`Sources/cubi/Settings/PluginsSection.swift:35` |
 | 拒載 | 原因用紅字列在設定頁，log 寫 `plugin <資料夾> rejected:` | stable | `PluginRegistry.swift:61`、`PluginsSection.swift:30` |
 | id 命名空間 | 兩種套件共用；跟內建的 `claude-code` 撞名就拒載 | stable | `PluginRegistry.swift:42-45` |
 | 預設開關 | 工具套件預設開，agent 套件預設關。在設定頁關掉工具套件後，已開著的面板送來的請求也會被拒，資訊窗區塊與 tick 也停 | stable | `PluginRegistry.swift:73`、`ToolPanel.swift:153-156` |
-| 檢查指令 | `cubi --validate-plugin <資料夾>`：照上面的規則檢查，加上面板檔與每個執行檔在不在、能不能執行；不開 app、不寫 log。結束碼 0 載得進來（可能有警告）、1 有錯、2 用法錯 | stable | `Sources/cubi/main.swift:25-38`、`PluginManifest.swift:131-170` |
+| 檢查指令 | `cubi --validate-plugin <資料夾>`：照上面的規則檢查，加上面板檔與每個執行檔在不在、能不能執行；不開 app、不寫 log。結束碼 0 載得進來（可能有警告）、1 有錯、2 用法錯 | stable | `Sources/cubi/main.swift:25-38`、`PluginManifest.swift:132-171` |
 
-schema 檔比 Cubi 嚴格一點：不認得的欄位在 schema 是錯誤，在 Cubi 只是警告。有些規則 schema 寫不出來，請用 `--validate-plugin` 檢查：資料夾名要等於 `id`、`text` 參數要走 stdin、`stdin` 不能超過參數數量、`$1`…`$n` 要有對應參數、hook 命令的形狀（包括 `session.info`／`tick.action` 指到的命令存在）、agent 套件 `install.entries[].command` 要含 `cubi-hook --agent <id> `、檔案在不在。
+schema 檔比 Cubi 嚴格一點：不認得的欄位在 schema 是錯誤，在 Cubi 只是警告。有些規則 schema 寫不出來，請用 `--validate-plugin` 檢查：資料夾名要等於 `id`、`text` 參數要走 stdin、`stdin` 不能超過參數數量、`$1`…`$n` 要有對應參數、hook 命令的形狀（包括 `session.info`／`tick.action` 指到的命令存在）、`service.run` 指到的命令存在而且沒有參數、agent 套件 `install.entries[].command` 要含 `cubi-hook --agent <id> `、檔案在不在。
 
 ## 工具套件 manifest
 
@@ -36,28 +36,32 @@ schema 檔比 Cubi 嚴格一點：不認得的欄位在 schema 是錯誤，在 C
 |---|---|---|---|---|
 | `schema` | | 見「相容承諾」 | stable | `PluginManifest.swift:61-64` |
 | `kind` | ✔ | `"tool"` | stable | `PluginManifest.swift:66-70` |
-| `id` | ✔ | `[a-z0-9-]`，1–24 字，等於資料夾名 | stable | `Sources/CubiKit/ToolPlugin.swift:134-135`、`Sources/CubiKit/AgentPlugin.swift:77-78` |
-| `name` | ✔ | 視窗標題、選單文字、資訊窗區塊標題 | stable | `ToolPlugin.swift:136` |
-| `panel.file` | ✔ | 一個 HTML 檔：相對套件資料夾、`~` 或絕對路徑；每次開窗重讀。以字串載入、沒有基底網址（origin 是 null），**同資料夾的 js、css、圖片用相對路徑載不到，要全部寫在這個 HTML 裡**（實測：同資料夾的 `app.js` 沒有載入）。外部網址的 script、img、fetch 不擋：面板跟 manifest 一樣是你自己放的，一樣信任 | stable | `ToolPlugin.swift:137`、`Sources/cubi/Plugins/ToolPanel.swift:75-77` |
-| `panel.width`、`panel.height` | | 視窗大小，預設 900×640 | stable | `ToolPlugin.swift:146-147` |
-| `panel.style` | | `"cubi"`：注入樣式包（見「樣式包」）；不寫或 `null` 就不注入，既有面板不受影響 | stable | `ToolPlugin.swift:139-144`、`ToolPanel.swift:104-106` |
-| `panel.bridge` | | JS 用的 handler 名，預設 `cubi`；既有面板寫死別的名字時在這裡宣告，不用改面板 | experimental | `ToolPlugin.swift:148`、`ToolPanel.swift:58` |
-| `commands.<action>` | | 動作名稱：小寫英數與 `.`、`_`、`-`，第一個字要是英數，1–64 字；`pick.file`、`pick.dir`、`session.new` 是內建的，不能自己定義 | stable | `ToolPlugin.swift:160-161`、`PluginManifest.swift:176-180` |
-| `commands.<action>.run` | ✔ | argv，**不經 shell**。第一格是執行檔：絕對路徑、`~`、`$plugin/…` 或含 `/` 的相對路徑，只寫名字不會去 PATH 找。自己寫的腳本要 `chmod +x`，或第一格寫直譯器，例如 `["/usr/bin/python3", "$plugin/main.py"]`。任何一格可用 `$plugin`（整格是它或以 `$plugin/` 開頭）；`$1`…`$n` 換成呼叫端的第 n 個參數；走 stdin 的那個參數不能再寫成 `$n`（會拒載）。工作目錄是套件資料夾 | stable | `ToolPlugin.swift:162-168`、`:191-196`、`:287-297`、`Sources/cubi/Plugins/ToolRunner.swift:45` |
-| `commands.<action>.args[]`：`"text"` | | ≤256 KB，只能走 stdin | stable | `ToolPlugin.swift:188-190`、`:268-269` |
-| `commands.<action>.args[]`：`"value"` | | 可印字元，1–512 字，不能以 `-` 開頭（變不成選項） | stable | `ToolPlugin.swift:263-267` |
-| `commands.<action>.args[]`：`"name"` | | `[A-Za-z0-9._-]`，1–64 字，不能是 `.`／`..`（走不出目錄） | experimental | `ToolPlugin.swift:258-262` |
-| `commands.<action>.args[]`：`{"enum": […]}` | | 只能是列出的字串之一 | experimental | `ToolPlugin.swift:176-180`、`:270-271` |
-| `commands.<action>.stdin` | | 1-based 整數：第 n 個參數餵 stdin、不放 argv。hook 命令與面板指令都適用，例如面板要收長文字就寫 `"args": ["text"], "stdin": 1`（依據：兩個以上套件使用）。送進去的是那個字串的 UTF-8 原樣：結尾不補換行、CRLF 不轉換（實測：面板、`--tool-run` 參數、`--tool-run -` 三種來源都一樣）；Cubi 自己組給 hook 的 JSON 結尾也沒有換行 | stable | `ToolPlugin.swift:185-187`、`ToolRunner.swift:79-81`、`PluginIO.swift:251-255` |
-| `commands.<action>.reveal` | | `true`：stdout 去頭尾空白當路徑，在 Finder 選取；回 `{ok, out: 路徑}` | stable | `ToolPlugin.swift:198`、`ToolPanel.swift:259-262` |
-| `commands.<action>.sessionAllowed` | | 只有 `true` 算數：受限 session 可以不經核准跑它（見「受限 session」）。只標「把結果交回來」的命令，不要標會寫外部系統或改設定的 | experimental | `ToolPlugin.swift:198` |
-| `session.info` | | hook 命令名：資訊窗選到 session 時執行 | stable | `ToolPlugin.swift:202-206` |
-| `session.refresh` | | 秒，整數，≥10，預設 60；資訊窗離開畫面（換 session、島收起）就停 | stable | `ToolPlugin.swift:219-224`、`Sources/cubi/Island/SessionWidgetView.swift:50-57` |
-| `tick.action` | | hook 命令名：定時執行，不管島開不開 | experimental | `ToolPlugin.swift:208-212` |
+| `id` | ✔ | `[a-z0-9-]`，1–24 字，等於資料夾名 | stable | `Sources/CubiKit/ToolPlugin+Load.swift:31-32`、`Sources/CubiKit/AgentPlugin.swift:77-78` |
+| `name` | ✔ | 視窗標題、選單文字、資訊窗區塊標題 | stable | `ToolPlugin+Load.swift:33` |
+| `panel.file` | ✔ | 一個 HTML 檔：相對套件資料夾、`~` 或絕對路徑；每次開窗重讀。以字串載入、沒有基底網址（origin 是 null），**同資料夾的 js、css、圖片用相對路徑載不到，要全部寫在這個 HTML 裡**（實測：同資料夾的 `app.js` 沒有載入）。外部網址的 script、img、fetch 不擋：面板跟 manifest 一樣是你自己放的，一樣信任 | stable | `ToolPlugin+Load.swift:34`、`Sources/cubi/Plugins/ToolPanel.swift:75-77` |
+| `panel.width`、`panel.height` | | 視窗大小，預設 900×640 | stable | `ToolPlugin+Load.swift:43-44` |
+| `panel.style` | | `"cubi"`：注入樣式包（見「樣式包」）；不寫或 `null` 就不注入，既有面板不受影響 | stable | `ToolPlugin+Load.swift:36-41`、`ToolPanel.swift:104-106` |
+| `panel.bridge` | | JS 用的 handler 名，預設 `cubi`；既有面板寫死別的名字時在這裡宣告，不用改面板 | experimental | `ToolPlugin+Load.swift:45`、`ToolPanel.swift:58` |
+| `commands.<action>` | | 動作名稱：小寫英數與 `.`、`_`、`-`，第一個字要是英數，1–64 字；`pick.file`、`pick.dir`、`session.new` 是內建的，不能自己定義 | stable | `ToolPlugin+Load.swift:57-58`、`PluginManifest.swift:177-181` |
+| `commands.<action>.run` | ✔ | argv，**不經 shell**。第一格是執行檔：絕對路徑、`~`、`$plugin/…` 或含 `/` 的相對路徑，只寫名字不會去 PATH 找。自己寫的腳本要 `chmod +x`，或第一格寫直譯器，例如 `["/usr/bin/python3", "$plugin/main.py"]`。任何一格可用 `$plugin`（整格是它或以 `$plugin/` 開頭）；`$1`…`$n` 換成呼叫端的第 n 個參數；走 stdin 的那個參數不能再寫成 `$n`（會拒載）。工作目錄是套件資料夾 | stable | `ToolPlugin+Load.swift:59-65`、`:88-93`、`:142-152`、`Sources/cubi/Plugins/ToolRunner.swift:45` |
+| `commands.<action>.args[]`：`"text"` | | ≤256 KB，只能走 stdin | stable | `ToolPlugin+Load.swift:85-87`、`ToolPlugin+Invoke.swift:52-53` |
+| `commands.<action>.args[]`：`"value"` | | 可印字元，1–512 字，不能以 `-` 開頭（變不成選項） | stable | `ToolPlugin+Invoke.swift:47-51` |
+| `commands.<action>.args[]`：`"name"` | | `[A-Za-z0-9._-]`，1–64 字，不能是 `.`／`..`（走不出目錄） | experimental | `ToolPlugin+Invoke.swift:42-46` |
+| `commands.<action>.args[]`：`{"enum": […]}` | | 只能是列出的字串之一 | experimental | `ToolPlugin+Load.swift:73-77`、`ToolPlugin+Invoke.swift:54-55` |
+| `commands.<action>.stdin` | | 1-based 整數：第 n 個參數餵 stdin、不放 argv。hook 命令與面板指令都適用，例如面板要收長文字就寫 `"args": ["text"], "stdin": 1`（依據：兩個以上套件使用）。送進去的是那個字串的 UTF-8 原樣：結尾不補換行、CRLF 不轉換（實測：面板、`--tool-run` 參數、`--tool-run -` 三種來源都一樣）；Cubi 自己組給 hook 的 JSON 結尾也沒有換行 | stable | `ToolPlugin+Load.swift:82-84`、`ToolRunner.swift:79-81`、`PluginIO.swift:251-255` |
+| `commands.<action>.reveal` | | `true`：stdout 去頭尾空白當路徑，在 Finder 選取；回 `{ok, out: 路徑}` | stable | `ToolPlugin+Load.swift:95`、`ToolPanel.swift:259-262` |
+| `commands.<action>.sessionAllowed` | | 只有 `true` 算數：受限 session 可以不經核准跑它（見「受限 session」）。只標「把結果交回來」的命令，不要標會寫外部系統或改設定的 | experimental | `ToolPlugin+Load.swift:95` |
+| `session.info` | | hook 命令名：資訊窗選到 session 時執行 | stable | `ToolPlugin+Load.swift:99-103` |
+| `session.refresh` | | 秒，整數，≥10，預設 60；資訊窗離開畫面（換 session、島收起）就停 | stable | `ToolPlugin+Load.swift:117-122`、`Sources/cubi/Island/SessionWidgetView.swift:50-57` |
+| `tick.action` | | hook 命令名：定時執行，不管島開不開 | experimental | `ToolPlugin+Load.swift:105-109` |
 | `tick.every` | | 秒，整數，≥30，預設 60。Cubi 每 30 秒檢查一次，所以實際間隔是 30 的倍數往上湊（寫 45 約每 60 秒一次） | experimental | `Sources/cubi/Plugins/PluginTicker.swift:25`、`:43` |
-| `builtins` | | 目前只收 `"session.new"`：要用它得先在這裡寫 | experimental | `ToolPlugin.swift:153-158` |
+| `builtins` | | 目前只收 `"session.new"`：要用它得先在這裡寫 | experimental | `ToolPlugin+Load.swift:50-55` |
+| `service` | | 背景服務：套件開著時由 Cubi 啟動並看管的一個命令。**目前只檢查格式，這一版 Cubi 還不會啟動它** | experimental | `ToolPlugin+Load.swift:110`、`ToolPlugin+Service.swift:24-49` |
+| `service.run` | ✔（寫了 `service` 時） | 命令名。那個命令不能有 `args` 或 `stdin`（stdin 留給 Cubi 跟它溝通），也不能 `reveal`、`sessionAllowed`。面板與 `--tool-run` 不能執行它，會回「只有 Cubi 能啟動」，以免多出一份沒人看管的 | experimental | `ToolPlugin+Service.swift:26-31`、`ToolPlugin+Invoke.swift:25` |
+| `service.restart` | | `on-failure`（預設）或 `never`。`on-failure`：非 0 結束或被訊號結束時再啟動；以 0 結束算是自己停 | experimental | `ToolPlugin+Service.swift:14-18`、`:32-38` |
+| `service.events` | ✔（寫了 `service` 時） | 它可以在 stdout 請 Cubi 做的事：`notice`、`present`、`state`、`log`、`reply` 裡挑，至少一個、不能重複；沒列的會被丟掉。每一種的格式之後的版本才定 | experimental | `ToolPlugin+Service.swift:20-22`、`:39-47` |
 
-**hook 命令**：`session.info`、`tick.action` 與資訊窗按鈕叫的命令，形狀固定是 `"args": ["text"], "stdin": 1`，不能 `reveal`，不符就整份 manifest 拒載（`ToolPlugin.swift:228-232`）。app 把 JSON 餵進 stdin、讀 stdout 的 JSON。hook 命令有 20 秒上限，到期整組行程 SIGKILL（`ToolRunner.swift:15`、`:67-78`）；**不要留背景子行程**，孫行程握著 stdout 會讓 app 一直等到時限。面板與 `--tool-run` 叫的命令沒有時限。
+**hook 命令**：`session.info`、`tick.action` 與資訊窗按鈕叫的命令，形狀固定是 `"args": ["text"], "stdin": 1`，不能 `reveal`，不符就整份 manifest 拒載（`ToolPlugin+Load.swift:126-130`）。app 把 JSON 餵進 stdin、讀 stdout 的 JSON。hook 命令有 20 秒上限，到期整組行程 SIGKILL（`ToolRunner.swift:15`、`:67-78`）；**不要留背景子行程**，孫行程握著 stdout 會讓 app 一直等到時限。面板與 `--tool-run` 叫的命令沒有時限。
 
 **環境變數**（experimental）：每個命令都有 `CUBI_BIN`，是正在跑的 cubi 執行檔路徑（`ToolRunner.swift:48`）。離線渲染（`--render-panel`／`--render-widget`）時多一個 `CUBI_RENDER=1`（`main.swift:65-67`），代表乾跑：不該寫使用者真的資料（寫測試資料可以），也不該碰外部服務（用使用者的帳密連線、改遠端資料）。建議的寫法是腳本讀一個自己的環境變數決定資料夾，有 `CUBI_RENDER` 又沒設那個變數時就不寫檔（範例在 [guide.md](guide.md#下一步)）。sprint 的做法：有 `CUBI_RENDER` 又沒指定 `CUBI_SPRINT_DIR` 時不存檔、不連 Jira、不寫回顧檔，畫面照算。
 
@@ -77,7 +81,7 @@ window.cubiSession   // {id, name, cwd, projectDirectory, agent, segments}；之
 | 項目 | 說明 | 穩定度 | 出處 |
 |---|---|---|---|
 | `{action, args}` → `{ok, out, err}` | `ok` 是 exit code 為 0 | stable | `ToolPanel.swift:235-268` |
-| 拒絕 | 動作不在表裡、參數數量或型別不符、套件在設定頁關掉 → 不執行，Promise reject，原因是中文。每次執行與拒絕都寫進 log | stable | `ToolPanel.swift:149-156`、`:246-252`、`ToolPlugin.swift:240-254` |
+| 拒絕 | 動作不在表裡、參數數量或型別不符、套件在設定頁關掉 → 不執行，Promise reject，原因是中文。每次執行與拒絕都寫進 log | stable | `ToolPanel.swift:149-156`、`:246-252`、`ToolPlugin+Invoke.swift:23-38` |
 | 舊形狀 `{action, name, value}` | name、value 依序當成 args | deprecated | `ToolPanel.swift:240-244` |
 | `pick.file`、`pick.dir` | 原生選擇器，回 `{ok, path, cancelled?}` | experimental | `ToolPanel.swift:222-233` |
 | `session.new` | 見「受限 session」 | experimental | `ToolPanel.swift:162-216` |

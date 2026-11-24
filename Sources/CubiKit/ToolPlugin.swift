@@ -90,4 +90,6 @@ public struct ToolPlugin: Sendable, Equatable {
     public var tick: TickHook?
     /// Optional built-ins the manifest asked for (see `optionalBuiltins`).
     public var builtins: Set<String> = []
+    /// The command Cubi keeps running for this plugin, if any (experimental).
+    public var service: Service? = nil
 }

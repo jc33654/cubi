@@ -89,6 +89,7 @@ public enum PluginManifest {
         "commands": .each(.fields(["run": .leaf, "args": .leaf, "stdin": .leaf, "reveal": .leaf, "sessionAllowed": .leaf])),
         "session": .fields(["info": .leaf, "refresh": .leaf]),
         "tick": .fields(["action": .leaf, "every": .leaf]),
+        "service": .fields(["run": .leaf, "restart": .leaf, "events": .leaf]),
     ])
 
     static let agentKeys: Keys = .fields([
@@ -160,7 +161,7 @@ public enum PluginManifest {
         catch { return Report(errors: [(error as? LocalizedError)?.errorDescription ?? "\(error)"], warnings: [], summary: nil) }
         switch loaded.plugin {
         case .tool(let t):
-            let hooks = [t.session.map { _ in "session hook" }, t.tick.map { _ in "tick" }].compactMap { $0 }
+            let hooks = [t.session.map { _ in "session hook" }, t.tick.map { _ in "tick" }, t.service.map { _ in "service" }].compactMap { $0 }
             return Report(errors: fileProblems(t, fileManager: fm), warnings: loaded.warnings,
                           summary: "工具套件 \(t.id)：\(t.commands.count) 個指令" + hooks.map { "、" + $0 }.joined())
         case .agent(let a):

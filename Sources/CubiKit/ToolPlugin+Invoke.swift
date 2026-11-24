@@ -6,10 +6,12 @@ extension ToolPlugin {
         case unknownAction(String)
         case argumentCount(expected: Int, got: Int)
         case badArgument(index: Int, reason: String)
+        case serviceOnly(String)
 
         public var errorDescription: String? {
             switch self {
             case .unknownAction(let a): return "不允許的請求：\(a)"
+            case .serviceOnly(let a): return "「\(a)」是背景服務，只有 Cubi 能啟動"
             case .argumentCount(let e, let g): return "參數數量不符（要 \(e) 個，收到 \(g) 個）"
             case .badArgument(let i, let r): return "第 \(i) 個參數不合法：\(r)"
             }
@@ -20,6 +22,7 @@ extension ToolPlugin {
 
     public func invocation(action: String, args: [String]) throws -> Invocation {
         guard let command = commands[action] else { throw InvokeError.unknownAction(action) }
+        guard !isService(action) else { throw InvokeError.serviceOnly(action) }
         guard args.count == command.args.count else {
             throw InvokeError.argumentCount(expected: command.args.count, got: args.count)
         }

@@ -140,80 +140,6 @@ final class ServiceOverlayPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
-/// A round Cubi in a pose (NudgeMotion), with the zap's glow behind it.
-struct NudgeCubi: View {
-    let pose: BotPose
-    let color: RGB
-    var glow = 0.0
-
-    var body: some View {
-        Canvas { ctx, size in
-            if glow > 0 {
-                // Where BotPainter puts the body, a little larger, softened.
-                let d = size.width * 0.8 * 1.3
-                let halo = CGRect(x: size.width / 2 - d / 2, y: size.height * 0.58 - d / 2, width: d, height: d)
-                var c = ctx
-                c.addFilter(.blur(radius: size.width * 0.06))
-                c.fill(Path(ellipseIn: halo), with: .color(.yellow.opacity(0.55 * glow)))
-            }
-            BotPainter.draw(pose, color: color, shape: .circle, in: &ctx, size: size)
-        }
-        .shadow(color: .black.opacity(0.25), radius: 6, y: 4)
-    }
-}
-
-/// The white speech bubble: who, the message, whose. White with dark text and a shadow, so it reads
-/// on any desktop; every line clipped to itself, so a service's text never reaches the plugin's name.
-struct NudgeBubble: View {
-    let title: String
-    var message: String? = nil
-    let plugin: String
-    var tail: Edge = .trailing
-    var scale: CGFloat = 1
-    var maxWidth: CGFloat = 250
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3 * scale) {
-            Text(title).font(.system(size: 14 * scale, weight: .semibold)).foregroundStyle(.black.opacity(0.88))
-                .lineLimit(1).clipped()
-            if let message {
-                Text(message).font(.system(size: 12 * scale)).foregroundStyle(.black.opacity(0.78))
-                    // 60 characters (ServiceProtocol.messageLimit) of the widest script fit whole.
-                    .lineLimit(5).clipped().fixedSize(horizontal: false, vertical: true)
-            }
-            Text(plugin).font(.system(size: 10 * scale)).foregroundStyle(.black.opacity(0.5)).lineLimit(1).clipped()
-        }
-        .padding(.horizontal, 14 * scale)
-        .padding(.vertical, 10 * scale)
-        .frame(maxWidth: maxWidth * scale, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 14 * scale, style: .continuous).fill(.white))
-        .clipShape(RoundedRectangle(cornerRadius: 14 * scale, style: .continuous))
-        .background(alignment: tail == .trailing ? .bottomTrailing : .bottomTrailing) { BubbleTail(edge: tail, scale: scale) }
-        .compositingGroup()
-        .shadow(color: .black.opacity(0.28), radius: 8, y: 3)
-    }
-}
-
-/// The bubble's small tail toward the Cubi: on the right near the bottom, or under it near the right.
-struct BubbleTail: View {
-    let edge: Edge
-    let scale: CGFloat
-
-    var body: some View {
-        Canvas { ctx, size in
-            var p = Path()
-            if edge == .trailing {
-                p.move(to: CGPoint(x: 0, y: 0)); p.addLine(to: CGPoint(x: size.width, y: size.height / 2)); p.addLine(to: CGPoint(x: 0, y: size.height))
-            } else {
-                p.move(to: CGPoint(x: 0, y: 0)); p.addLine(to: CGPoint(x: size.width / 2, y: size.height)); p.addLine(to: CGPoint(x: size.width, y: 0))
-            }
-            ctx.fill(p, with: .color(.white))
-        }
-        .frame(width: (edge == .trailing ? 9 : 16) * scale, height: (edge == .trailing ? 14 : 9) * scale)
-        .offset(x: edge == .trailing ? 8 * scale : -22 * scale, y: edge == .trailing ? -14 * scale : 8 * scale)
-    }
-}
-
 /// The frameless nudge: the Cubi comes in (NudgeMotion.enter), the bubble pops out once it is in,
 /// the effect's face follows, and the whole fades over the last moment of its seconds. `frozenAt`
 /// draws one moment (the offline picture); with Reduce Motion, the still frame.
@@ -267,7 +193,8 @@ struct ServiceOverlayView: View {
                     bubble.padding(.trailing, 12)
                     cubi.padding(.trailing, 18)
                 }
-                .padding(.bottom, 8)
+                // The glow reaches past the Cubi (NudgeCubi.glowReach): room for it below as at the right.
+                .padding(.bottom, 20)
             case "shake":
                 // Peeking: a third of it past the screen's edge.
                 HStack(alignment: .center, spacing: 0) {

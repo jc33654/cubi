@@ -234,15 +234,46 @@ enum IconRenderer {
             let screen = CGSize(width: 1512, height: 982)
             let view = ServiceLoudView(request: request, plugin: "LAN Nudge", screen: screen, reduceMotion: reduce, frozenAt: moment ?? 1)
                 .frame(width: screen.width, height: screen.height)
-                .background(Color(white: 0.35))
+                .background(desktop(env["CUBI_RENDER_BG"]))
             return writePNG(ImageRenderer(content: view), scale: 1, to: path)
         }
-        let view = ServiceOverlayView(effect: request.effect, from: request.from, plugin: "LAN Nudge", message: request.message,
-                                      color: request.color, shakes: effect == "shake", reduceMotion: reduce, frozenAt: moment ?? 0)
+        // The panel at the screen's bottom-right corner, as it sits, on a stretch of desktop.
+        let view = ServiceOverlayView(request: request, plugin: "LAN Nudge", reduceMotion: reduce, frozenAt: moment ?? 0)
             .frame(width: ServiceOverlay.size.width, height: ServiceOverlay.size.height)
-            .padding(16)
-            .background(Color(white: 0.35))
+            .padding(.leading, 120)
+            .padding(.top, 40)
+            .background(desktop(env["CUBI_RENDER_BG"]))
         return writePNG(ImageRenderer(content: view), scale: 2, to: path)
+    }
+
+    /// CUBI_RENDER_BG: what the frameless overlay is seen on. white, black, noise (bright confetti) or
+    /// photo (sky over dark trees); otherwise mid grey. Deterministic, so pictures compare.
+    @MainActor
+    private static func desktop(_ name: String?) -> some View {
+        Canvas { ctx, size in
+            switch name {
+            case "white": ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.white))
+            case "black": ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.black))
+            case "noise":
+                var seed: UInt64 = 0x9E37_79B9_7F4A_7C15
+                func next() -> Double { seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407; return Double(seed >> 11) / Double(1 << 53) }
+                ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(white: 0.55)))
+                for _ in 0..<2500 {
+                    let r = CGRect(x: next() * size.width, y: next() * size.height, width: 2 + next() * 10, height: 2 + next() * 10)
+                    ctx.fill(Path(ellipseIn: r), with: .color(Color(hue: next(), saturation: 0.8, brightness: next())))
+                }
+            case "photo":
+                ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .linearGradient(
+                    Gradient(colors: [Color(red: 0.55, green: 0.78, blue: 0.98), Color(red: 0.98, green: 0.93, blue: 0.80)]),
+                    startPoint: .zero, endPoint: CGPoint(x: 0, y: size.height * 0.6)))
+                for i in 0..<14 {
+                    let x = Double(i) / 13 * size.width, h = size.height * (0.35 + 0.25 * sin(Double(i) * 1.7))
+                    ctx.fill(Path(ellipseIn: CGRect(x: x - 50, y: size.height - h, width: 110, height: h * 1.4)),
+                             with: .color(Color(red: 0.08, green: 0.22 + 0.05 * sin(Double(i)), blue: 0.10)))
+                }
+            default: ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(white: 0.35)))
+            }
+        }
     }
 
     @MainActor

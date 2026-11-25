@@ -85,3 +85,50 @@ private func lightings(from: Double, reduceMotion: Bool = false) -> Int {
     // No time at all: off the left edge, not stuck in the middle.
     #expect(M.roll(at: 0, total: 0, width: width, diameter: diameter).centerX == -r)
 }
+
+// Batch 70: the frameless overlay's entrances. Totals are ServiceProtocol.presentSeconds' ends and
+// the default; the diameter is ServiceOverlayView's 60.
+@Test func entrancesFinishWithinTheirSecondsAndRestAfter() {
+    let d = 60.0
+    for total in [ServiceProtocol.presentSeconds.lowerBound, ServiceProtocol.defaultPresentSeconds, ServiceProtocol.presentSeconds.upperBound] {
+        for effect in effects {
+            let length = M.entrance(effect: effect, total: total, reduceMotion: false)
+            #expect(length > 0 && length <= total * M.entranceShare)
+            // Before the start is the start; from its end on, at rest, however late.
+            #expect(M.enter(effect: effect, at: -1, total: total, diameter: d, reduceMotion: false)
+                    == M.enter(effect: effect, at: 0, total: total, diameter: d, reduceMotion: false))
+            for t in [length, total, total + 100] {
+                #expect(M.enter(effect: effect, at: t, total: total, diameter: d, reduceMotion: false) == M.Entering())
+            }
+            // It starts away from its place: off to the right.
+            #expect(M.enter(effect: effect, at: 0, total: total, diameter: d, reduceMotion: false).dx > 0)
+            // With Reduce Motion: at rest from the first frame, the face at once.
+            #expect(M.entrance(effect: effect, total: total, reduceMotion: true) == 0)
+            #expect(M.enter(effect: effect, at: 0, total: total, diameter: d, reduceMotion: true) == M.Entering())
+        }
+        // The knocks come after the bounce and are over before the end, even at 1 s.
+        let knocksEnd = M.entrance(effect: "knock", total: total, reduceMotion: false) + (M.knocks.last ?? 0) + M.knockLength
+        #expect(knocksEnd <= total)
+        // The bounce never sinks below its resting place; the roll turns one way only.
+        var previous = Double.infinity
+        for i in 0...200 {
+            let t = M.entrance(effect: "zap", total: total, reduceMotion: false) * Double(i) / 200
+            #expect(M.enter(effect: "knock", at: t * M.bounceLength / M.rollInLength, total: total, diameter: d, reduceMotion: false).dy <= 0)
+            let angle = M.enter(effect: "zap", at: t, total: total, diameter: d, reduceMotion: false).angle
+            #expect(angle <= previous + 1e-9)
+            previous = angle
+        }
+    }
+}
+
+@Test func bubblesPopAndEverythingFadesAtTheEnd() {
+    #expect(M.pop(at: 0.4, start: 0.5) == 0 && M.pop(at: 0.5, start: 0.5) == 0)
+    #expect(M.pop(at: 0.75, start: 0.5) == 1 && M.pop(at: 9, start: 0.5) == 1)
+    var top = 0.0
+    for i in 0...100 { top = max(top, M.pop(at: 0.5 + 0.25 * Double(i) / 100, start: 0.5)) }
+    #expect(top > 1 && top < 1.2)
+    for total in [ServiceProtocol.presentSeconds.lowerBound, ServiceProtocol.presentSeconds.upperBound] {
+        #expect(M.fade(at: 0, total: total) == 1 && M.fade(at: total - M.fadeLength, total: total) == 1)
+        #expect(M.fade(at: total, total: total) == 0 && M.fade(at: total + 1, total: total) == 0)
+    }
+}

@@ -2,16 +2,19 @@ import AppKit
 import SwiftUI
 import CubiKit
 
-/// What a plugin service's `present` asks for (experimental): a small card in the bottom-right
-/// corner of the screen under the mouse, or with `emphasis: loud` a giant Cubi across that screen
+/// What a plugin service's `present` asks for (experimental): a round Cubi coming into the bottom-right
+/// corner of the screen under the mouse with a speech bubble, no frame (the knock bounces in, the zap
+/// rolls in, the shake peeks in from the edge), or with `emphasis: loud` a giant Cubi across that screen
 /// (ServiceLoudView), for the seconds it asks (ServiceProtocol.presentSeconds), with the effect's
 /// sound and its message if any. It never takes focus and lets clicks through. The plugin's name is
 /// on it, so a service cannot pass it off as something of the system's. It goes as soon as the
 /// screen locks or sleeps.
 @MainActor
 final class ServiceOverlay {
-    /// The panel; the card inside is as tall as its text needs, at the bottom.
-    static let size = CGSize(width: 300, height: 160)
+    /// The panel, against the right and bottom of the visible frame (never over the Dock or the menu
+    /// bar): room above for the bounce and at the edge for the roll and the peek. The window clips what
+    /// is outside it, so nothing is drawn on a screen next to this one.
+    static let size = CGSize(width: 420, height: 300)
 
     private var panel: NSPanel?
     private var closing: Task<Void, Never>?
@@ -50,19 +53,17 @@ final class ServiceOverlay {
                                                                         reduceMotion: reduceMotion))
         } else {
             let visible = screen.visibleFrame
-            panel = ServiceOverlayPanel(contentRect: CGRect(x: visible.maxX - Self.size.width - 16, y: visible.minY + 16,
+            panel = ServiceOverlayPanel(contentRect: CGRect(x: visible.maxX - Self.size.width, y: visible.minY,
                                                             width: Self.size.width, height: Self.size.height))
-            // When the service could not shake the real window, the card shakes instead.
-            panel.contentView = NSHostingView(rootView: ServiceOverlayView(
-                effect: request.effect, from: request.from, plugin: plugin, message: request.message, color: request.color,
-                shakes: request.effect == "shake" && !request.windowShaken, reduceMotion: reduceMotion))
+            panel.contentView = NSHostingView(rootView: ServiceOverlayView(request: request, plugin: plugin, reduceMotion: reduceMotion))
         }
         panel.orderFrontRegardless()
         self.panel = panel
-        // The giant Cubi makes its face once it has rolled in: the sound comes with that, if it is
-        // still up by then.
+        // The Cubi makes its face once it is in: the sound comes with that, if it is still up by then.
         let cue = Self.cue(sound: Self.sound(for: request.effect))
-        let rolling = request.emphasis == .loud && !reduceMotion ? NudgeMotion.rollTime(total: request.seconds) : 0
+        let rolling = request.emphasis == .loud
+            ? (reduceMotion ? 0 : NudgeMotion.rollTime(total: request.seconds))
+            : NudgeMotion.entrance(effect: request.effect, total: request.seconds, reduceMotion: reduceMotion)
         if rolling > 0 {
             DispatchQueue.main.asyncAfter(deadline: .now() + rolling) { [weak self] in
                 MainActor.assumeIsolated { if self?.panel === panel { Sounds.play(cue) } }
@@ -109,7 +110,11 @@ final class ServiceOverlay {
     }
 
     static func title(effect: String, from: String) -> String {
-        effect == "knock" ? "\(from) 在敲你的門" : "\(from) 戳了你一下"
+        switch effect {
+        case "knock": "\(from) 在敲你的門"
+        case "shake": "\(from) 震了你一下"
+        default: "\(from) 戳了你一下"
+        }
     }
 
     private static func screenLocked() -> Bool {
@@ -153,23 +158,73 @@ struct NudgeCubi: View {
             }
             BotPainter.draw(pose, color: color, shape: .circle, in: &ctx, size: size)
         }
+        .shadow(color: .black.opacity(0.25), radius: 6, y: 4)
     }
 }
 
-/// The card, in the island's colours. `frozenAt` draws one moment (the offline picture); with
-/// Reduce Motion it is the still frame. The knock timing and the shake curve follow LAN Nudge's
-/// NudgeView (MIT), so the plugin feels like the app.
-struct ServiceOverlayView: View {
-    let effect: String
-    let from: String
-    let plugin: String
+/// The white speech bubble: who, the message, whose. White with dark text and a shadow, so it reads
+/// on any desktop; every line clipped to itself, so a service's text never reaches the plugin's name.
+struct NudgeBubble: View {
+    let title: String
     var message: String? = nil
-    /// SessionPalette index; nil keeps the effect's own colour.
-    var color: Int? = nil
-    let shakes: Bool
+    let plugin: String
+    var tail: Edge = .trailing
+    var scale: CGFloat = 1
+    var maxWidth: CGFloat = 250
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3 * scale) {
+            Text(title).font(.system(size: 14 * scale, weight: .semibold)).foregroundStyle(.black.opacity(0.88))
+                .lineLimit(1).clipped()
+            if let message {
+                Text(message).font(.system(size: 12 * scale)).foregroundStyle(.black.opacity(0.78))
+                    // 60 characters (ServiceProtocol.messageLimit) of the widest script fit whole.
+                    .lineLimit(5).clipped().fixedSize(horizontal: false, vertical: true)
+            }
+            Text(plugin).font(.system(size: 10 * scale)).foregroundStyle(.black.opacity(0.5)).lineLimit(1).clipped()
+        }
+        .padding(.horizontal, 14 * scale)
+        .padding(.vertical, 10 * scale)
+        .frame(maxWidth: maxWidth * scale, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 14 * scale, style: .continuous).fill(.white))
+        .clipShape(RoundedRectangle(cornerRadius: 14 * scale, style: .continuous))
+        .background(alignment: tail == .trailing ? .bottomTrailing : .bottomTrailing) { BubbleTail(edge: tail, scale: scale) }
+        .compositingGroup()
+        .shadow(color: .black.opacity(0.28), radius: 8, y: 3)
+    }
+}
+
+/// The bubble's small tail toward the Cubi: on the right near the bottom, or under it near the right.
+struct BubbleTail: View {
+    let edge: Edge
+    let scale: CGFloat
+
+    var body: some View {
+        Canvas { ctx, size in
+            var p = Path()
+            if edge == .trailing {
+                p.move(to: CGPoint(x: 0, y: 0)); p.addLine(to: CGPoint(x: size.width, y: size.height / 2)); p.addLine(to: CGPoint(x: 0, y: size.height))
+            } else {
+                p.move(to: CGPoint(x: 0, y: 0)); p.addLine(to: CGPoint(x: size.width / 2, y: size.height)); p.addLine(to: CGPoint(x: size.width, y: 0))
+            }
+            ctx.fill(p, with: .color(.white))
+        }
+        .frame(width: (edge == .trailing ? 9 : 16) * scale, height: (edge == .trailing ? 14 : 9) * scale)
+        .offset(x: edge == .trailing ? 8 * scale : -22 * scale, y: edge == .trailing ? -14 * scale : 8 * scale)
+    }
+}
+
+/// The frameless nudge: the Cubi comes in (NudgeMotion.enter), the bubble pops out once it is in,
+/// the effect's face follows, and the whole fades over the last moment of its seconds. `frozenAt`
+/// draws one moment (the offline picture); with Reduce Motion, the still frame.
+struct ServiceOverlayView: View {
+    let request: ServiceProtocol.Present
+    let plugin: String
     let reduceMotion: Bool
     var frozenAt: Double? = nil
     @State private var start = Date()
+
+    static let diameter: CGFloat = 60
 
     var body: some View {
         if let frozenAt {
@@ -181,39 +236,55 @@ struct ServiceOverlayView: View {
         }
     }
 
-    private func frame(_ t: Double) -> some View {
-        card(t)
-            .offset(x: shakes ? NudgeMotion.shakeOffset(at: t, reduceMotion: reduceMotion) : 0)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-    }
+    private var effect: String { request.effect }
+    private var entrance: Double { NudgeMotion.entrance(effect: effect, total: request.seconds, reduceMotion: reduceMotion) }
 
-    private func card(_ t: Double) -> some View {
-        let rgb = ServiceOverlay.cubiColor(color, effect: effect)
-        return HStack(spacing: 12) {
-            NudgeCubi(pose: NudgeMotion.pose(effect: effect, at: t, reduceMotion: reduceMotion), color: rgb,
-                      glow: effect == "zap" ? NudgeMotion.glow(at: t, reduceMotion: reduceMotion) : 0)
-                .frame(width: 44, height: 44)
-            // Every line clipped to itself: a service's text (combining marks, oversized glyphs) can
-            // never reach another line, least of all the plugin's name, or leave the card.
-            VStack(alignment: .leading, spacing: 3) {
-                Text(ServiceOverlay.title(effect: effect, from: from)).font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
-                    .lineLimit(1).clipped()
-                if let message {
-                    Text(message).font(.system(size: 12)).foregroundStyle(.white.opacity(0.9))
-                        // 60 characters (ServiceProtocol.messageLimit) of the widest script fit whole.
-                        .lineLimit(5)
-                        .clipped()
-                        .fixedSize(horizontal: false, vertical: true)
+    private func frame(_ t: Double) -> some View {
+        let side = Self.diameter / 0.8
+        let enter = NudgeMotion.enter(effect: effect, at: t, total: request.seconds, diameter: Self.diameter, reduceMotion: reduceMotion)
+        let since = max(0, t - entrance)
+        var pose = NudgeMotion.pose(effect: effect, at: since, reduceMotion: reduceMotion)
+        pose.tilt += enter.angle
+        pose.scaleY *= enter.squash
+        pose.scaleX *= 2 - enter.squash
+        // The shake: the Cubi wobbles itself when the service could not shake the real window.
+        let wobble = effect == "shake" && !request.windowShaken ? NudgeMotion.shakeOffset(at: since, reduceMotion: reduceMotion) * 0.6 : 0
+        if effect == "shake" && request.windowShaken { pose.tilt = enter.angle }
+        let cubi = NudgeCubi(pose: pose, color: ServiceOverlay.cubiColor(request.color, effect: effect),
+                             glow: effect == "zap" ? NudgeMotion.glow(at: since, reduceMotion: reduceMotion) : 0)
+            .frame(width: side, height: side)
+            .offset(x: enter.dx + wobble, y: enter.dy)
+        let popped = reduceMotion ? 1 : NudgeMotion.pop(at: t, start: entrance)
+        let bubble = NudgeBubble(title: ServiceOverlay.title(effect: effect, from: request.from), message: request.message,
+                                 plugin: plugin, tail: effect == "zap" ? .bottom : .trailing)
+            .scaleEffect(popped, anchor: effect == "zap" ? .bottomTrailing : .trailing)
+            .opacity(popped > 0 ? 1 : 0)
+        return Group {
+            switch effect {
+            case "zap":
+                VStack(alignment: .trailing, spacing: 2) {
+                    // Off the edge a little, so its right corners show however wide it gets.
+                    bubble.padding(.trailing, 12)
+                    cubi.padding(.trailing, 18)
                 }
-                Text(plugin).font(.system(size: 10)).foregroundStyle(.white.opacity(0.55)).lineLimit(1).clipped()
+                .padding(.bottom, 8)
+            case "shake":
+                // Peeking: a third of it past the screen's edge.
+                HStack(alignment: .center, spacing: 0) {
+                    bubble.padding(.trailing, 10)
+                    cubi.offset(x: side * 0.3)
+                }
+                .padding(.bottom, 40)
+            default:
+                HStack(alignment: .bottom, spacing: 4) {
+                    bubble.padding(.bottom, 14)
+                    cubi
+                }
+                .padding(.trailing, 14)
+                .padding(.bottom, 8)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .frame(maxWidth: ServiceOverlay.size.width, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.black.opacity(0.88)))
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .stroke(color == nil ? Color.white.opacity(0.12) : BotPainter.swift(rgb).opacity(0.7)))
+        .opacity(reduceMotion ? 1 : NudgeMotion.fade(at: t, total: request.seconds))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
     }
 }

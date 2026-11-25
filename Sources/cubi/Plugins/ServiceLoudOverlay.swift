@@ -4,7 +4,7 @@ import CubiKit
 /// `emphasis: loud` (experimental): a giant round Cubi, `NudgeMotion.loudHeightShare` of the screen's
 /// height, rolls in from the right, stops in the middle making the effect's face under a speech
 /// bubble (who, the message, the plugin's name), and rolls out to the left, all within the
-/// `present`'s seconds. With Reduce Motion: a large card in the middle that fades in and out, still.
+/// `present`'s seconds. With Reduce Motion: the bubble over a still Cubi in the middle, fading in and out.
 /// Nothing on the screen flashes; only the Cubi's own glow does, as on the card.
 struct ServiceLoudView: View {
     let request: ServiceProtocol.Present
@@ -53,7 +53,8 @@ struct ServiceLoudView: View {
                 .frame(width: side, height: side)
                 .position(x: roll.centerX, y: centerY - side * 0.08)
             if roll.holding {
-                bubble()
+                bubble(tail: .bottom)
+                    .scaleEffect(NudgeMotion.pop(at: roll.heldFor, start: 0), anchor: .bottom)
                     .frame(width: screen.width, height: max(0, top - gap), alignment: .bottom)
                     .position(x: screen.width / 2, y: max(0, top - gap) / 2)
             }
@@ -63,43 +64,18 @@ struct ServiceLoudView: View {
 
     private func still(_ t: Double) -> some View {
         let opacity = max(0, min(1, t / Self.fade, (request.seconds - t) / Self.fade))
-        return HStack(spacing: 28) {
+        return VStack(spacing: 14) {
+            bubble(tail: .bottom)
             NudgeCubi(pose: NudgeMotion.pose(effect: request.effect, at: 0, reduceMotion: true), color: rgb)
-                .frame(width: diameter * 0.5, height: diameter * 0.5)
-            bubble(framed: false)
+                .frame(width: diameter * 0.6, height: diameter * 0.6)
         }
-        .padding(32)
-        .frame(maxWidth: 760)
-        .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Color.black.opacity(0.88)))
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(BotPainter.swift(rgb).opacity(0.7), lineWidth: 2))
         .opacity(opacity)
         .frame(width: screen.width, height: screen.height)
     }
 
-    /// Who, the message, and whose: each line clipped to itself, as on the card.
-    private func bubble(framed: Bool = true) -> some View {
-        let text = VStack(alignment: .leading, spacing: 8) {
-            Text(ServiceOverlay.title(effect: request.effect, from: request.from)).font(.system(size: 26, weight: .bold))
-                .foregroundStyle(.white).lineLimit(1).clipped()
-            if let message = request.message {
-                Text(message).font(.system(size: 20)).foregroundStyle(.white.opacity(0.92))
-                    .lineLimit(5).clipped().fixedSize(horizontal: false, vertical: true)
-            }
-            Text(plugin).font(.system(size: 13)).foregroundStyle(.white.opacity(0.6)).lineLimit(1).clipped()
-        }
-        return Group {
-            if framed {
-                text
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 18)
-                    .frame(maxWidth: 560, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Color.black.opacity(0.88)))
-                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(BotPainter.swift(rgb).opacity(0.7), lineWidth: 2))
-            } else {
-                text.frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
+    /// Who, the message, and whose, in the white bubble the card uses, larger.
+    private func bubble(tail: Edge) -> some View {
+        NudgeBubble(title: ServiceOverlay.title(effect: request.effect, from: request.from), message: request.message,
+                    plugin: plugin, tail: tail, scale: 1.6)
     }
 }

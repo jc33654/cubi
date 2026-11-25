@@ -58,6 +58,80 @@ public enum NudgeMotion {
         return sin(t * 2 * .pi * 9) * 14 * (1 - t / shakeLength)
     }
 
+    // MARK: - Entrances (the frameless overlay)
+
+    /// The knock falls in from the upper right and bounces like a ping-pong ball; the zap rolls in
+    /// from the right edge; the shake peeks in from it. Short, as they count in the `present`'s seconds.
+    public static let bounceLength = 0.75
+    public static let rollInLength = 0.6
+    public static let peekLength = 0.35
+    /// The last this many seconds fade out.
+    public static let fadeLength = 0.25
+
+    /// Never more of the `present`'s seconds than this share goes to coming in, so a short one (1 s)
+    /// still has its knocks within it.
+    public static let entranceShare = 0.35
+
+    /// When the effect itself (its face, its sound) starts: once the Cubi is in; at once with Reduce Motion.
+    public static func entrance(effect: String, total: Double, reduceMotion: Bool) -> Double {
+        guard !reduceMotion else { return 0 }
+        let full: Double
+        switch effect {
+        case "zap": full = rollInLength
+        case "shake": full = peekLength
+        default: full = bounceLength
+        }
+        return min(full, max(0, total) * entranceShare)
+    }
+
+    /// The entering Cubi against where it rests, in points, for a Cubi `diameter` across: `dx` to the
+    /// right of it, `dy` above it (negative), `angle` as it rolls, `squash` its height as it lands.
+    public struct Entering: Sendable, Equatable {
+        public var dx = 0.0
+        public var dy = 0.0
+        public var angle = 0.0
+        public var squash = 1.0
+        public init() {}
+    }
+
+    public static func enter(effect: String, at t: Double, total: Double, diameter: Double, reduceMotion: Bool) -> Entering {
+        var e = Entering()
+        let t = max(0, t), r = diameter / 2, length = entrance(effect: effect, total: total, reduceMotion: reduceMotion)
+        guard length > 0, t < length else { return e }
+        let u = t / length
+        switch effect {
+        case "zap":
+            e.dx = diameter * 4.5 * (1 - u) * (1 - u)
+            e.angle = r > 0 ? e.dx / r : 0
+        case "shake":
+            e.dx = diameter * (1 - u) * (1 - u)
+        default:
+            e.dx = diameter * 4 * (1 - u) * (1 - u)
+            e.angle = r > 0 ? e.dx / r * 0.3 : 0
+            // Three arcs, each lower, the first falling from above; a squash as it touches down.
+            let arcs: [(start: Double, end: Double, height: Double)] = [(0, 0.42, 2.2), (0.42, 0.76, 0.8), (0.76, 1, 0.28)]
+            for (i, arc) in arcs.enumerated() where u >= arc.start && u < arc.end {
+                let s = (u - arc.start) / (arc.end - arc.start)
+                e.dy = -diameter * arc.height * (i == 0 ? 1 - s * s : 4 * s * (1 - s))
+                if s > 0.9 || (i > 0 && s < 0.1) { e.squash = 0.86 }
+            }
+        }
+        return e
+    }
+
+    /// A bubble's scale as it pops out at `start`: 0 before, a little past 1 on the way, then 1.
+    public static func pop(at t: Double, start: Double, length: Double = 0.25) -> Double {
+        let u = (t - start) / length
+        guard u > 0 else { return 0 }
+        guard u < 1 else { return 1 }
+        return 1 + 2.2 * pow(u - 1, 3) + 1.2 * pow(u - 1, 2)
+    }
+
+    /// 1, then down to 0 over the last `fadeLength` of `total`.
+    public static func fade(at t: Double, total: Double) -> Double {
+        max(0, min(1, (total - t) / fadeLength))
+    }
+
     // MARK: - The giant Cubi (emphasis: loud)
 
     /// Its size against the screen's height.
